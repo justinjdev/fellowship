@@ -1,0 +1,22 @@
+{
+  "name": "fellowship",
+  "owner": {
+    "name": "justinjdev"
+  },
+  "metadata": {
+    "description": "Multi-quest orchestrator for Claude Code. Coordinates parallel quests via agent teams with structured research-plan-implement lifecycles."
+  },
+  "plugins": [
+    {
+      "name": "fellowship",
+      "source": "./",
+      "description": "Multi-quest orchestrator with 7 skills and 2 agents for parallel quest coordination via worktrees.",
+      "version": "1.0.0",
+      "author": {
+        "name": "justinjdev"
+      },
+      "keywords": ["orchestration", "quest", "parallel", "worktree", "agent-teams"],
+      "category": "productivity"
+    }
+  ]
+}
