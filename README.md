@@ -14,7 +14,7 @@ From within Claude Code:
 
 ```
 /plugin marketplace add justinjdev/claude-plugins
-/plugin install fellowship@justinjdev-claude-plugins
+/plugin install fellowship@justinjdev
 ```
 
 ### Dependencies
@@ -29,8 +29,8 @@ Fellowship's `/quest` skill orchestrates skills from these plugins. Install them
 These are referenced by name in skill prompts. If a dependency isn't installed, Claude will skip that step rather than fail — but you lose the discipline that step provides.
 
 ```
-/plugin marketplace add obra/superpowers
-/plugin install superpowers@obra-superpowers
+/plugin marketplace add obra/superpowers-marketplace
+/plugin install superpowers@superpowers-marketplace
 /plugin install pr-review-toolkit@claude-plugins-official
 ```
 
