@@ -1,0 +1,176 @@
+---
+name: quest
+description: Use for any non-trivial task. Orchestrates the Research-Plan-Implement cycle with compaction between phases, integrating council, lembas, gather-lore, warden, and steward. Enforces discipline and phase gates.
+---
+
+# Quest — Research, Plan, Implement
+
+## Overview
+
+Orchestrates the full Research → Plan → Implement cycle with intentional compaction between phases. This is the hub skill that enforces context engineering discipline by invoking satellite skills at the right moments and maintaining hard gates between phases.
+
+## When to Use
+
+- Any task that involves more than a quick fix
+- When you want structured, disciplined progress through a complex change
+- When context management matters (large codebase, multi-file changes)
+
+## Phase Flow
+
+```
+Phase 0: Onboard ──→ using-git-worktrees → /council
+     │
+     ▼
+Phase 1: Research ──→ Explore agents / /gather-lore
+     │                Goal: understand the system, identify files
+     ▼
+  /lembas
+     │
+     ▼
+Phase 2: Plan ──────→ Plan mode / writing-plans
+     │                Goal: explicit steps with file:line refs
+     │                Decision point: decomposition needed?
+     ▼
+  /lembas
+     │
+     ▼
+Phase 3: Implement ──→ TDD (test-driven-development) + execute plan
+     │                 Goal: small verifiable changes via red-green-refactor
+     ▼
+Phase 4: Review ─────→ /warden → /pr-review-toolkit:review-pr
+     │                 → verification-before-completion
+     │                 Goal: conventions + code quality + verified passing
+     ▼
+Phase 5: Complete ───→ finishing-a-development-branch
+                       Goal: squash/merge, PR creation, cleanup
+```
+
+## Process
+
+### Phase 0: Onboard
+
+1. **Isolate:** Invoke `superpowers:using-git-worktrees` to create an isolated worktree for this work. This keeps the main branch clean and allows safe experimentation.
+2. **Orient:** Invoke `/council` to load task-relevant context.
+
+If the user has already described their task, pass the description directly. Otherwise, council will ask.
+
+**Gate:** Worktree created AND Session Context block must exist before proceeding.
+
+### Phase 1: Research
+
+Goal: Understand the system well enough to plan changes. Stay objective — gather information, don't propose solutions yet.
+
+**Actions:**
+1. If entering an unfamiliar area, invoke `/gather-lore` to extract conventions from reference files
+2. Use Explore agents (Task tool, subagent_type=Explore) to scan relevant code paths
+3. Read key files identified in the Session Context
+4. Document findings: how the current system works, constraints, edge cases
+
+**Hard gate — Research must produce:**
+- [ ] Key files identified with specific line ranges
+- [ ] Constraints and dependencies documented
+- [ ] Current behavior understood (not just file locations)
+
+If these aren't met, continue researching. Don't proceed to planning with incomplete understanding.
+
+**Transition:** Invoke `/lembas` with phase "Research" before moving to Plan.
+
+### Phase 2: Plan
+
+Goal: Outline explicit steps with file:line references and a test strategy.
+
+**Actions:**
+1. Enter plan mode (EnterPlanMode) or use the writing-plans skill for formal plans
+2. Write steps that reference specific files and line ranges from research
+3. Define test strategy: what to test, how to verify
+4. Assess whether the plan has 2+ independent workstreams
+
+**Decision point — Decomposition:**
+If the plan has independent workstreams (frontend + backend, multiple unrelated files, parallel test suites), note that Phase 3 should use the `steward` agent.
+
+**Hard gate — Plan must include:**
+- [ ] Explicit file paths and line ranges for every change
+- [ ] Test strategy (what tests to write or run)
+- [ ] User approval of the plan
+
+**Transition:** Invoke `/lembas` with phase "Plan" before moving to Implement.
+
+### Phase 3: Implement
+
+Goal: Execute the plan with small, verifiable changes and tight feedback loops. Default to TDD.
+
+**Execution mode — choose based on plan structure:**
+
+**Single-stream (default):** Tasks are sequential or tightly coupled.
+1. Invoke `superpowers:test-driven-development` — red-green-refactor for each unit of work
+2. Execute the plan step by step
+3. Verify after each change (run tests, check build)
+4. Commit each logical unit
+
+**Parallel subagents:** Plan has 3+ independent tasks touching different files.
+1. Dispatch multiple implementation subagents simultaneously (multiple Task tool calls in one message)
+2. Each subagent gets the full task text, relevant context, and TDD instructions
+3. No two subagents modify the same file — this is a planning constraint, not a runtime guard
+4. Optionally spawn a `palantir` agent in the background to monitor progress and detect drift
+5. Collect results, review each, then commit
+
+**Worktree isolation (opt-in):** Only when explicitly requested or when file conflicts are unavoidable. Pass `isolation: "worktree"` to the Task tool for subagents that need it.
+
+**Guidelines:**
+- **TDD by default.** Write the failing test first, then the minimal implementation, then refactor.
+- Follow the plan. If the plan is wrong, go back and revise it — don't silently deviate.
+- Small changes. One function, one test, one commit. Not a big-bang change.
+- Verify as you go. Don't batch all testing to the end.
+
+### Phase 4: Review
+
+Goal: Convention compliance, code quality, and verified passing state before completion.
+
+**Actions — three sequential steps:**
+
+**Step 1: Convention review**
+1. Invoke `/warden` to compare changes against reference files and conventions
+2. Fix all BLOCKING issues identified
+3. For ADVISORY issues, present to the user for decision
+
+**Step 2: Code quality review**
+1. Invoke `/pr-review-toolkit:review-pr` for comprehensive code quality analysis (silent failure hunting, type design, test coverage)
+2. Address any critical or important issues identified
+3. Re-run affected tests after fixes
+
+**Step 3: Verification gate**
+1. Invoke `superpowers:verification-before-completion` — run tests for affected package(s) only, confirm build passes, verify output matches expectations
+2. Use the package scope from Session Context to determine which test suites to run — do not run the entire monorepo's test suite
+3. Do NOT claim work is complete until verification passes
+4. If verification fails, fix and re-verify
+
+**Output:** Summary of what was built, what was reviewed, verification results, and readiness for completion.
+
+### Phase 5: Complete
+
+Goal: Integrate the work — squash/merge, PR creation, worktree cleanup.
+
+**Actions:**
+1. Invoke `superpowers:finishing-a-development-branch` to present integration options
+2. This skill handles: squash vs merge decision, PR creation, branch cleanup
+3. If working in a worktree (from Phase 0), clean up the worktree after merge
+
+**Gate:** Phase 4 verification must have passed. Do not complete without a green verification step.
+
+## Escape Hatch
+
+For simple tasks (single-file change, clear requirements, familiar area), the full cycle is overkill. Collapse to:
+
+1. Quick research (read the relevant file)
+2. Implement the change
+3. `/warden`
+
+Use judgment: if you're confident about the change and the area, skip formal planning. If there's any uncertainty, run the full cycle.
+
+## Key Principles
+
+1. **Context is the bottleneck.** Compact between every phase. Don't let research noise pollute planning, or planning noise pollute implementation.
+2. **Hard gates prevent drift.** Don't plan without understanding. Don't implement without a plan. Don't PR without review.
+3. **Compose, don't rebuild.** This skill orchestrates existing skills and superpowers (council, gather-lore, lembas, warden, review-pr, writing-plans, TDD, verification-before-completion, finishing-a-development-branch, using-git-worktrees). It doesn't replace them.
+4. **Human in the loop.** Plan approval is non-negotiable. The user guides direction; the agent handles execution.
+5. **Frequent compaction.** When in doubt, compact. The cost of re-reading a file is low; the cost of degraded reasoning is high.

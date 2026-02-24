@@ -1,0 +1,142 @@
+---
+name: fellowship
+description: Multi-quest orchestrator. Coordinates a team of agent teammates (led by Gandalf), each running /quest in an isolated worktree. Use when you have multiple independent tasks to run in parallel.
+---
+
+# Fellowship — Multi-Quest Orchestrator
+
+## Overview
+
+Coordinates parallel quest-running teammates using the agent teams API (`TeamCreate`, `SendMessage`, `TaskCreate`, `TaskUpdate`, `TeamDelete`). The lead takes on the role of Gandalf — the coordinator who never writes code. Gandalf spawns teammates, routes gate approvals, and reports progress. Each teammate runs the full `/quest` lifecycle in an isolated worktree and produces a PR as its deliverable.
+
+## When to Use
+
+- 2+ independent tasks, each warranting a full `/quest`
+- Tasks don't share in-progress state (separate files, separate concerns)
+- You want parallel execution with isolation and coordination
+
+## Lifecycle
+
+### Start
+
+`/fellowship` creates the fellowship team via `TeamCreate` with name `fellowship-{timestamp}`. The lead enters coordinator mode, waiting for quests. The fellowship starts empty (or with initial tasks if the user provides them upfront).
+
+### Add Quests
+
+The user adds quests dynamically at any time:
+
+```
+User: "quest: fix auth bug #42"
+User: "quest: add rate limiting to API"
+User: "quest: refactor logger to structured output"
+```
+
+Quests can be added while others are in progress, after some finish, or all at once.
+
+### Spawn a Quest
+
+For each quest, Gandalf:
+
+1. `TaskCreate` in the shared task list with the quest description
+2. Spawn a teammate via the `Task` tool with:
+   - `team_name`: the fellowship team name
+   - `isolation: "worktree"`
+   - `subagent_type: "general-purpose"`
+   - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
+3. Worktree branch: `fellowship/{task-slug}` (slug derived from the task description)
+
+**Teammate spawn prompt:**
+
+```
+You are a quest runner in a fellowship coordinated by Gandalf (the lead).
+
+YOUR TASK: {task_description}
+
+INSTRUCTIONS:
+1. Run /quest to execute this task through the full quest lifecycle
+2. You are working in an isolated worktree — make changes freely
+3. Gate handling — when you reach a phase gate, message the lead with
+   your gate checklist and summary using SendMessage:
+   - Research and Plan gates: send your checklist, then proceed
+     (the lead auto-approves these)
+   - Implement and Complete gates: send your checklist and WAIT
+     for the lead to respond before proceeding
+4. When /quest reaches Phase 5 (Complete), create a PR and message
+   the lead with the PR URL
+5. If you get stuck or need a decision, message the lead
+
+CONTEXT:
+- Fellowship team: {team_name}
+- Your quest: {quest_name}
+- Other active quests: {brief_list}
+```
+
+### Monitor & Approve Gates
+
+See the Gate Handling section below.
+
+### Disband
+
+When the user says "wrap up" or "disband":
+
+1. Send `shutdown_request` to all active teammates
+2. Synthesize a summary: quests completed, PR URLs, any open items
+3. Run `TeamDelete` to clean up
+
+## Gate Handling
+
+Each quest runs the full `/quest` lifecycle (6 phases with gates). Gate routing is prompt-based — the spawn prompt overrides quest's default gate behavior so teammates message the lead instead of waiting for direct user input.
+
+| Gate | Handling |
+|------|----------|
+| Onboard → Research | Auto-approve |
+| Research → Plan | Auto-approve |
+| **Plan → Implement** | **Surface to user** |
+| Implement → Review | Auto-approve |
+| **Review → Complete** | **Surface to user** |
+
+**Auto-approve gates:** Teammate sends checklist and proceeds. Lead acknowledges receipt, no blocking.
+
+**User-facing gates:** Lead presents the gate summary to the user with context (which quest, what phase, the checklist). Waits for user response. Relays approval or feedback to the teammate via `SendMessage`.
+
+Example: `"quest-2 (rate limiting) reached Plan → Implement gate. Plan summary: [summary]. Approve?"`
+
+## Lead Behavior (Gandalf's Job)
+
+### Reactive (responding to teammate events)
+
+- **Gate message received** → auto-approve or surface to user based on gate type
+- **Quest completed** → record PR URL, mark task done via `TaskUpdate`, report to user
+- **Quest stuck/errored** → report to user with context (phase, error), offer respawn
+- **Teammate idle** → normal, no action needed
+
+### Proactive (responding to user commands)
+
+- **"quest: {desc}"** → spawn new teammate (see Spawn a Quest)
+- **"status"** → read task list, summarize all quests with current phase
+- **"approve" / "reject"** → relay to the relevant teammate
+- **"cancel quest-N"** → send `shutdown_request` to teammate, preserve worktree
+- **"tell quest-N to ..."** → relay message to specific teammate via `SendMessage`
+- **"wrap up" / "disband"** → shutdown all teammates, synthesize summary, `TeamDelete`
+
+### What Gandalf does NOT do
+
+- Write code
+- Run quests itself
+- Make architectural decisions
+- Merge PRs (user's responsibility)
+
+## Edge Cases
+
+- **Quest fails:** Report to user with context (which phase, what went wrong). Offer to respawn a new teammate for the same task. Worktree is preserved for inspection.
+- **Too many quests:** Warn at 5+ active quests — token costs scale linearly and coordination overhead increases. No hard limit.
+- **Direct teammate access:** Through Gandalf ("tell quest-2 to skip the logger refactor") or direct via Shift+Down to message the teammate.
+- **Session death:** Worktrees survive but coordination is lost. Teammates are orphaned. The user can manually resume work in the preserved worktrees.
+
+## Key Principles
+
+1. **Coordinate, don't execute.** Gandalf never writes code. It spawns, routes, and reports.
+2. **Compose over existing primitives.** Agent teams + quest + worktrees. No new runtime code.
+3. **Dynamic over static.** Accept quests anytime, not just at startup.
+4. **Isolation by default.** Every quest gets its own worktree. No shared in-progress state.
+5. **Human in the loop.** Implement and complete gates surface to the user. Gandalf doesn't approve plans or PRs.
