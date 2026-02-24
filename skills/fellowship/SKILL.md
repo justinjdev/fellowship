@@ -56,11 +56,9 @@ INSTRUCTIONS:
 1. Run /quest to execute this task through the full quest lifecycle
 2. You are working in an isolated worktree — make changes freely
 3. Gate handling — when you reach a phase gate, message the lead with
-   your gate checklist and summary using SendMessage:
-   - Research and Plan gates: send your checklist, then proceed
-     (the lead auto-approves these)
-   - Implement and Complete gates: send your checklist and WAIT
-     for the lead to respond before proceeding
+   your gate checklist and summary using SendMessage, then WAIT for
+   the lead to respond before proceeding. Do NOT auto-proceed through
+   any gate — all gates require approval.
 4. When /quest reaches Phase 5 (Complete), create a PR and message
    the lead with the PR URL
 5. If you get stuck or need a decision, message the lead
@@ -85,27 +83,25 @@ When the user says "wrap up" or "disband":
 
 ## Gate Handling
 
-Each quest runs the full `/quest` lifecycle (6 phases with gates). Gate routing is prompt-based — the spawn prompt overrides quest's default gate behavior so teammates message the lead instead of waiting for direct user input.
+Each quest runs the full `/quest` lifecycle (6 phases with gates). Gate routing is prompt-based — the spawn prompt overrides quest's default gate behavior so teammates message the lead instead of waiting for direct user input. All gates are surfaced to the user for approval.
 
 | Gate | Handling |
 |------|----------|
-| Onboard → Research | Auto-approve |
-| Research → Plan | Auto-approve |
-| **Plan → Implement** | **Surface to user** |
-| Implement → Review | Auto-approve |
-| **Review → Complete** | **Surface to user** |
+| Onboard → Research | Surface to user |
+| Research → Plan | Surface to user |
+| Plan → Implement | Surface to user |
+| Implement → Review | Surface to user |
+| Review → Complete | Surface to user |
 
-**Auto-approve gates:** Teammate sends checklist and proceeds. Lead acknowledges receipt, no blocking.
+**All gates surface to the user.** Lead presents the gate summary with context (which quest, what phase, the checklist). Waits for user response. Relays approval or feedback to the teammate via `SendMessage`. No gate is auto-approved.
 
-**User-facing gates:** Lead presents the gate summary to the user with context (which quest, what phase, the checklist). Waits for user response. Relays approval or feedback to the teammate via `SendMessage`.
-
-Example: `"quest-2 (rate limiting) reached Plan → Implement gate. Plan summary: [summary]. Approve?"`
+Example: `"quest-2 (rate limiting) reached Research → Plan gate. Research summary: [summary]. Approve?"`
 
 ## Lead Behavior (Gandalf's Job)
 
 ### Reactive (responding to teammate events)
 
-- **Gate message received** → auto-approve or surface to user based on gate type
+- **Gate message received** → surface to user for approval
 - **Quest completed** → record PR URL, mark task done via `TaskUpdate`, report to user
 - **Quest stuck/errored** → report to user with context (phase, error), offer respawn
 - **Teammate idle** → normal, no action needed
@@ -139,4 +135,4 @@ Example: `"quest-2 (rate limiting) reached Plan → Implement gate. Plan summary
 2. **Compose over existing primitives.** Agent teams + quest + worktrees. No new runtime code.
 3. **Dynamic over static.** Accept quests anytime, not just at startup.
 4. **Isolation by default.** Every quest gets its own worktree. No shared in-progress state.
-5. **Human in the loop.** Implement and complete gates surface to the user. Gandalf doesn't approve plans or PRs.
+5. **Human in the loop.** All gates surface to the user. Gandalf doesn't auto-approve anything or merge PRs.
