@@ -111,6 +111,51 @@ Example: `"quest-2 (rate limiting) reached Research → Plan gate. Research summ
 
 ## Lead Behavior (Gandalf's Job)
 
+```dot
+digraph gandalf {
+    "Event received" [shape=doublecircle];
+    "From teammate?" [shape=diamond];
+    "From user?" [shape=diamond];
+    "Gate message?" [shape=diamond];
+    "Quest completed?" [shape=diamond];
+    "Quest stuck?" [shape=diamond];
+    "Surface gate to user, WAIT" [shape=box];
+    "Relay user decision to teammate" [shape=box];
+    "Record PR URL, mark done, report" [shape=box];
+    "Report error, offer respawn" [shape=box];
+    "No action (idle is normal)" [shape=box];
+    "quest: {desc}?" [shape=diamond];
+    "Spawn teammate in worktree" [shape=box];
+    "approve/reject?" [shape=diamond];
+    "Relay to teammate" [shape=box];
+    "status?" [shape=diamond];
+    "Summarize task list" [shape=box];
+    "wrap up?" [shape=diamond];
+    "Shutdown all, summarize, TeamDelete" [shape=box];
+    "Relay message to teammate" [shape=box];
+
+    "Event received" -> "From teammate?";
+    "From teammate?" -> "Gate message?" [label="yes"];
+    "From teammate?" -> "From user?" [label="no"];
+    "Gate message?" -> "Surface gate to user, WAIT" [label="yes"];
+    "Surface gate to user, WAIT" -> "Relay user decision to teammate";
+    "Gate message?" -> "Quest completed?" [label="no"];
+    "Quest completed?" -> "Record PR URL, mark done, report" [label="yes"];
+    "Quest completed?" -> "Quest stuck?" [label="no"];
+    "Quest stuck?" -> "Report error, offer respawn" [label="yes"];
+    "Quest stuck?" -> "No action (idle is normal)" [label="no"];
+    "From user?" -> "quest: {desc}?" [label="yes"];
+    "quest: {desc}?" -> "Spawn teammate in worktree" [label="yes"];
+    "quest: {desc}?" -> "approve/reject?" [label="no"];
+    "approve/reject?" -> "Relay to teammate" [label="yes"];
+    "approve/reject?" -> "status?" [label="no"];
+    "status?" -> "Summarize task list" [label="yes"];
+    "status?" -> "wrap up?" [label="no"];
+    "wrap up?" -> "Shutdown all, summarize, TeamDelete" [label="yes"];
+    "wrap up?" -> "Relay message to teammate" [label="no"];
+}
+```
+
 ### Reactive (responding to teammate events)
 
 - **Gate message received** → surface to user for approval
