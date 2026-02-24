@@ -62,6 +62,9 @@ INSTRUCTIONS:
 4. When /quest reaches Phase 5 (Complete), create a PR and message
    the lead with the PR URL
 5. If you get stuck or need a decision, message the lead
+6. If you receive a shutdown request, respond immediately using
+   SendMessage with type "shutdown_response", approve: true, and
+   the request_id from the message. Do not just acknowledge in text.
 
 CONTEXT:
 - Fellowship team: {team_name}

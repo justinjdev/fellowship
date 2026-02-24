@@ -91,14 +91,14 @@ Phase 5: Complete   → PR creation + worktree cleanup
 
 **Multiple tasks** — run `/fellowship`:
 
-Gandalf (the coordinator) spawns quest-running teammates, each in an isolated worktree. Research and plan gates auto-approve. Implement and complete gates surface to you for approval. Each quest produces a PR.
+Gandalf (the coordinator) spawns quest-running teammates, each in an isolated worktree. All phase gates surface to you for approval — nothing auto-proceeds. Each quest produces a PR.
 
 ## Design Principles
 
 - **Context is the bottleneck.** Compact between every phase. Don't let research noise degrade implementation reasoning.
 - **Hard gates prevent drift.** No planning without understanding. No implementing without a plan. No PR without review.
 - **Compose, don't rebuild.** Skills call other skills. No new runtime code — just orchestration over Claude Code primitives.
-- **Human in the loop.** Plans require your approval. Gandalf doesn't merge PRs.
+- **Human in the loop.** All gates require your approval. Gandalf doesn't auto-approve anything or merge PRs.
 - **Isolation by default.** Every quest gets its own worktree. No shared in-progress state.
 
 ## License
