@@ -66,6 +66,15 @@ INSTRUCTIONS:
    SendMessage with type "shutdown_response", approve: true, and
    the request_id from the message. Do not just acknowledge in text.
 
+BOUNDARIES:
+- Stay in YOUR worktree. Do NOT read, write, or navigate into other
+  teammates' worktrees. Your working directory is your worktree root.
+- Do NOT use MCP tools or external service integrations (Notion, Slack,
+  Jira, etc.) without first messaging the lead and getting explicit
+  approval. Your scope is local: code, tests, git, and the filesystem.
+- Do NOT push branches, create PRs, or take any action visible to
+  others without lead approval (except at Phase 5 as instructed above).
+
 CONTEXT:
 - Fellowship team: {team_name}
 - Your quest: {quest_name}

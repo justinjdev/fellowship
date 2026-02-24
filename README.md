@@ -100,6 +100,7 @@ Gandalf (the coordinator) spawns quest-running teammates, each in an isolated wo
 - **Compose, don't rebuild.** Skills call other skills. No new runtime code — just orchestration over Claude Code primitives.
 - **Human in the loop.** All gates require your approval. Gandalf doesn't auto-approve anything or merge PRs.
 - **Isolation by default.** Every quest gets its own worktree. No shared in-progress state.
+- **Local scope only.** Teammates are restricted to code, tests, git, and the filesystem. MCP tools and external services (Notion, Slack, Jira, etc.) require explicit approval.
 
 ## License
 
