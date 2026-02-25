@@ -37,6 +37,8 @@ Read the root CLAUDE.md. Extract:
 
 If no CLAUDE.md exists, note: "Consider running `/chronicle` to set up project context."
 
+Also check for `.claude/fellowship.json`. If it exists, read it and note any non-default settings. These will be included in the Session Context block under Architecture Notes so downstream skills (quest, lembas) are aware of the active configuration.
+
 ### Step 2: Understand the Task
 
 Ask one focused question:

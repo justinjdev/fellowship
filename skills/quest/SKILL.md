@@ -60,12 +60,13 @@ When running as a fellowship teammate (indicated by the spawn prompt), report ea
 
 ### Phase 0: Onboard
 
-1. **Isolate:** Invoke `superpowers:using-git-worktrees` to create an isolated worktree for this work. This keeps the main branch clean and allows safe experimentation.
-2. **Orient:** Invoke `/council` to load task-relevant context.
+1. **Config:** Read `.claude/fellowship.json` from the project root if it exists. Merge with defaults (see fellowship skill for the full schema). If the file does not exist, all defaults apply.
+2. **Isolate:** If `config.worktree.enabled` is true (default), invoke `superpowers:using-git-worktrees` to create an isolated worktree for this work. This keeps the main branch clean and allows safe experimentation. If `config.worktree.enabled` is false, work on the current branch without worktree isolation.
+3. **Orient:** Invoke `/council` to load task-relevant context.
 
 If the user has already described their task, pass the description directly. Otherwise, council will ask.
 
-**Gate:** Worktree created AND Session Context block must exist before proceeding.
+**Gate:** Isolation set up (worktree created or skipped per config) AND Session Context block must exist before proceeding.
 
 ### Phase 1: Research
 
@@ -165,6 +166,7 @@ Goal: Integrate the work — squash/merge, PR creation, worktree cleanup.
 1. Invoke `superpowers:finishing-a-development-branch` to present integration options
 2. This skill handles: squash vs merge decision, PR creation, branch cleanup
 3. If working in a worktree (from Phase 0), clean up the worktree after merge
+4. **PR config:** If `config.pr.draft` is true, create the PR as a draft. If `config.pr.template` is set (a string), use it as the PR body template — the template can contain `{task}`, `{summary}`, and `{changes}` placeholders that get filled in with the actual values.
 
 **Gate:** Phase 4 verification must have passed. Do not complete without a green verification step.
 
