@@ -65,6 +65,11 @@ INSTRUCTIONS:
 6. If you receive a shutdown request, respond immediately using
    SendMessage with type "shutdown_response", approve: true, and
    the request_id from the message. Do not just acknowledge in text.
+7. Phase tracking — at the START of each quest phase, update your task
+   with your current phase using TaskUpdate:
+   TaskUpdate(taskId: "{task_id}", metadata: {"phase": "<phase_name>"})
+   Valid phases: Onboard, Research, Plan, Implement, Review, Complete
+   This lets the lead track progress across all quests.
 
 BOUNDARIES:
 - Stay in YOUR worktree. Do NOT read, write, or navigate into other
@@ -78,6 +83,7 @@ BOUNDARIES:
 CONTEXT:
 - Fellowship team: {team_name}
 - Your quest: {quest_name}
+- Your task ID: {task_id}
 - Other active quests: {brief_list}
 ```
 
@@ -107,7 +113,7 @@ Each quest runs the full `/quest` lifecycle (6 phases with gates). Gate routing 
 
 **All gates surface to the user.** Lead presents the gate summary with context (which quest, what phase, the checklist). Waits for user response. Relays approval or feedback to the teammate via `SendMessage`. No gate is auto-approved.
 
-Example: `"quest-2 (rate limiting) reached Research → Plan gate. Research summary: [summary]. Approve?"`
+Example: `"quest-2 (rate limiting) reached Research → Plan gate [██░░░░ 1/5]. Research summary: [summary]. Approve?"`
 
 ## Lead Behavior (Gandalf's Job)
 
@@ -129,7 +135,7 @@ digraph gandalf {
     "approve/reject?" [shape=diamond];
     "Relay to teammate" [shape=box];
     "status?" [shape=diamond];
-    "Summarize task list" [shape=box];
+    "Present progress report" [shape=box];
     "wrap up?" [shape=diamond];
     "Shutdown all, summarize, TeamDelete" [shape=box];
     "Relay message to teammate" [shape=box];
@@ -149,7 +155,7 @@ digraph gandalf {
     "quest: {desc}?" -> "approve/reject?" [label="no"];
     "approve/reject?" -> "Relay to teammate" [label="yes"];
     "approve/reject?" -> "status?" [label="no"];
-    "status?" -> "Summarize task list" [label="yes"];
+    "status?" -> "Present progress report" [label="yes"];
     "status?" -> "wrap up?" [label="no"];
     "wrap up?" -> "Shutdown all, summarize, TeamDelete" [label="yes"];
     "wrap up?" -> "Relay message to teammate" [label="no"];
@@ -166,11 +172,37 @@ digraph gandalf {
 ### Proactive (responding to user commands)
 
 - **"quest: {desc}"** → spawn new teammate (see Spawn a Quest)
-- **"status"** → read task list, summarize all quests with current phase
+- **"status"** → read task list (including metadata), present structured progress report (see Progress Tracking below)
 - **"approve" / "reject"** → relay to the relevant teammate
 - **"cancel quest-N"** → send `shutdown_request` to teammate, preserve worktree
 - **"tell quest-N to ..."** → relay message to specific teammate via `SendMessage`
 - **"wrap up" / "disband"** → shutdown all teammates, synthesize summary, `TeamDelete`
+
+### Progress Tracking
+
+Gandalf maintains awareness of quest progress through two mechanisms:
+
+1. **Task metadata**: Each teammate updates their task's `phase` metadata field at phase transitions via `TaskUpdate`. Gandalf reads this via `TaskList` when reporting status.
+2. **Gate messages**: Gate transition messages from teammates provide the most recent context for each quest.
+
+When the user asks for "status" or Gandalf proactively reports progress:
+
+```
+## Fellowship Status
+
+| Quest | Phase | Progress | Last Gate |
+|-------|-------|----------|-----------|
+| quest-auth-bug | Implement | ████░░ 3/5 | Plan approved |
+| quest-rate-limit | Research | █░░░░░ 1/5 | Onboard complete |
+
+**Active:** 2 | **Completed:** 0 | **Blocked:** 0
+```
+
+Phase-to-progress mapping:
+- Onboard = 0/5, Research = 1/5, Plan = 2/5, Implement = 3/5, Review = 4/5, Complete = 5/5
+- Use filled/empty block characters for visual progress
+- Pull phase from task metadata `phase` field via `TaskList`
+- Pull last gate context from the most recent gate message or teammate update
 
 ### What Gandalf does NOT do
 

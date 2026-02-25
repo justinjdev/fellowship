@@ -47,6 +47,12 @@ Phase 5: Complete ───→ finishing-a-development-branch
 
 ## Process
 
+### Fellowship Integration
+
+When running as a fellowship teammate (indicated by the spawn prompt), report each phase transition to the lead:
+1. Update task metadata: `TaskUpdate(taskId: "<your_task_id>", metadata: {"phase": "<phase_name>"})`
+2. This happens at the start of each phase — no extra messages needed beyond existing gate handling.
+
 ### Phase 0: Onboard
 
 1. **Isolate:** Invoke `superpowers:using-git-worktrees` to create an isolated worktree for this work. This keeps the main branch clean and allows safe experimentation.

@@ -91,7 +91,7 @@ Phase 5: Complete   → PR creation + worktree cleanup
 
 **Multiple tasks** — run `/fellowship`:
 
-Gandalf (the coordinator) spawns quest-running teammates, each in an isolated worktree. All phase gates surface to you for approval — nothing auto-proceeds. Each quest produces a PR.
+Gandalf (the coordinator) spawns quest-running teammates, each in an isolated worktree. All phase gates surface to you for approval — nothing auto-proceeds. Each quest produces a PR. Say "status" to see a progress table showing each quest's current phase with visual progress indicators.
 
 ## Design Principles
 
