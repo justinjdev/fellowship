@@ -57,6 +57,42 @@ Add this hook to `.claude/settings.local.json` in repos where you use fellowship
 
 Also add `tmp/` to your `.gitignore` — checkpoints are local ephemeral state.
 
+### Configuration (Optional)
+
+Create `.claude/fellowship.json` in your project root to customize fellowship behavior. All settings are optional — missing keys use sensible defaults that match the out-of-box behavior.
+
+```json
+{
+  "branchPrefix": "fellowship/",
+  "worktree": {
+    "enabled": true
+  },
+  "gates": {
+    "autoApprove": []
+  },
+  "pr": {
+    "draft": false,
+    "template": null
+  },
+  "palantir": {
+    "enabled": true,
+    "minQuests": 2
+  }
+}
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `branchPrefix` | `"fellowship/"` | Prefix for worktree branch names. E.g., `"feature/"` produces `feature/{task-slug}`. |
+| `worktree.enabled` | `true` | Whether quests create isolated worktrees. Set to `false` to work on the current branch. |
+| `gates.autoApprove` | `[]` | Gate names to auto-approve: `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`. Gates not listed still surface to you for approval. |
+| `pr.draft` | `false` | Create PRs as drafts. |
+| `pr.template` | `null` | PR body template string. Supports `{task}`, `{summary}`, and `{changes}` placeholders. |
+| `palantir.enabled` | `true` | Whether to spawn a palantir monitoring agent during fellowships. |
+| `palantir.minQuests` | `2` | Minimum active quests before palantir is spawned. |
+
+The config is read at fellowship startup and quest onboard (Phase 0). Changes to the file take effect on the next fellowship or quest invocation.
+
 ## Skills
 
 | Skill | Purpose |
@@ -90,14 +126,14 @@ Phase 5: Complete   → PR creation + worktree cleanup
 
 **Multiple tasks** — run `/fellowship`:
 
-Gandalf (the coordinator) spawns quest-running teammates, each in an isolated worktree. All phase gates surface to you for approval — nothing auto-proceeds. Each quest produces a PR. Say "status" to see a progress table showing each quest's current phase with visual progress indicators.
+Gandalf (the coordinator) spawns quest-running teammates, each in an isolated worktree. By default, all phase gates surface to you for approval. You can auto-approve specific gates via `.claude/fellowship.json` (see Configuration). Each quest produces a PR. Say "status" to see a progress table showing each quest's current phase with visual progress indicators.
 
 ## Design Principles
 
 - **Context is the bottleneck.** Compact between every phase. Don't let research noise degrade implementation reasoning.
 - **Hard gates prevent drift.** No planning without understanding. No implementing without a plan. No PR without review.
 - **Compose, don't rebuild.** Skills call other skills. No new runtime code — just orchestration over Claude Code primitives.
-- **Human in the loop.** All gates require your approval. Gandalf doesn't auto-approve anything or merge PRs.
+- **Human in the loop.** By default, all gates require your approval. You can opt into auto-approval for specific gates via config. Gandalf never merges PRs.
 - **Isolation by default.** Every quest gets its own worktree. No shared in-progress state.
 - **Local scope only.** Teammates are restricted to code, tests, git, and the filesystem. MCP tools and external services (Notion, Slack, Jira, etc.) require explicit approval.
 

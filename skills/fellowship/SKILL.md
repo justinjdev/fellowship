@@ -33,6 +33,32 @@ User: "quest: refactor logger to structured output"
 
 Quests can be added while others are in progress, after some finish, or all at once.
 
+### Load Config
+
+At startup, read `.claude/fellowship.json` from the project root if it exists. This file contains user preferences for fellowship behavior. If the file does not exist, use these defaults:
+
+```json
+{
+  "branchPrefix": "fellowship/",
+  "worktree": {
+    "enabled": true
+  },
+  "gates": {
+    "autoApprove": []
+  },
+  "pr": {
+    "draft": false,
+    "template": null
+  },
+  "palantir": {
+    "enabled": true,
+    "minQuests": 2
+  }
+}
+```
+
+Merge the file contents with defaults — any key not present in the file uses the default value. Store the resolved config for use throughout the fellowship lifecycle.
+
 ### Spawn a Quest
 
 For each quest, Gandalf:
@@ -40,10 +66,10 @@ For each quest, Gandalf:
 1. `TaskCreate` in the shared task list with the quest description
 2. Spawn a teammate via the `Task` tool with:
    - `team_name`: the fellowship team name
-   - `isolation: "worktree"`
+   - `isolation: "worktree"` (if config `worktree.enabled` is true; otherwise omit `isolation`)
    - `subagent_type: "general-purpose"`
    - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
-3. Worktree branch: `fellowship/{task-slug}` (slug derived from the task description)
+3. Worktree branch: `{config.branchPrefix}{task-slug}` (slug derived from the task description, prefix from config)
 
 **Teammate spawn prompt:**
 
@@ -55,12 +81,16 @@ YOUR TASK: {task_description}
 INSTRUCTIONS:
 1. Run /quest to execute this task through the full quest lifecycle
 2. You are working in an isolated worktree — make changes freely
-3. Gate handling — when you reach a phase gate, send your gate checklist
-   and summary to the lead via SendMessage. Then STOP. Do not take any
-   further action — do not continue working, do not start the next phase,
-   do not call any tools. Your turn is done. You will receive a message
-   from the lead with approval or feedback. Only resume work after that
-   message arrives.
+3. Gate handling — when you reach a phase gate, message the lead with
+   your gate checklist and summary using SendMessage:
+   - Research and Plan gates: send your checklist, then proceed
+     (the lead auto-approves these)
+   - Implement and Complete gates: send your checklist via SendMessage,
+     then STOP. Do not take any further action — do not continue working,
+     do not start the next phase, do not call any tools. Your turn is done.
+     You will receive a message from the lead with approval or feedback.
+     Only resume work after that message arrives.
+   {gate_config_override}
 4. When /quest reaches Phase 5 (Complete), create a PR and message
    the lead with the PR URL
 5. If you get stuck or need a decision, message the lead
@@ -87,11 +117,16 @@ CONTEXT:
 - Your quest: {quest_name}
 - Your task ID: {task_id}
 - Other active quests: {brief_list}
+{if pr config exists}
+- PR config: draft={config.pr.draft}, template={config.pr.template}
+{endif}
 ```
+
+**Gate config override (`{gate_config_override}`):** If `config.gates.autoApprove` contains gate names (e.g., `["Research", "Plan"]`), replace the gate handling instruction for those gates. For auto-approved gates, the instruction becomes: "send your checklist, then proceed (the lead auto-approves these)." For gates NOT in the auto-approve list, keep the default: "send your checklist via SendMessage, then STOP and wait for approval."
 
 ### Spawn Palantir
 
-When 2+ quests are active, Gandalf spawns a palantir monitoring agent as a background teammate. Palantir watches quest progress, detects stuck agents, scope drift, and file conflicts, and alerts the lead.
+When `config.palantir.minQuests` or more quests are active (default: 2) and `config.palantir.enabled` is true (default), Gandalf spawns a palantir monitoring agent as a background teammate. Palantir watches quest progress, detects stuck agents, scope drift, and file conflicts, and alerts the lead. If `config.palantir.enabled` is false, skip palantir entirely.
 
 Spawn palantir via the `Task` tool with:
 - `team_name`: the fellowship team name
@@ -127,7 +162,7 @@ BOUNDARIES:
 - If you receive a shutdown request, approve it immediately.
 ```
 
-Only one palantir runs per fellowship. If quests drop below 2, shut down palantir to save resources. If palantir detects an issue, Gandalf presents it to the user alongside the affected quest's context.
+Only one palantir runs per fellowship. If quests drop below `config.palantir.minQuests` (default: 2), shut down palantir to save resources. If palantir detects an issue, Gandalf presents it to the user alongside the affected quest's context.
 
 ### Monitor & Approve Gates
 
@@ -143,7 +178,9 @@ When the user says "wrap up" or "disband":
 
 ## Gate Handling
 
-Each quest runs the full `/quest` lifecycle (6 phases with gates). Gate routing is prompt-based — the spawn prompt overrides quest's default gate behavior so teammates message the lead instead of waiting for direct user input. All gates are surfaced to the user for approval.
+Each quest runs the full `/quest` lifecycle (6 phases with gates). Gate routing is prompt-based — the spawn prompt overrides quest's default gate behavior so teammates message the lead instead of waiting for direct user input.
+
+**Default behavior (no config or empty `autoApprove`):**
 
 | Gate | Handling |
 |------|----------|
@@ -153,9 +190,12 @@ Each quest runs the full `/quest` lifecycle (6 phases with gates). Gate routing 
 | Implement → Review | Surface to user |
 | Review → Complete | Surface to user |
 
-**All gates surface to the user.** Lead presents the gate summary with context (which quest, what phase, the checklist). Waits for user response. Relays approval or feedback to the teammate via `SendMessage`. No gate is auto-approved.
+**With `config.gates.autoApprove`:** Gates listed in the array are auto-approved by the lead without surfacing to the user. Valid gate names: `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`. For example, `"autoApprove": ["Research", "Plan"]` means Research and Plan gates are auto-approved, while Implement, Review, and Complete gates still surface to the user.
 
-Example: `"quest-2 (rate limiting) reached Research → Plan gate [██░░░░ 1/5]. Research summary: [summary]. Approve?"`
+When a gate is auto-approved: the lead receives the gate message, immediately relays approval to the teammate, and logs it (e.g., `"quest-2: Research gate auto-approved"`). When a gate requires user approval: the lead presents the gate summary with context and waits for the user's response before relaying.
+
+Example (user-approved): `"quest-2 (rate limiting) reached Research → Plan gate [██░░░░ 1/5]. Research summary: [summary]. Approve?"`
+Example (auto-approved): `"quest-2: Research gate auto-approved per config"`
 
 ## Lead Behavior (Gandalf's Job)
 
@@ -206,7 +246,7 @@ digraph gandalf {
 
 ### Reactive (responding to teammate events)
 
-- **Gate message received** → surface to user for approval
+- **Gate message received** → check `config.gates.autoApprove`: if gate is listed, auto-approve and relay; otherwise surface to user for approval
 - **Quest completed** → record PR URL, mark task done via `TaskUpdate`, report to user
 - **Quest stuck/errored** → report to user with context (phase, error), offer respawn
 - **Teammate idle** → normal, no action needed
@@ -266,4 +306,4 @@ Phase-to-progress mapping:
 2. **Compose over existing primitives.** Agent teams + quest + worktrees. No new runtime code.
 3. **Dynamic over static.** Accept quests anytime, not just at startup.
 4. **Isolation by default.** Every quest gets its own worktree. No shared in-progress state.
-5. **Human in the loop.** All gates surface to the user. Gandalf doesn't auto-approve anything or merge PRs.
+5. **Human in the loop.** By default, all gates surface to the user. Users can opt into auto-approval for specific gates via config. Gandalf never merges PRs.
