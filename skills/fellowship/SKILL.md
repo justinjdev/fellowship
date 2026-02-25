@@ -55,10 +55,12 @@ YOUR TASK: {task_description}
 INSTRUCTIONS:
 1. Run /quest to execute this task through the full quest lifecycle
 2. You are working in an isolated worktree — make changes freely
-3. Gate handling — when you reach a phase gate, message the lead with
-   your gate checklist and summary using SendMessage, then WAIT for
-   the lead to respond before proceeding. Do NOT auto-proceed through
-   any gate — all gates require approval.
+3. Gate handling — when you reach a phase gate, send your gate checklist
+   and summary to the lead via SendMessage. Then STOP. Do not take any
+   further action — do not continue working, do not start the next phase,
+   do not call any tools. Your turn is done. You will receive a message
+   from the lead with approval or feedback. Only resume work after that
+   message arrives.
 4. When /quest reaches Phase 5 (Complete), create a PR and message
    the lead with the PR URL
 5. If you get stuck or need a decision, message the lead
