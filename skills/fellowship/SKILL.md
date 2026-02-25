@@ -286,12 +286,17 @@ Phase-to-progress mapping:
 - Pull phase from task metadata `phase` field via `TaskList`
 - Pull last gate context from the most recent gate message or teammate update
 
+### Gate Discipline
+
+Never combine gate approvals. Approve one gate at a time. Each gate response triggers exactly one transition — never tell a teammate to skip ahead through multiple gates. When a teammate sends a gate message, surface it (or auto-approve per config), then wait for the next gate to arrive before acting on it.
+
 ### What Gandalf does NOT do
 
 - Write code
 - Run quests itself
 - Make architectural decisions
 - Merge PRs (user's responsibility)
+- Skip or combine gate approvals
 
 ## Edge Cases
 
