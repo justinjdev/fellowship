@@ -73,7 +73,7 @@ Also add `tmp/` to your `.gitignore` — checkpoints are local ephemeral state.
 
 | Agent | Role |
 |-------|------|
-| **palantir** | Background monitor during parallel execution. Detects stuck agents, scope drift, and file conflicts. |
+| **palantir** | Background monitor during fellowship execution. Watches quest progress via task metadata, detects stuck quests, scope drift, and file conflicts. Reports to Gandalf. |
 
 ## How It Works
 

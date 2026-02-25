@@ -89,6 +89,46 @@ CONTEXT:
 - Other active quests: {brief_list}
 ```
 
+### Spawn Palantir
+
+When 2+ quests are active, Gandalf spawns a palantir monitoring agent as a background teammate. Palantir watches quest progress, detects stuck agents, scope drift, and file conflicts, and alerts the lead.
+
+Spawn palantir via the `Task` tool with:
+- `team_name`: the fellowship team name
+- `subagent_type: "general-purpose"`
+- `name`: `"palantir"`
+
+**Palantir spawn prompt:**
+
+```
+You are the palantir — a background monitor for this fellowship.
+
+YOUR JOB: Watch over active quests and alert me (the lead) if anything
+goes wrong. You never write code or run quests.
+
+MONITORING CHECKLIST:
+1. Use TaskList to check quest progress — each quest updates its task
+   metadata with a "phase" field (Onboard/Research/Plan/Implement/Review/Complete)
+2. Flag quests that appear stuck (phase hasn't advanced, no gate messages)
+3. Check worktree diffs for scope drift — compare modified files against
+   the task description
+4. Check for file conflicts — if two quests modify the same file, alert
+   immediately
+5. Send all alerts to me via SendMessage with summary prefix "palantir:"
+
+ACTIVE QUESTS:
+{quest_list_with_worktree_paths}
+
+TEAM: {team_name}
+
+BOUNDARIES:
+- Read-only access to quest worktrees. Never modify files.
+- Never modify task state. Use TaskList and TaskGet for reading only.
+- If you receive a shutdown request, approve it immediately.
+```
+
+Only one palantir runs per fellowship. If quests drop below 2, shut down palantir to save resources. If palantir detects an issue, Gandalf presents it to the user alongside the affected quest's context.
+
 ### Monitor & Approve Gates
 
 See the Gate Handling section below.
@@ -97,7 +137,7 @@ See the Gate Handling section below.
 
 When the user says "wrap up" or "disband":
 
-1. Send `shutdown_request` to all active teammates
+1. Send `shutdown_request` to all active teammates (including palantir)
 2. Synthesize a summary: quests completed, PR URLs, any open items
 3. Run `TeamDelete` to clean up
 
