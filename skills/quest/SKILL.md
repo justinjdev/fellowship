@@ -18,7 +18,7 @@ Orchestrates the full Research → Plan → Implement cycle with intentional com
 ## Phase Flow
 
 ```
-Phase 0: Onboard ──→ using-git-worktrees → /council
+Phase 0: Onboard ──→ EnterWorktree → /council
      │
      ▼
 Phase 1: Research ──→ Explore agents / /gather-lore
@@ -60,8 +60,8 @@ When running as a fellowship teammate (indicated by the spawn prompt), report ea
 
 ### Phase 0: Onboard
 
-1. **Config:** Read `.claude/fellowship.json` from the project root if it exists. Merge with defaults (see fellowship skill for the full schema). If the file does not exist, all defaults apply.
-2. **Isolate:** If `config.worktree.enabled` is true (default), invoke `superpowers:using-git-worktrees` to create an isolated worktree for this work. This keeps the main branch clean and allows safe experimentation. If `config.worktree.enabled` is false, work on the current branch without worktree isolation.
+1. **Config:** Read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. Merge with defaults (see fellowship skill for the full schema). If the file does not exist, all defaults apply.
+2. **Isolate:** If `config.worktree.enabled` is true (default), use `EnterWorktree` to create an isolated worktree for this work. If `config.worktree.directory` is set, create the worktree there instead of the default location (e.g., `git worktree add {config.worktree.directory}/{branch-name}`). This keeps the main branch clean and allows safe experimentation. If `config.worktree.enabled` is false, work on the current branch without worktree isolation.
 3. **Orient:** Invoke `/council` to load task-relevant context.
 
 If the user has already described their task, pass the description directly. Otherwise, council will ask.
@@ -185,6 +185,6 @@ Use judgment: if you're confident about the change and the area, skip formal pla
 
 1. **Context is the bottleneck.** Compact between every phase. Don't let research noise pollute planning, or planning noise pollute implementation.
 2. **Hard gates prevent drift.** Don't plan without understanding. Don't implement without a plan. Don't PR without review.
-3. **Compose, don't rebuild.** This skill orchestrates existing skills and superpowers (council, gather-lore, lembas, warden, review-pr, writing-plans, TDD, verification-before-completion, finishing-a-development-branch, using-git-worktrees). It doesn't replace them.
+3. **Compose, don't rebuild.** This skill orchestrates existing skills (council, gather-lore, lembas, warden, review-pr, writing-plans, TDD, verification-before-completion, finishing-a-development-branch). It doesn't replace them.
 4. **Human in the loop.** Plan approval is non-negotiable. The user guides direction; the agent handles execution.
 5. **Frequent compaction.** When in doubt, compact. The cost of re-reading a file is low; the cost of degraded reasoning is high.

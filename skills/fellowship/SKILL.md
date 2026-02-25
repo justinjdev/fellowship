@@ -35,29 +35,30 @@ Quests can be added while others are in progress, after some finish, or all at o
 
 ### Load Config
 
-At startup, read `.claude/fellowship.json` from the project root if it exists. This file contains user preferences for fellowship behavior. If the file does not exist, use these defaults:
+At startup, read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. This file contains user preferences for fellowship behavior that apply across all projects. If the file does not exist, all defaults apply. Merge the file contents with defaults — any key not present in the file uses the default value.
 
+**Config schema:**
+
+| Key | Type | Default | Valid values | Description |
+|-----|------|---------|--------------|-------------|
+| `branchPrefix` | string | `"fellowship/"` | Any valid git branch prefix | Prefix for worktree branch names. Produces `{prefix}{task-slug}`. |
+| `worktree.enabled` | boolean | `true` | `true`, `false` | Create isolated git worktrees per quest. Set `false` to work on the current branch. |
+| `worktree.directory` | string \| null | `null` | Absolute path to a directory | Parent directory for worktrees. `null` uses Claude Code's default (`.claude/worktrees/`). |
+| `gates.autoApprove` | string[] | `[]` | `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"` | Gates the lead auto-approves without surfacing to the user. Unlisted gates require user approval. |
+| `pr.draft` | boolean | `false` | `true`, `false` | Create PRs as drafts. |
+| `pr.template` | string \| null | `null` | Template string with `{task}`, `{summary}`, `{changes}` placeholders | Custom PR body template. `null` uses the default format. |
+| `palantir.enabled` | boolean | `true` | `true`, `false` | Spawn a palantir monitoring agent during fellowships. |
+| `palantir.minQuests` | number | `2` | Any positive integer | Minimum active quests before palantir is spawned. |
+
+**Example — auto-approve early gates, draft PRs:**
 ```json
 {
-  "branchPrefix": "fellowship/",
-  "worktree": {
-    "enabled": true
-  },
-  "gates": {
-    "autoApprove": []
-  },
-  "pr": {
-    "draft": false,
-    "template": null
-  },
-  "palantir": {
-    "enabled": true,
-    "minQuests": 2
-  }
+  "gates": { "autoApprove": ["Research", "Plan"] },
+  "pr": { "draft": true }
 }
 ```
 
-Merge the file contents with defaults — any key not present in the file uses the default value. Store the resolved config for use throughout the fellowship lifecycle.
+If the user asks to set up or modify their config, invoke `/config`.
 
 ### Spawn a Quest
 

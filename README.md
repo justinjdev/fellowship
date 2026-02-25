@@ -10,10 +10,12 @@ For multiple independent tasks, it spins up parallel agent teammates — each in
 
 ## Install
 
-From within Claude Code:
+From within Claude Code, run these as **two separate commands**:
 
 ```
 /plugin marketplace add justinjdev/claude-plugins
+```
+```
 /plugin install fellowship@justinjdev
 ```
 
@@ -59,13 +61,14 @@ Also add `tmp/` to your `.gitignore` — checkpoints are local ephemeral state.
 
 ### Configuration (Optional)
 
-Create `.claude/fellowship.json` in your project root to customize fellowship behavior. All settings are optional — missing keys use sensible defaults that match the out-of-box behavior.
+Create `~/.claude/fellowship.json` in your personal Claude directory to customize fellowship behavior across all projects. All settings are optional — missing keys use sensible defaults that match the out-of-box behavior.
 
 ```json
 {
   "branchPrefix": "fellowship/",
   "worktree": {
-    "enabled": true
+    "enabled": true,
+    "directory": null
   },
   "gates": {
     "autoApprove": []
@@ -85,6 +88,7 @@ Create `.claude/fellowship.json` in your project root to customize fellowship be
 |---------|---------|-------------|
 | `branchPrefix` | `"fellowship/"` | Prefix for worktree branch names. E.g., `"feature/"` produces `feature/{task-slug}`. |
 | `worktree.enabled` | `true` | Whether quests create isolated worktrees. Set to `false` to work on the current branch. |
+| `worktree.directory` | `null` | Parent directory for worktrees. `null` uses Claude Code's default (`.claude/worktrees/`). |
 | `gates.autoApprove` | `[]` | Gate names to auto-approve: `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`. Gates not listed still surface to you for approval. |
 | `pr.draft` | `false` | Create PRs as drafts. |
 | `pr.template` | `null` | PR body template string. Supports `{task}`, `{summary}`, and `{changes}` placeholders. |
@@ -104,6 +108,7 @@ The config is read at fellowship startup and quest onboard (Phase 0). Changes to
 | `/lembas` | Context compression between phases. Keeps the context window in the reasoning sweet spot. |
 | `/warden` | Pre-PR convention review. Compares changes against reference files and documented patterns. |
 | `/chronicle` | One-time codebase bootstrapping. Walks through your project to extract conventions into CLAUDE.md. |
+| `/config` | View or edit fellowship settings (`~/.claude/fellowship.json`). Interactive setup for all configuration options. |
 
 ## Agents
 
@@ -126,7 +131,7 @@ Phase 5: Complete   → PR creation + worktree cleanup
 
 **Multiple tasks** — run `/fellowship`:
 
-Gandalf (the coordinator) spawns quest-running teammates, each in an isolated worktree. By default, all phase gates surface to you for approval. You can auto-approve specific gates via `.claude/fellowship.json` (see Configuration). Each quest produces a PR. Say "status" to see a progress table showing each quest's current phase with visual progress indicators.
+Gandalf (the coordinator) spawns quest-running teammates, each in an isolated worktree. By default, all phase gates surface to you for approval. You can auto-approve specific gates via `~/.claude/fellowship.json` (see Configuration). Each quest produces a PR. Say "status" to see a progress table showing each quest's current phase with visual progress indicators.
 
 ## Design Principles
 
@@ -139,9 +144,16 @@ Gandalf (the coordinator) spawns quest-running teammates, each in an isolated wo
 
 ## Changelog
 
+### v1.2.0
+
+- **`/config` command** — interactive skill to view, edit, and reset fellowship settings
+- **Config moved to personal directory** — `~/.claude/fellowship.json` is now loaded from the user's personal Claude directory instead of the project root, making settings cross-project
+- **Custom worktree directory** — `worktree.directory` config option for organizations that don't use Claude Code's default worktree location
+- **Removed superpowers:using-git-worktrees dependency** — quest now uses `EnterWorktree` directly for worktree isolation
+
 ### v1.1.0
 
-- **Config file support** — `.claude/fellowship.json` for customizing branch prefixes, gate auto-approval, PR defaults, worktree strategy, and palantir settings ([#3](https://github.com/justinjdev/fellowship/pull/3))
+- **Config file support** — `~/.claude/fellowship.json` for customizing branch prefixes, gate auto-approval, PR defaults, worktree strategy, and palantir settings ([#3](https://github.com/justinjdev/fellowship/pull/3))
 - **Palantir rewrite** — rewrote from dead code into a functional monitoring agent that watches quest progress, detects stuck quests and scope drift, and alerts Gandalf via SendMessage ([#2](https://github.com/justinjdev/fellowship/pull/2))
 - **Progress tracking** — teammates report current phase via task metadata; say "status" during a fellowship for a structured progress table ([#1](https://github.com/justinjdev/fellowship/pull/1))
 - **Gate blocking fix** — replaced ineffective "WAIT" instruction with explicit turn-ending so agents actually stop at gates ([#1](https://github.com/justinjdev/fellowship/pull/1))
