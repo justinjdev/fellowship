@@ -128,6 +128,7 @@ Goal: Execute the plan with small, verifiable changes and tight feedback loops. 
 - **TDD by default.** Write the failing test first, then the minimal implementation, then refactor.
 - Follow the plan. If the plan is wrong, go back and revise it — don't silently deviate.
 - Small changes. One function, one test, one commit. Not a big-bang change.
+- Use conventional commits for all git commits (e.g., `feat:`, `fix:`, `docs:`, `refactor:`).
 - Verify as you go. Don't batch all testing to the end.
 
 **Transition:** Invoke `/lembas` with phase "Implement" before moving to Review.

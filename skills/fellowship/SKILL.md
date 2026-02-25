@@ -103,6 +103,9 @@ INSTRUCTIONS:
    Valid phases: Onboard, Research, Plan, Implement, Review, Complete
    This lets the lead track progress across all quests.
 
+CONVENTIONS:
+- Use conventional commits for all git commits (e.g., feat:, fix:, docs:, refactor:)
+
 BOUNDARIES:
 - Stay in YOUR worktree. Do NOT read, write, or navigate into other
   teammates' worktrees. Your working directory is your worktree root.
