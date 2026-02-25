@@ -1,6 +1,6 @@
 ---
 name: quest
-description: Use for any non-trivial task. Orchestrates the Research-Plan-Implement cycle with compaction between phases, integrating council, lembas, gather-lore, warden, and steward. Enforces discipline and phase gates.
+description: Use for any non-trivial task. Orchestrates the Research-Plan-Implement cycle with compaction between phases, integrating council, lembas, gather-lore, and warden. Enforces discipline and phase gates.
 ---
 
 # Quest — Research, Plan, Implement
@@ -29,7 +29,6 @@ Phase 1: Research ──→ Explore agents / /gather-lore
      ▼
 Phase 2: Plan ──────→ Plan mode / writing-plans
      │                Goal: explicit steps with file:line refs
-     │                Decision point: decomposition needed?
      ▼
   /lembas
      │
@@ -37,15 +36,27 @@ Phase 2: Plan ──────→ Plan mode / writing-plans
 Phase 3: Implement ──→ TDD (test-driven-development) + execute plan
      │                 Goal: small verifiable changes via red-green-refactor
      ▼
+  /lembas
+     │
+     ▼
 Phase 4: Review ─────→ /warden → /pr-review-toolkit:review-pr
      │                 → verification-before-completion
      │                 Goal: conventions + code quality + verified passing
+     ▼
+  /lembas
+     │
      ▼
 Phase 5: Complete ───→ finishing-a-development-branch
                        Goal: squash/merge, PR creation, cleanup
 ```
 
 ## Process
+
+### Fellowship Integration
+
+When running as a fellowship teammate (indicated by the spawn prompt), report each phase transition to the lead:
+1. Update task metadata: `TaskUpdate(taskId: "<your_task_id>", metadata: {"phase": "<phase_name>"})`
+2. This happens at the start of each phase — no extra messages needed beyond existing gate handling.
 
 ### Phase 0: Onboard
 
@@ -85,9 +96,6 @@ Goal: Outline explicit steps with file:line references and a test strategy.
 3. Define test strategy: what to test, how to verify
 4. Assess whether the plan has 2+ independent workstreams
 
-**Decision point — Decomposition:**
-If the plan has independent workstreams (frontend + backend, multiple unrelated files, parallel test suites), note that Phase 3 should use the `steward` agent.
-
 **Hard gate — Plan must include:**
 - [ ] Explicit file paths and line ranges for every change
 - [ ] Test strategy (what tests to write or run)
@@ -111,8 +119,7 @@ Goal: Execute the plan with small, verifiable changes and tight feedback loops. 
 1. Dispatch multiple implementation subagents simultaneously (multiple Task tool calls in one message)
 2. Each subagent gets the full task text, relevant context, and TDD instructions
 3. No two subagents modify the same file — this is a planning constraint, not a runtime guard
-4. Optionally spawn a `palantir` agent in the background to monitor progress and detect drift
-5. Collect results, review each, then commit
+4. Collect results, review each, then commit
 
 **Worktree isolation (opt-in):** Only when explicitly requested or when file conflicts are unavoidable. Pass `isolation: "worktree"` to the Task tool for subagents that need it.
 
@@ -121,6 +128,8 @@ Goal: Execute the plan with small, verifiable changes and tight feedback loops. 
 - Follow the plan. If the plan is wrong, go back and revise it — don't silently deviate.
 - Small changes. One function, one test, one commit. Not a big-bang change.
 - Verify as you go. Don't batch all testing to the end.
+
+**Transition:** Invoke `/lembas` with phase "Implement" before moving to Review.
 
 ### Phase 4: Review
 
@@ -145,6 +154,8 @@ Goal: Convention compliance, code quality, and verified passing state before com
 4. If verification fails, fix and re-verify
 
 **Output:** Summary of what was built, what was reviewed, verification results, and readiness for completion.
+
+**Transition:** Invoke `/lembas` with phase "Review" before moving to Complete.
 
 ### Phase 5: Complete
 
