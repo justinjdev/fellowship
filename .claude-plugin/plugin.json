@@ -1,7 +1,7 @@
 {
   "name": "fellowship",
   "description": "Multi-quest orchestrator for Claude Code. Coordinates parallel quests via agent teams, with structured research-plan-implement lifecycles and isolation via worktrees.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "justinjdev"
   },
