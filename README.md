@@ -137,6 +137,23 @@ Gandalf (the coordinator) spawns quest-running teammates, each in an isolated wo
 - **Isolation by default.** Every quest gets its own worktree. No shared in-progress state.
 - **Local scope only.** Teammates are restricted to code, tests, git, and the filesystem. MCP tools and external services (Notion, Slack, Jira, etc.) require explicit approval.
 
+## Changelog
+
+### v1.1.0
+
+- **Config file support** — `.claude/fellowship.json` for customizing branch prefixes, gate auto-approval, PR defaults, worktree strategy, and palantir settings ([#3](https://github.com/justinjdev/fellowship/pull/3))
+- **Palantir rewrite** — rewrote from dead code into a functional monitoring agent that watches quest progress, detects stuck quests and scope drift, and alerts Gandalf via SendMessage ([#2](https://github.com/justinjdev/fellowship/pull/2))
+- **Progress tracking** — teammates report current phase via task metadata; say "status" during a fellowship for a structured progress table ([#1](https://github.com/justinjdev/fellowship/pull/1))
+- **Gate blocking fix** — replaced ineffective "WAIT" instruction with explicit turn-ending so agents actually stop at gates ([#1](https://github.com/justinjdev/fellowship/pull/1))
+- **Lembas compaction at all transitions** — added missing `/lembas` invocations at Implement→Review and Review→Complete ([#1](https://github.com/justinjdev/fellowship/pull/1))
+- **Steward removed** — deleted dead agent; decomposition logic was already inlined in quest Phase 3 ([#1](https://github.com/justinjdev/fellowship/pull/1))
+- **Gate discipline** — Gandalf must never combine or skip gate approvals
+- **Conventional commits** — spawn prompt and quest guidelines now enforce conventional commit format
+
+### v1.0.0
+
+- Initial release: quest lifecycle, fellowship orchestration, council, gather-lore, lembas, warden, chronicle
+
 ## License
 
 MIT
