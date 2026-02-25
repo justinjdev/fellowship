@@ -73,7 +73,6 @@ Also add `tmp/` to your `.gitignore` — checkpoints are local ephemeral state.
 
 | Agent | Role |
 |-------|------|
-| **steward** | Breaks plans into parallel work units and spawns focused sub-agents. Manages scope boundaries and synthesizes results. |
 | **palantir** | Background monitor during parallel execution. Detects stuck agents, scope drift, and file conflicts. |
 
 ## How It Works
@@ -84,7 +83,7 @@ Also add `tmp/` to your `.gitignore` — checkpoints are local ephemeral state.
 Phase 0: Onboard    → worktree isolation + /council context loading
 Phase 1: Research   → explore agents + /gather-lore
 Phase 2: Plan       → plan mode with file:line references + user approval
-Phase 3: Implement  → TDD (red-green-refactor), parallel subagents if independent
+Phase 3: Implement  → TDD (red-green-refactor)
 Phase 4: Review     → /warden conventions + code quality + verification
 Phase 5: Complete   → PR creation + worktree cleanup
 ```
