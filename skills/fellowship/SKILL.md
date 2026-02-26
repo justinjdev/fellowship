@@ -41,7 +41,10 @@ At startup, read `~/.claude/fellowship.json` (the user's personal Claude directo
 
 | Key | Type | Default | Valid values | Description |
 |-----|------|---------|--------------|-------------|
-| `branchPrefix` | string | `"fellowship/"` | Any valid git branch prefix | Prefix for worktree branch names. Produces `{prefix}{task-slug}`. |
+| `branchPrefix` | string | `"fellowship/"` | Any valid git branch prefix | **Deprecated.** Use `branch.pattern` instead. Falls back to `{branchPrefix}{slug}` if `branch.pattern` is not set. |
+| `branch.pattern` | string | `null` | Template with `{slug}`, `{ticket}`, `{author}` placeholders | Branch name template. When set, takes precedence over `branchPrefix`. Default effective pattern: `"fellowship/{slug}"`. |
+| `branch.author` | string | `null` | Any string (no spaces or special git-branch chars) | Static value for `{author}` placeholder. Prompted if missing and pattern uses `{author}`. |
+| `branch.ticketPattern` | string | `"[A-Z]+-\\d+"` | Any valid regex | Regex to extract ticket ID from quest description. Default matches Jira-style IDs (e.g., `PROJ-123`). |
 | `worktree.enabled` | boolean | `true` | `true`, `false` | Create isolated git worktrees per quest. Set `false` to work on the current branch. |
 | `worktree.directory` | string \| null | `null` | Absolute path to a directory | Parent directory for worktrees. `null` uses Claude Code's default (`.claude/worktrees/`). |
 | `gates.autoApprove` | string[] | `[]` | `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"` | Gates the lead auto-approves without surfacing to the user. Unlisted gates require user approval. |
@@ -70,7 +73,12 @@ For each quest, Gandalf:
    - `isolation: "worktree"` (if config `worktree.enabled` is true; otherwise omit `isolation`)
    - `subagent_type: "general-purpose"`
    - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
-3. Worktree branch: `{config.branchPrefix}{task-slug}` (slug derived from the task description, prefix from config)
+3. **Branch naming:** Resolve the branch name from config:
+   - If `branch.pattern` is set: substitute placeholders — `{slug}` from task description (slugified), `{ticket}` extracted from description via `branch.ticketPattern` regex, `{author}` from `branch.author` config.
+   - Else if `branchPrefix` is set: use `{branchPrefix}{slug}` (deprecated fallback).
+   - Else: use `fellowship/{slug}` (default).
+   - **Ticket extraction:** Match `branch.ticketPattern` (default: `[A-Z]+-\d+`) against the task description. If matched, extract the ticket ID and derive the slug from the remaining text. If no match and pattern requires `{ticket}`, prompt the user.
+   - **Missing placeholders:** If `{author}` is in the pattern but `branch.author` is not configured, prompt the user for the value.
 
 **Teammate spawn prompt:**
 
