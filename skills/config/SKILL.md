@@ -20,14 +20,17 @@ Present the user's current config (or defaults if no file) in this format:
 ```
 Fellowship Config (~/.claude/fellowship.json)
 
-  branchPrefix        fellowship/        (default)
+  branchPrefix        fellowship/        (default) (deprecated)
+  branch.pattern      null               (default)
+  branch.author       null               (default)
+  branch.ticketPattern [A-Z]+-\d+        (default)
   worktree.enabled    true               (default)
   worktree.directory  null               (default)
   gates.autoApprove   []                 (default)
-  pr.draft          false              (default)
-  pr.template       null               (default)
-  palantir.enabled  true               (default)
-  palantir.minQuests 2                 (default)
+  pr.draft            false              (default)
+  pr.template         null               (default)
+  palantir.enabled    true               (default)
+  palantir.minQuests  2                  (default)
 ```
 
 Mark non-default values with `(custom)` instead of `(default)`.
@@ -47,7 +50,10 @@ If the user picks "Change settings", ask which settings to modify. Present each 
 Write only non-default values to `~/.claude/fellowship.json`. If all values match defaults, delete the file instead (no point keeping it).
 
 Validate before writing:
-- `branchPrefix`: must be a string, should end with `/`
+- `branchPrefix`: must be a string, should end with `/` (deprecated — recommend `branch.pattern` instead)
+- `branch.pattern`: must be a string or null; may contain `{slug}`, `{ticket}`, `{author}` placeholders
+- `branch.author`: must be a string or null; no spaces or characters invalid in git branch names
+- `branch.ticketPattern`: must be a string; must be a valid regex
 - `worktree.enabled`: must be boolean
 - `worktree.directory`: must be string (absolute path) or null
 - `gates.autoApprove`: must be an array; valid entries are `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`
@@ -64,7 +70,10 @@ Read back the file and show the updated settings table from Step 2.
 
 | Key | Type | Default | Valid values |
 |-----|------|---------|--------------|
-| `branchPrefix` | string | `"fellowship/"` | Any valid git branch prefix ending in `/` |
+| `branchPrefix` | string | `"fellowship/"` | Any valid git branch prefix ending in `/` (**deprecated**) |
+| `branch.pattern` | string | `null` | Template with `{slug}`, `{ticket}`, `{author}` placeholders |
+| `branch.author` | string | `null` | String with no spaces or git-invalid characters |
+| `branch.ticketPattern` | string | `"[A-Z]+-\\d+"` | Any valid regex |
 | `worktree.enabled` | boolean | `true` | `true`, `false` |
 | `worktree.directory` | string \| null | `null` | Absolute path to a directory |
 | `gates.autoApprove` | string[] | `[]` | `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"` |
