@@ -61,7 +61,16 @@ When running as a fellowship teammate (indicated by the spawn prompt), report ea
 ### Phase 0: Onboard
 
 1. **Config:** Read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. Merge with defaults (see fellowship skill for the full schema). If the file does not exist, all defaults apply.
-2. **Isolate:** If `config.worktree.enabled` is true (default), use `EnterWorktree` to create an isolated worktree for this work. If `config.worktree.directory` is set, create the worktree there instead of the default location (e.g., `git worktree add {config.worktree.directory}/{branch-name}`). This keeps the main branch clean and allows safe experimentation. If `config.worktree.enabled` is false, work on the current branch without worktree isolation.
+2. **Isolate:** If `config.worktree.enabled` is true (default), create an isolated worktree:
+   - **Resolve branch name:** Determine the branch name using config priority:
+     1. If `branch.pattern` is set: substitute `{slug}`, `{ticket}`, `{author}` placeholders (see below).
+     2. Else if `branchPrefix` is set: use `{branchPrefix}{slug}`.
+     3. Else: use `fellowship/{slug}`.
+   - **Placeholder resolution:**
+     - `{slug}`: slugify the task description (lowercase, hyphens for spaces, strip non-alphanumeric). If a ticket was extracted, derive slug from the remaining text after extraction.
+     - `{ticket}`: match `branch.ticketPattern` (default: `[A-Z]+-\d+`) against the task description. If matched, use the match. If not matched and the pattern contains `{ticket}`, ask the user to provide a ticket ID.
+     - `{author}`: use `branch.author` from config. If not set and the pattern contains `{author}`, ask the user to provide their name.
+   - **Create worktree:** Use `EnterWorktree` with the resolved branch name. If `config.worktree.directory` is set, create the worktree there instead of the default location.
 3. **Orient:** Invoke `/council` to load task-relevant context.
 
 If the user has already described their task, pass the description directly. Otherwise, council will ask.
