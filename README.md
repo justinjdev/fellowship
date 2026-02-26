@@ -65,7 +65,11 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 
 ```json
 {
-  "branchPrefix": "fellowship/",
+  "branch": {
+    "pattern": null,
+    "author": null,
+    "ticketPattern": "[A-Z]+-\\d+"
+  },
   "worktree": {
     "enabled": true,
     "directory": null
@@ -86,7 +90,10 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `branchPrefix` | `"fellowship/"` | Prefix for worktree branch names. E.g., `"feature/"` produces `feature/{task-slug}`. |
+| `branchPrefix` | `"fellowship/"` | **Deprecated.** Use `branch.pattern` instead. Prefix for worktree branch names; falls back to `{prefix}{slug}` when `branch.pattern` is not set. |
+| `branch.pattern` | `null` | Branch name template with placeholders: `{slug}` (task description), `{ticket}` (extracted from description), `{author}` (from config). When `null`, falls back to `branchPrefix` or default `"fellowship/{slug}"`. |
+| `branch.author` | `null` | Static value for the `{author}` placeholder. If not set and pattern uses `{author}`, you'll be prompted. |
+| `branch.ticketPattern` | `"[A-Z]+-\\d+"` | Regex to extract ticket IDs from quest descriptions. Default matches Jira-style IDs (e.g., `PROJ-123`). |
 | `worktree.enabled` | `true` | Whether quests create isolated worktrees. Set to `false` to work on the current branch. |
 | `worktree.directory` | `null` | Parent directory for worktrees. `null` uses Claude Code's default (`.claude/worktrees/`). |
 | `gates.autoApprove` | `[]` | Gate names to auto-approve: `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`. Gates not listed still surface to you for approval. |
@@ -143,6 +150,10 @@ Gandalf (the coordinator) spawns quest-running teammates, each in an isolated wo
 - **Local scope only.** Teammates are restricted to code, tests, git, and the filesystem. MCP tools and external services (Notion, Slack, Jira, etc.) require explicit approval.
 
 ## Changelog
+
+### v1.3.0
+
+- **Branch name patterns** — `branch.pattern` config replaces the rigid `branchPrefix` with a flexible template system. Supports `{slug}`, `{ticket}`, and `{author}` placeholders for team-specific branch naming conventions (e.g., `"{author}.{ticket}.{slug}"` produces `justin.JIRA-123.fix-auth-bug`). Missing placeholders are prompted interactively. `branchPrefix` is deprecated but still works as a fallback.
 
 ### v1.2.0
 
