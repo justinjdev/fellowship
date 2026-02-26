@@ -61,11 +61,10 @@ When running as a fellowship teammate (indicated by the spawn prompt), report ea
 ### Phase 0: Onboard
 
 1. **Config:** Read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. Merge with defaults (see fellowship skill for the full schema). If the file does not exist, all defaults apply.
-2. **Isolate:** If `config.worktree.enabled` is true (default), create an isolated worktree:
-   - **Resolve branch name:** Determine the branch name using config priority:
+2. **Isolate:** If already in an isolated worktree (e.g., resuming a failed quest), skip worktree creation — you're already isolated. Otherwise, if `config.worktree.enabled` is true (default), create an isolated worktree:
+   - **Resolve branch name:** Determine the branch name using config:
      1. If `branch.pattern` is set: substitute `{slug}`, `{ticket}`, `{author}` placeholders (see below).
-     2. Else if `branchPrefix` is set: use `{branchPrefix}{slug}`.
-     3. Else: use `fellowship/{slug}`.
+     2. Else: use `fellowship/{slug}`.
    - **Placeholder resolution:**
      - `{slug}`: slugify the task description (lowercase, hyphens for spaces, strip non-alphanumeric). If a ticket was extracted, derive slug from the remaining text after extraction.
      - `{ticket}`: match `branch.ticketPattern` (default: `[A-Z]+-\d+`) against the task description. If matched, use the match. If not matched and the pattern contains `{ticket}`, ask the user to provide a ticket ID.
@@ -128,17 +127,29 @@ Goal: Execute the plan with small, verifiable changes and tight feedback loops. 
 **Parallel subagents:** Plan has 3+ independent tasks touching different files.
 1. Dispatch multiple implementation subagents simultaneously (multiple Task tool calls in one message)
 2. Each subagent gets the full task text, relevant context, and TDD instructions
-3. No two subagents modify the same file — this is a planning constraint, not a runtime guard
+3. No two subagents modify the same file — this is a planning constraint, not a runtime guard. If the plan has file conflicts between subtasks, fix the plan.
 4. Collect results, review each, then commit
-
-**Worktree isolation (opt-in):** Only when explicitly requested or when file conflicts are unavoidable. Pass `isolation: "worktree"` to the Task tool for subagents that need it.
 
 **Guidelines:**
 - **TDD by default.** Write the failing test first, then the minimal implementation, then refactor.
-- Follow the plan. If the plan is wrong, go back and revise it — don't silently deviate.
+- Follow the plan. If the plan is wrong, trigger recovery (see below) — don't silently deviate.
 - Small changes. One function, one test, one commit. Not a big-bang change.
 - Use conventional commits for all git commits (e.g., `feat:`, `fix:`, `docs:`, `refactor:`).
 - Verify as you go. Don't batch all testing to the end.
+
+**Recovery — when implementation hits a wall:**
+
+Trigger recovery when any of these occur:
+- A plan step is impossible or wrong (missing API, incorrect assumption, dependency doesn't work as expected)
+- TDD cycles aren't converging — 3+ failed attempts at making a test pass suggest a design problem, not a code problem
+- Implementation reveals the plan was incomplete (unaccounted-for edge case, missing step)
+
+Recovery procedure:
+1. **Stop implementing.** Commit what works so far — don't discard partial progress.
+2. **Document what went wrong.** Be specific: which step failed, what was discovered, why the plan doesn't hold.
+3. **Return to Phase 2 (Plan).** Invoke `/lembas` with phase "Implement (partial)" to compact, then re-enter plan mode with the new information. Revise only the affected steps — don't replan from scratch.
+4. **Get user approval** on the revised plan before resuming implementation.
+5. If running as a fellowship teammate, message the lead with the blocker before replanning.
 
 **Transition:** Invoke `/lembas` with phase "Implement" before moving to Review.
 
@@ -160,7 +171,7 @@ Goal: Convention compliance, code quality, and verified passing state before com
 
 **Step 3: Verification gate**
 1. Invoke `superpowers:verification-before-completion` — run tests for affected package(s) only, confirm build passes, verify output matches expectations
-2. Use the package scope from Session Context to determine which test suites to run — do not run the entire monorepo's test suite
+2. Use the scope from Session Context to determine which test suites to run — in a monorepo, run only the affected package(s), not the entire suite
 3. Do NOT claim work is complete until verification passes
 4. If verification fails, fix and re-verify
 
@@ -182,13 +193,18 @@ Goal: Integrate the work — squash/merge, PR creation, worktree cleanup.
 
 ## Escape Hatch
 
-For simple tasks (single-file change, clear requirements, familiar area), the full cycle is overkill. Collapse to:
+Use the shortened cycle when ALL of these are true:
+- Single file changed (or 2 files where one is a test)
+- < 50 lines of new/modified code
+- No new patterns introduced — you're following an existing pattern exactly
+- Familiar area — you've seen the conventions (or CLAUDE.md documents them clearly)
 
+If any condition is uncertain, run the full cycle.
+
+Shortened cycle:
 1. Quick research (read the relevant file)
 2. Implement the change
 3. `/warden`
-
-Use judgment: if you're confident about the change and the area, skip formal planning. If there's any uncertainty, run the full cycle.
 
 ## Key Principles
 

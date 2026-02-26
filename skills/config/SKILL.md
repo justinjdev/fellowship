@@ -20,7 +20,6 @@ Present the user's current config (or defaults if no file) in this format:
 ```
 Fellowship Config (~/.claude/fellowship.json)
 
-  branchPrefix        fellowship/        (default) (deprecated)
   branch.pattern      null               (default)
   branch.author       null               (default)
   branch.ticketPattern [A-Z]+-\d+        (default)
@@ -47,20 +46,7 @@ If the user picks "Change settings", ask which settings to modify. Present each 
 
 ### Step 4: Write Config
 
-Write only non-default values to `~/.claude/fellowship.json`. If all values match defaults, delete the file instead (no point keeping it).
-
-Validate before writing:
-- `branchPrefix`: must be a string, should end with `/` (deprecated — recommend `branch.pattern` instead)
-- `branch.pattern`: must be a string or null; may contain `{slug}`, `{ticket}`, `{author}` placeholders
-- `branch.author`: must be a string or null; no spaces or characters invalid in git branch names
-- `branch.ticketPattern`: must be a string; must be a valid regex
-- `worktree.enabled`: must be boolean
-- `worktree.directory`: must be string (absolute path) or null
-- `gates.autoApprove`: must be an array; valid entries are `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`
-- `pr.draft`: must be boolean
-- `pr.template`: must be string or null; may contain `{task}`, `{summary}`, `{changes}` placeholders
-- `palantir.enabled`: must be boolean
-- `palantir.minQuests`: must be a positive integer
+Write only non-default values to `~/.claude/fellowship.json`. If all values match defaults, delete the file instead (no point keeping it). Validate each value against the Schema Reference below before writing.
 
 ### Step 5: Confirm
 
@@ -68,15 +54,16 @@ Read back the file and show the updated settings table from Step 2.
 
 ## Schema Reference
 
+This is the canonical schema for `~/.claude/fellowship.json`. Other skills reference this table.
+
 | Key | Type | Default | Valid values |
 |-----|------|---------|--------------|
-| `branchPrefix` | string | `"fellowship/"` | Any valid git branch prefix ending in `/` (**deprecated**) |
-| `branch.pattern` | string | `null` | Template with `{slug}`, `{ticket}`, `{author}` placeholders |
-| `branch.author` | string | `null` | String with no spaces or git-invalid characters |
+| `branch.pattern` | string \| null | `null` | Template with `{slug}`, `{ticket}`, `{author}` placeholders. Default effective pattern: `"fellowship/{slug}"`. |
+| `branch.author` | string \| null | `null` | String with no spaces or git-invalid characters |
 | `branch.ticketPattern` | string | `"[A-Z]+-\\d+"` | Any valid regex |
 | `worktree.enabled` | boolean | `true` | `true`, `false` |
 | `worktree.directory` | string \| null | `null` | Absolute path to a directory |
-| `gates.autoApprove` | string[] | `[]` | `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"` |
+| `gates.autoApprove` | string[] | `[]` | `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`. Names refer to the completed phase — e.g., `"Research"` auto-approves the Research→Plan transition. |
 | `pr.draft` | boolean | `false` | `true`, `false` |
 | `pr.template` | string \| null | `null` | Template with `{task}`, `{summary}`, `{changes}` placeholders |
 | `palantir.enabled` | boolean | `true` | `true`, `false` |

@@ -17,6 +17,16 @@ You receive:
 - **Quest list**: names and task IDs of active quest teammates
 - **Worktree paths**: where each quest teammate's worktree is located
 
+## Cadence
+
+You are event-driven, not polling. Run your full monitoring checklist at these moments:
+
+1. **On spawn** — initial baseline scan of all active quests
+2. **On "check" message from the lead** — the lead messages you after gate transitions and when new quests are spawned
+3. **On any other message from the lead** — always run a fresh check before responding
+
+Between checks, you go idle. This is normal — don't try to self-wake or loop.
+
 ## Your Job
 
 ### 1. Monitor Quest Progress

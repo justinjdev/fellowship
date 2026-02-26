@@ -90,8 +90,7 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `branchPrefix` | `"fellowship/"` | **Deprecated.** Use `branch.pattern` instead. Prefix for worktree branch names; falls back to `{prefix}{slug}` when `branch.pattern` is not set. |
-| `branch.pattern` | `null` | Branch name template with placeholders: `{slug}` (task description), `{ticket}` (extracted from description), `{author}` (from config). When `null`, falls back to `branchPrefix` or default `"fellowship/{slug}"`. |
+| `branch.pattern` | `null` | Branch name template with placeholders: `{slug}` (task description), `{ticket}` (extracted from description), `{author}` (from config). When `null`, defaults to `"fellowship/{slug}"`. |
 | `branch.author` | `null` | Static value for the `{author}` placeholder. If not set and pattern uses `{author}`, you'll be prompted. |
 | `branch.ticketPattern` | `"[A-Z]+-\\d+"` | Regex to extract ticket IDs from quest descriptions. Default matches Jira-style IDs (e.g., `PROJ-123`). |
 | `worktree.enabled` | `true` | Whether quests create isolated worktrees. Set to `false` to work on the current branch. |
@@ -115,6 +114,7 @@ The config is read at fellowship startup and quest onboard (Phase 0). Changes to
 | `/lembas` | Context compression between phases. Keeps the context window in the reasoning sweet spot. |
 | `/warden` | Pre-PR convention review. Compares changes against reference files and documented patterns. |
 | `/chronicle` | One-time codebase bootstrapping. Walks through your project to extract conventions into CLAUDE.md. |
+| `/red-book` | Post-PR convention capture. Extracts conventions from reviewer comments and adds them to CLAUDE.md. |
 | `/config` | View or edit fellowship settings (`~/.claude/fellowship.json`). Interactive setup for all configuration options. |
 
 ## Agents
@@ -151,9 +151,24 @@ Gandalf (the coordinator) spawns quest-running teammates, each in an isolated wo
 
 ## Changelog
 
+### v1.4.0
+
+- **gather-lore rewrite** — simplified to study-only (pattern extraction). Code generation and diff checking removed as redundant with quest Implement + warden Review phases.
+- **`/red-book` skill** — new skill for capturing conventions from PR reviewer feedback into CLAUDE.md. Closes the convention learning loop.
+- **Quest recovery** — Phase 3 now has explicit recovery procedure: when implementation hits a wall, stop, commit partial work, document the blocker, return to Plan phase.
+- **Quest resume** — failed/dead quests can be respawned into their existing worktree. Council finds the lembas checkpoint and offers to resume.
+- **Palantir fix** — spawned as `fellowship:palantir` (custom agent with restricted tools) instead of `general-purpose`.
+- **Palantir cadence** — event-driven monitoring triggered by Gandalf after gate transitions and quest spawns, instead of unbounded.
+- **Worktree ownership** — quest Phase 0 owns worktree creation. Fellowship no longer passes `isolation: "worktree"`, eliminating double-worktree conflicts and unused branch naming logic.
+- **Config schema dedup** — canonical schema lives in `/config`. Fellowship references it instead of duplicating.
+- **`branchPrefix` removed** — deprecated key fully removed from all skills and config.
+- **Escape hatch criteria** — concrete heuristics (single file, < 50 lines, no new patterns, familiar area) replace "use judgment".
+- **Monorepo conditional** — council package scope step now skips for single-package repos.
+- **Nested subagent worktrees removed** — if plan subtasks have file conflicts, fix the plan.
+
 ### v1.3.0
 
-- **Branch name patterns** — `branch.pattern` config replaces the rigid `branchPrefix` with a flexible template system. Supports `{slug}`, `{ticket}`, and `{author}` placeholders for team-specific branch naming conventions (e.g., `"{author}.{ticket}.{slug}"` produces `justin.JIRA-123.fix-auth-bug`). Missing placeholders are prompted interactively. `branchPrefix` is deprecated but still works as a fallback.
+- **Branch name patterns** — `branch.pattern` config with a flexible template system. Supports `{slug}`, `{ticket}`, and `{author}` placeholders for team-specific branch naming conventions (e.g., `"{author}.{ticket}.{slug}"` produces `justin.JIRA-123.fix-auth-bug`). Missing placeholders are prompted interactively. **Breaking:** removed `branchPrefix` (deprecated in v1.3.0). Use `branch.pattern` instead — e.g., `"myprefix/{slug}"` replaces `"branchPrefix": "myprefix/"`.
 
 ### v1.2.0
 

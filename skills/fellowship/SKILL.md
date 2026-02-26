@@ -37,21 +37,7 @@ Quests can be added while others are in progress, after some finish, or all at o
 
 At startup, read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. This file contains user preferences for fellowship behavior that apply across all projects. If the file does not exist, all defaults apply. Merge the file contents with defaults — any key not present in the file uses the default value.
 
-**Config schema:**
-
-| Key | Type | Default | Valid values | Description |
-|-----|------|---------|--------------|-------------|
-| `branchPrefix` | string | `"fellowship/"` | Any valid git branch prefix | **Deprecated.** Use `branch.pattern` instead. Falls back to `{branchPrefix}{slug}` if `branch.pattern` is not set. |
-| `branch.pattern` | string | `null` | Template with `{slug}`, `{ticket}`, `{author}` placeholders | Branch name template. When set, takes precedence over `branchPrefix`. Default effective pattern: `"fellowship/{slug}"`. |
-| `branch.author` | string | `null` | Any string (no spaces or special git-branch chars) | Static value for `{author}` placeholder. Prompted if missing and pattern uses `{author}`. |
-| `branch.ticketPattern` | string | `"[A-Z]+-\\d+"` | Any valid regex | Regex to extract ticket ID from quest description. Default matches Jira-style IDs (e.g., `PROJ-123`). |
-| `worktree.enabled` | boolean | `true` | `true`, `false` | Create isolated git worktrees per quest. Set `false` to work on the current branch. |
-| `worktree.directory` | string \| null | `null` | Absolute path to a directory | Parent directory for worktrees. `null` uses Claude Code's default (`.claude/worktrees/`). |
-| `gates.autoApprove` | string[] | `[]` | `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"` | Gates the lead auto-approves without surfacing to the user. Unlisted gates require user approval. |
-| `pr.draft` | boolean | `false` | `true`, `false` | Create PRs as drafts. |
-| `pr.template` | string \| null | `null` | Template string with `{task}`, `{summary}`, `{changes}` placeholders | Custom PR body template. `null` uses the default format. |
-| `palantir.enabled` | boolean | `true` | `true`, `false` | Spawn a palantir monitoring agent during fellowships. |
-| `palantir.minQuests` | number | `2` | Any positive integer | Minimum active quests before palantir is spawned. |
+**Config keys used by fellowship:** `branch.*` (branch naming), `worktree.*` (isolation), `gates.autoApprove` (gate routing), `pr.*` (PR creation), `palantir.*` (monitoring). See `/config` for the full schema, defaults, and valid values.
 
 **Example — auto-approve early gates, draft PRs:**
 ```json
@@ -70,15 +56,9 @@ For each quest, Gandalf:
 1. `TaskCreate` in the shared task list with the quest description
 2. Spawn a teammate via the `Task` tool with:
    - `team_name`: the fellowship team name
-   - `isolation: "worktree"` (if config `worktree.enabled` is true; otherwise omit `isolation`)
    - `subagent_type: "general-purpose"`
    - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
-3. **Branch naming:** Resolve the branch name from config:
-   - If `branch.pattern` is set: substitute placeholders — `{slug}` from task description (slugified), `{ticket}` extracted from description via `branch.ticketPattern` regex, `{author}` from `branch.author` config.
-   - Else if `branchPrefix` is set: use `{branchPrefix}{slug}` (deprecated fallback).
-   - Else: use `fellowship/{slug}` (default).
-   - **Ticket extraction:** Match `branch.ticketPattern` (default: `[A-Z]+-\d+`) against the task description. If matched, extract the ticket ID and derive the slug from the remaining text. If no match and pattern requires `{ticket}`, prompt the user.
-   - **Missing placeholders:** If `{author}` is in the pattern but `branch.author` is not configured, prompt the user for the value.
+   - Do NOT pass `isolation: "worktree"` — the teammate creates its own worktree during quest Phase 0, using the branch naming config. This avoids double-worktree conflicts and ensures config-resolved branch names are used.
 
 **Teammate spawn prompt:**
 
@@ -89,7 +69,8 @@ YOUR TASK: {task_description}
 
 INSTRUCTIONS:
 1. Run /quest to execute this task through the full quest lifecycle
-2. You are working in an isolated worktree — make changes freely
+2. Quest Phase 0 will create your isolated worktree using the branch
+   naming config — make changes freely once isolation is set up
 3. Gate handling — when you reach a phase gate, message the lead with
    your gate checklist and summary using SendMessage:
    - Research and Plan gates: send your checklist, then proceed
@@ -142,7 +123,7 @@ When `config.palantir.minQuests` or more quests are active (default: 2) and `con
 
 Spawn palantir via the `Task` tool with:
 - `team_name`: the fellowship team name
-- `subagent_type: "general-purpose"`
+- `subagent_type: "fellowship:palantir"`
 - `name`: `"palantir"`
 
 **Palantir spawn prompt:**
@@ -258,14 +239,14 @@ digraph gandalf {
 
 ### Reactive (responding to teammate events)
 
-- **Gate message received** → check `config.gates.autoApprove`: if gate is listed, auto-approve and relay; otherwise surface to user for approval
+- **Gate message received** → check `config.gates.autoApprove`: if gate is listed, auto-approve and relay; otherwise surface to user for approval. After handling the gate, send a "check" message to palantir (if active) to trigger a monitoring sweep.
 - **Quest completed** → record PR URL, mark task done via `TaskUpdate`, report to user
 - **Quest stuck/errored** → report to user with context (phase, error), offer respawn
 - **Teammate idle** → normal, no action needed
 
 ### Proactive (responding to user commands)
 
-- **"quest: {desc}"** → spawn new teammate (see Spawn a Quest)
+- **"quest: {desc}"** → spawn new teammate (see Spawn a Quest). After spawning, send a "check" message to palantir (if active) with the updated quest list.
 - **"status"** → read task list (including metadata), present structured progress report (see Progress Tracking below)
 - **"approve" / "reject"** → relay to the relevant teammate
 - **"cancel quest-N"** → send `shutdown_request` to teammate, preserve worktree
@@ -312,10 +293,10 @@ Never combine gate approvals. Approve one gate at a time. Each gate response tri
 
 ## Edge Cases
 
-- **Quest fails:** Report to user with context (which phase, what went wrong). Offer to respawn a new teammate for the same task. Worktree is preserved for inspection.
-- **Too many quests:** Warn at 5+ active quests — token costs scale linearly and coordination overhead increases. No hard limit.
+- **Quest fails:** Report to user with context (which phase, what went wrong). Offer to respawn. Worktree is preserved.
+  - **Respawn procedure:** Spawn a new teammate with the same task description, but add to the spawn prompt: `"You are resuming a failed quest. Your working directory is already set to the existing worktree at {worktree_path}. Skip worktree creation in quest Phase 0 — you're already isolated. Check tmp/checkpoint.md for a checkpoint from the previous attempt."` Set the new teammate's working directory to the failed quest's worktree path.
 - **Direct teammate access:** Through Gandalf ("tell quest-2 to skip the logger refactor") or direct via Shift+Down to message the teammate.
-- **Session death:** Worktrees survive but coordination is lost. Teammates are orphaned. The user can manually resume work in the preserved worktrees.
+- **Session death:** Worktrees survive but coordination is lost. Teammates are orphaned. To resume: start a new fellowship, and for each incomplete quest use the respawn procedure above pointing at the preserved worktree. Each worktree's `tmp/checkpoint.md` has the last known state.
 
 ## Key Principles
 

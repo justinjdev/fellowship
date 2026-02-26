@@ -49,18 +49,21 @@ If invoked by quest, the task description is passed in — skip the question.
 
 ### Step 3: Identify Package Scope
 
-From the task description, identify which package(s) are involved:
+Determine the scope of the task within the project:
+
+**Monorepo** (has `packages/`, `apps/`, or a workspace config like `pnpm-workspace.yaml`):
 1. Match the task area to a package directory (e.g., `packages/<name>/`, `apps/<name>/`)
 2. If ambiguous, check the monorepo structure (`ls` top-level directories) and ask the user
 3. If the task spans multiple packages, list all affected packages
+4. If a package-level CLAUDE.md exists (e.g., `packages/<name>/CLAUDE.md`), read it and merge its conventions with the root CLAUDE.md. Package-level conventions override root conventions where they conflict.
+
+**Single-package repo:** Skip this step — the scope is the whole project. Proceed to Step 4.
 
 This scope constrains all downstream scanning and verification.
 
-If a package-level CLAUDE.md exists (e.g., `packages/<name>/CLAUDE.md`), read it and merge its conventions with the root CLAUDE.md. Package-level conventions override root conventions where they conflict.
-
 ### Step 4: Scan for Relevant Files
 
-Use the Explore agent (Task tool with subagent_type=Explore) to find files related to the task description. **Scope the search to the identified package(s)** — do not scan the entire monorepo.
+Use the Explore agent (Task tool with subagent_type=Explore) to find files related to the task description. **In a monorepo, scope the search to the identified package(s)** — do not scan the entire repo.
 
 Focus on:
 - Files that will likely need modification
