@@ -1,6 +1,6 @@
 ---
-name: config
-description: View or edit fellowship configuration (~/.claude/fellowship.json). Run /config to see current settings, change values, or reset to defaults.
+name: settings
+description: View or edit fellowship configuration (~/.claude/fellowship.json). Run /settings to see current settings, change values, or reset to defaults.
 ---
 
 # Config — Fellowship Settings Manager

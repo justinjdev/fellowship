@@ -37,7 +37,7 @@ Quests can be added while others are in progress, after some finish, or all at o
 
 At startup, read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. This file contains user preferences for fellowship behavior that apply across all projects. If the file does not exist, all defaults apply. Merge the file contents with defaults — any key not present in the file uses the default value.
 
-**Config keys used by fellowship:** `branch.*` (branch naming), `worktree.*` (isolation), `gates.autoApprove` (gate routing), `pr.*` (PR creation), `palantir.*` (monitoring). See `/config` for the full schema, defaults, and valid values.
+**Config keys used by fellowship:** `branch.*` (branch naming), `worktree.*` (isolation), `gates.autoApprove` (gate routing), `pr.*` (PR creation), `palantir.*` (monitoring). See `/settings` for the full schema, defaults, and valid values.
 
 **Example — auto-approve early gates, draft PRs:**
 ```json
@@ -47,7 +47,7 @@ At startup, read `~/.claude/fellowship.json` (the user's personal Claude directo
 }
 ```
 
-If the user asks to set up or modify their config, invoke `/config`.
+If the user asks to set up or modify their config, invoke `/settings`.
 
 ### Spawn a Quest
 

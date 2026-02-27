@@ -115,7 +115,7 @@ The config is read at fellowship startup and quest onboard (Phase 0). Changes to
 | `/warden` | Pre-PR convention review. Compares changes against reference files and documented patterns. |
 | `/chronicle` | One-time codebase bootstrapping. Walks through your project to extract conventions into CLAUDE.md. |
 | `/red-book` | Post-PR convention capture. Extracts conventions from reviewer comments and adds them to CLAUDE.md. |
-| `/config` | View or edit fellowship settings (`~/.claude/fellowship.json`). Interactive setup for all configuration options. |
+| `/settings` | View or edit fellowship settings (`~/.claude/fellowship.json`). Interactive setup for all configuration options. |
 
 ## Agents
 
@@ -160,7 +160,7 @@ Gandalf (the coordinator) spawns quest-running teammates, each in an isolated wo
 - **Palantir fix** — spawned as `fellowship:palantir` (custom agent with restricted tools) instead of `general-purpose`.
 - **Palantir cadence** — event-driven monitoring triggered by Gandalf after gate transitions and quest spawns, instead of unbounded.
 - **Worktree ownership** — quest Phase 0 owns worktree creation. Fellowship no longer passes `isolation: "worktree"`, eliminating double-worktree conflicts and unused branch naming logic.
-- **Config schema dedup** — canonical schema lives in `/config`. Fellowship references it instead of duplicating.
+- **Config schema dedup** — canonical schema lives in `/settings`. Fellowship references it instead of duplicating.
 - **`branchPrefix` removed** — deprecated key fully removed from all skills and config.
 - **Escape hatch criteria** — concrete heuristics (single file, < 50 lines, no new patterns, familiar area) replace "use judgment".
 - **Monorepo conditional** — council package scope step now skips for single-package repos.
