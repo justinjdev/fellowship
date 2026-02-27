@@ -1,3 +1,5 @@
+<img width="1512" height="982" alt="Screenshot 2026-02-27 at 14 55 56" src="https://github.com/user-attachments/assets/a4fb319e-20ca-4bba-8595-134cbd06f4b6" />
+
 # Fellowship
 
 A Claude Code plugin that orchestrates multi-task workflows through structured research-plan-implement lifecycles. Named after the obvious — a fellowship of agents, each on their own quest, coordinated by a wizard who never writes code.
