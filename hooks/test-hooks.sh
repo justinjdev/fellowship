@@ -286,6 +286,70 @@ set_state '.phase = "InvalidPhase" | .lembas_completed = true | .metadata_update
 run_hook_stdin gate-submit.sh "$GATE_MSG"
 assert_exit "unknown phase blocks gate" 2 "$rc"
 
+# --- completion-guard.sh ---
+
+echo ""
+echo "=== completion-guard ==="
+
+COMPLETE_MSG='{"tool_input":{"taskId":"1","status":"completed"}}'
+PROGRESS_MSG='{"tool_input":{"taskId":"1","status":"in_progress"}}'
+METADATA_MSG='{"tool_input":{"taskId":"1","metadata":{"phase":"Research"}}}'
+
+echo "-- allows non-completion updates"
+reset_state
+run_hook_stdin completion-guard.sh "$PROGRESS_MSG"
+assert_exit "in_progress allowed" 0 "$rc"
+
+echo "-- allows metadata-only updates"
+reset_state
+run_hook_stdin completion-guard.sh "$METADATA_MSG"
+assert_exit "metadata update allowed" 0 "$rc"
+
+echo "-- blocks completion when phase is Onboard"
+reset_state
+set_state '.phase = "Onboard"'
+run_hook_stdin completion-guard.sh "$COMPLETE_MSG"
+assert_exit "blocks at Onboard" 2 "$rc"
+
+echo "-- blocks completion when phase is Research"
+reset_state
+run_hook_stdin completion-guard.sh "$COMPLETE_MSG"
+assert_exit "blocks at Research" 2 "$rc"
+
+echo "-- blocks completion when phase is Plan"
+reset_state
+set_state '.phase = "Plan"'
+run_hook_stdin completion-guard.sh "$COMPLETE_MSG"
+assert_exit "blocks at Plan" 2 "$rc"
+
+echo "-- blocks completion when phase is Implement"
+reset_state
+set_state '.phase = "Implement"'
+run_hook_stdin completion-guard.sh "$COMPLETE_MSG"
+assert_exit "blocks at Implement" 2 "$rc"
+
+echo "-- blocks completion when phase is Review"
+reset_state
+set_state '.phase = "Review"'
+run_hook_stdin completion-guard.sh "$COMPLETE_MSG"
+assert_exit "blocks at Review" 2 "$rc"
+
+echo "-- allows completion when phase is Complete"
+reset_state
+set_state '.phase = "Complete"'
+run_hook_stdin completion-guard.sh "$COMPLETE_MSG"
+assert_exit "allows at Complete" 0 "$rc"
+
+echo "-- rejects malformed input"
+reset_state
+run_hook_stdin completion-guard.sh 'not valid json'
+assert_exit "malformed input rejected" 2 "$rc"
+
+echo "-- no-op when state file missing"
+rm "$STATE_FILE"
+run_hook_stdin completion-guard.sh "$COMPLETE_MSG"
+assert_exit "no-op without state file" 0 "$rc"
+
 # --- phase transitions ---
 
 echo ""
