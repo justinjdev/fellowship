@@ -63,6 +63,7 @@ When running as a fellowship teammate (indicated by the spawn prompt), report ea
 When running as a fellowship teammate, a state file at `tmp/quest-state.json` enforces gate discipline via plugin hooks. The hooks structurally prevent you from working after submitting a gate, skipping lembas, or skipping metadata updates. You do not need to manage this file — the hooks handle it automatically.
 
 **What the hooks enforce:**
+- Gate messages must start with `[GATE]` to be detected (e.g., `[GATE] Research complete\n- [x] ...`)
 - After you send a gate message, your Edit/Write/Bash/Agent/Skill tools are blocked until the lead approves
 - Before you can send a gate message, you must have run `/lembas` and updated task metadata with your current phase
 - You cannot send a second gate while one is pending

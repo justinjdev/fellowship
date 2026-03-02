@@ -2,7 +2,10 @@
 # Shared utilities for fellowship gate hooks.
 # Source this at the top of every hook script.
 
-STATE_FILE="tmp/quest-state.json"
+# Resolve state file path from the repo/worktree root, so hooks work
+# even if the session's cwd drifts within the repo.
+_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || _ROOT="$PWD"
+STATE_FILE="$_ROOT/tmp/quest-state.json"
 
 # No state file = not a quest teammate session. Exit immediately.
 if [ ! -f "$STATE_FILE" ]; then

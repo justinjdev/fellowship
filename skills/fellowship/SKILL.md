@@ -79,7 +79,10 @@ INSTRUCTIONS:
    a. Run /lembas to compress context (hooks verify this)
    b. Run TaskUpdate(taskId: "{task_id}", metadata: {"phase": "<phase>"})
       to record your current phase (hooks verify this)
-   c. Send ONE gate checklist via SendMessage to the lead
+   c. Send ONE gate checklist via SendMessage to the lead.
+      The message content MUST start with [GATE] — e.g.:
+      "[GATE] Research complete\n- [x] Key files identified..."
+      Messages without the [GATE] prefix are not detected as gates.
 
    After sending a gate message, your Edit/Write/Bash/Agent/Skill tools
    are blocked by hooks until the lead approves. You cannot bypass this.
@@ -358,7 +361,7 @@ Never combine gate approvals. Approve one gate at a time. Each gate response tri
 - **Quest fails:** Report to user with context (which phase, what went wrong). Offer to respawn. Worktree is preserved.
   - **Respawn procedure:** Spawn a new teammate with the same task description, but add to the spawn prompt: `"You are resuming a failed quest. Your working directory is already set to the existing worktree at {worktree_path}. Skip worktree creation in quest Phase 0 — you're already isolated. Check tmp/checkpoint.md for a checkpoint from the previous attempt."` Set the new teammate's working directory to the failed quest's worktree path.
 - **Direct teammate access:** Through Gandalf ("tell quest-2 to skip the logger refactor") or direct via Shift+Down to message the teammate.
-- **Session death:** Worktrees survive but coordination is lost. Teammates are orphaned. To resume: start a new fellowship, and for each incomplete quest use the respawn procedure above pointing at the preserved worktree. Each worktree's `tmp/checkpoint.md` has the last known state.
+- **Session death:** Worktrees survive but coordination is lost. Teammates are orphaned. To resume: start a new fellowship, and for each incomplete quest use the respawn procedure above pointing at the preserved worktree. Each worktree's `tmp/checkpoint.md` has the last known state. If a teammate was stuck in `gate_pending: true` when the session died, the respawn procedure resets this automatically. For manual recovery without respawn, edit the state file directly: `jq '.gate_pending = false | .gate_id = null' <worktree>/tmp/quest-state.json > /tmp/qs.json && mv /tmp/qs.json <worktree>/tmp/quest-state.json`
 
 ## Key Principles
 

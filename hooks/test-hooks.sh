@@ -163,14 +163,22 @@ assert_val "no metadata no-op" '.metadata_updated' "false"
 echo ""
 echo "=== gate-submit ==="
 
-GATE_MSG='{"tool_input":{"content":"Research complete\n- [x] findings documented"}}'
+GATE_MSG='{"tool_input":{"content":"[GATE] Research complete\n- [x] findings documented"}}'
 NORMAL_MSG='{"tool_input":{"content":"Here is a status update on my progress"}}'
+PHASE_MSG_NO_GATE='{"tool_input":{"content":"Research complete\n- [x] findings documented"}}'
 
 echo "-- allows non-gate messages through"
 reset_state
 run_hook_stdin gate-submit.sh "$NORMAL_MSG"
 assert_exit "non-gate message allowed" 0 "$rc"
 assert_val "state unchanged" '.gate_pending' "false"
+
+echo "-- allows phase+checklist messages without [GATE] prefix"
+reset_state
+set_state '.lembas_completed = true | .metadata_updated = true'
+run_hook_stdin gate-submit.sh "$PHASE_MSG_NO_GATE"
+assert_exit "no [GATE] prefix — not a gate" 0 "$rc"
+assert_val "gate_pending still false" '.gate_pending' "false"
 
 echo "-- blocks gate message when lembas missing"
 reset_state
@@ -224,7 +232,7 @@ assert_val "metadata reset after auto-approve" '.metadata_updated' "false"
 echo "-- does not auto-approve unlisted gates"
 reset_state
 set_state '.phase = "Plan" | .lembas_completed = true | .metadata_updated = true | .auto_approve_gates = ["Research"]'
-PLAN_GATE_MSG='{"tool_input":{"content":"Plan complete\n- [x] plan reviewed"}}'
+PLAN_GATE_MSG='{"tool_input":{"content":"[GATE] Plan complete\n- [x] plan reviewed"}}'
 run_hook_stdin gate-submit.sh "$PLAN_GATE_MSG"
 assert_exit "non-auto gate exits 0" 0 "$rc"
 assert_val "gate_pending set for non-auto gate" '.gate_pending' "true"
@@ -260,7 +268,7 @@ for phase_pair in "Onboard:Research" "Research:Plan" "Plan:Implement" "Implement
   TO="${phase_pair##*:}"
   reset_state
   set_state "$(printf '.phase = "%s" | .lembas_completed = true | .metadata_updated = true | .auto_approve_gates = ["%s"]' "$FROM" "$TO")"
-  TRANSITION_MSG='{"tool_input":{"content":"Phase complete\n- [x] done"}}'
+  TRANSITION_MSG='{"tool_input":{"content":"[GATE] Phase complete\n- [x] done"}}'
   run_hook_stdin gate-submit.sh "$TRANSITION_MSG"
   assert_exit "$FROM -> $TO exits 0" 0 "$rc"
   assert_val "$FROM -> $TO advances phase" '.phase' "$TO"
@@ -279,7 +287,7 @@ set_state '.phase = "Onboard"'
 for phase_pair in "Onboard:Research" "Research:Plan" "Plan:Implement" "Implement:Review" "Review:Complete"; do
   FROM="${phase_pair%%:*}"
   TO="${phase_pair##*:}"
-  LIFECYCLE_MSG='{"tool_input":{"content":"'"$TO"' gate\n- [x] checklist complete"}}'
+  LIFECYCLE_MSG='{"tool_input":{"content":"[GATE] '"$TO"' gate\n- [x] checklist complete"}}'
 
   # 1. prereqs not met — gate blocked
   run_hook_stdin gate-submit.sh "$LIFECYCLE_MSG"

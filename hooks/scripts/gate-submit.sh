@@ -10,12 +10,11 @@ source "$SCRIPT_DIR/_common.sh"
 INPUT=$(cat)
 CONTENT=$(echo "$INPUT" | jq -r '.tool_input.content // empty')
 
-# Gate pattern: phase keyword + checklist marker both present.
-PHASE_MATCH=$(echo "$CONTENT" | grep -Ei '\b(Research|Plan|Implement|Review|Complete)\b' || true)
-CHECKLIST_MATCH=$(echo "$CONTENT" | grep -E '\- \[[ x]\]' || true)
+# Gate detection: message must start with [GATE] marker.
+GATE_MARKER=$(echo "$CONTENT" | grep -m1 '^\[GATE\]' || true)
 
 # Not a gate message — allow through.
-if [ -z "$PHASE_MATCH" ] || [ -z "$CHECKLIST_MATCH" ]; then
+if [ -z "$GATE_MARKER" ]; then
   exit 0
 fi
 
