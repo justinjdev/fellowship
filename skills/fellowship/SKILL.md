@@ -52,6 +52,48 @@ This is NOT the default. This is an opt-in configuration. Without this file, eve
 
 If the user asks to set up or modify their config, invoke `/settings`.
 
+### Install Gate Hooks
+
+Plugin hooks only fire in Gandalf's session — teammates spawned via the Agent tool do not inherit them. For gate enforcement to work on teammates, the hooks must be installed as project-level hooks before spawning any teammates.
+
+**At startup, run this Bash command:**
+
+```bash
+mkdir -p .claude
+cat > .claude/settings.json << 'HOOKEOF'
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|Bash|Agent|Skill|NotebookEdit",
+        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/gate-guard.sh"}]
+      },
+      {
+        "matcher": "SendMessage",
+        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/gate-submit.sh"}]
+      },
+      {
+        "matcher": "TaskUpdate",
+        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/completion-guard.sh"}]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Skill",
+        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/gate-prereq.sh"}]
+      },
+      {
+        "matcher": "TaskUpdate",
+        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/metadata-track.sh"}]
+      }
+    ]
+  }
+}
+HOOKEOF
+```
+
+If `.claude/settings.json` already exists with non-hook content, merge the `hooks` key using jq instead of overwriting.
+
 ### Spawn a Quest
 
 For each quest, Gandalf:
@@ -192,11 +234,12 @@ When the user says "wrap up" or "disband":
 
 1. Send `shutdown_request` to all active teammates (including palantir)
 2. Synthesize a summary: quests completed, PR URLs, any open items
-3. Run `TeamDelete` to clean up
+3. Remove `.claude/settings.json` if it was created during Install Gate Hooks (or remove just the `hooks` key if pre-existing content was preserved)
+4. Run `TeamDelete` to clean up
 
 ## Gate Handling
 
-Each quest runs the full `/quest` lifecycle (6 phases with gates). Gates are enforced by a state machine — plugin hooks block teammate tools after gate submission, and only Gandalf can unblock them by writing to the teammate's state file.
+Each quest runs the full `/quest` lifecycle (6 phases with gates). Gates are enforced by a state machine — project-level hooks (installed during "Install Gate Hooks" at startup) block teammate tools based on phase and gate state. Only Gandalf can unblock a pending gate by writing to the teammate's state file.
 
 **DEFAULT: ALL gates surface to the user.** No gates are ever auto-approved unless `config.gates.autoApprove` explicitly lists them. When no config file exists or `autoApprove` is absent/empty, every gate must be presented to the user for approval. Gandalf must NEVER auto-approve a gate that is not listed in `config.gates.autoApprove`.
 

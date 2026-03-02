@@ -87,6 +87,7 @@ When running as a fellowship teammate, a state file at `tmp/quest-state.json` en
      - `{ticket}`: match `branch.ticketPattern` (default: `[A-Z]+-\d+`) against the task description. If matched, use the match. If not matched and the pattern contains `{ticket}`, ask the user to provide a ticket ID.
      - `{author}`: use `branch.author` from config. If not set and the pattern contains `{author}`, ask the user to provide their name.
    - **Create worktree:** Use `EnterWorktree` with the resolved branch name. If `config.worktree.directory` is set, create the worktree there instead of the default location.
+   - **Install hooks in worktree (fellowship only):** After entering the worktree, project-level hooks must be re-created so gate enforcement continues. Run the same "Install Gate Hooks" Bash command from the fellowship skill (creates `.claude/settings.json` with the gate hook configuration). This must happen before the state file creation below.
 3. **State file (fellowship only):** This MUST happen before any other tool calls (Skill, Bash, etc.) so that hooks can enforce gates from the start. If running as a fellowship teammate:
    - If `tmp/quest-state.json` already exists (respawn), reset `gate_pending` to `false` and preserve the existing `phase`.
    - Otherwise, create `tmp/quest-state.json`:
