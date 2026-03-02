@@ -3,10 +3,17 @@
 # Exercises each hook script with simulated inputs and validates
 # exit codes + state file mutations.
 #
-# Usage: ./hooks/test-hooks.sh
+# Usage: ./hooks/test-hooks.sh [--verbose]
 # Requires: jq
 
 set -uo pipefail
+
+VERBOSE=false
+for arg in "$@"; do
+  case "$arg" in
+    --verbose) VERBOSE=true ;;
+  esac
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOKS="$SCRIPT_DIR/scripts"
@@ -54,7 +61,11 @@ run_hook() {
   local script="$1"
   shift
   rc=0
-  (cd "$WORK_DIR" && "$HOOKS/$script" "$@") 2>/dev/null || rc=$?
+  if [ "$VERBOSE" = "true" ]; then
+    (cd "$WORK_DIR" && "$HOOKS/$script" "$@") || rc=$?
+  else
+    (cd "$WORK_DIR" && "$HOOKS/$script" "$@") 2>/dev/null || rc=$?
+  fi
 }
 
 # Run a hook script with stdin input from the work directory.
@@ -62,7 +73,11 @@ run_hook_stdin() {
   local script="$1"
   local input="$2"
   rc=0
-  (cd "$WORK_DIR" && echo "$input" | "$HOOKS/$script") 2>/dev/null || rc=$?
+  if [ "$VERBOSE" = "true" ]; then
+    (cd "$WORK_DIR" && echo "$input" | "$HOOKS/$script") || rc=$?
+  else
+    (cd "$WORK_DIR" && echo "$input" | "$HOOKS/$script") 2>/dev/null || rc=$?
+  fi
 }
 
 assert_exit() {
