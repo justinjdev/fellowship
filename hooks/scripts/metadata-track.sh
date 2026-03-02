@@ -7,6 +7,10 @@ source "$SCRIPT_DIR/_common.sh"
 
 # Read tool input from stdin.
 INPUT=$(cat)
+if ! echo "$INPUT" | jq empty 2>/dev/null; then
+  echo "fellowship: malformed hook input" >&2
+  exit 2
+fi
 
 # Check if tool_input contains metadata.phase.
 HAS_PHASE=$(echo "$INPUT" | jq -r '.tool_input.metadata.phase // empty')

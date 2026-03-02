@@ -8,6 +8,10 @@ source "$SCRIPT_DIR/_common.sh"
 
 # Read tool input from stdin.
 INPUT=$(cat)
+if ! echo "$INPUT" | jq empty 2>/dev/null; then
+  echo "fellowship: malformed hook input — blocking for safety" >&2
+  exit 2
+fi
 CONTENT=$(echo "$INPUT" | jq -r '.tool_input.content // empty')
 
 # Gate detection: message must start with [GATE] marker.
@@ -16,6 +20,13 @@ GATE_MARKER=$(echo "$CONTENT" | grep -m1 '^\[GATE\]' || true)
 # Not a gate message — allow through.
 if [ -z "$GATE_MARKER" ]; then
   exit 0
+fi
+
+# Reject multiple [GATE] markers in one message.
+GATE_COUNT=$(echo "$CONTENT" | grep -c '\[GATE\]' || true)
+if [ "$GATE_COUNT" -gt 1 ]; then
+  echo "Multiple [GATE] markers detected — send one gate per message." >&2
+  exit 2
 fi
 
 # --- This is a gate message ---

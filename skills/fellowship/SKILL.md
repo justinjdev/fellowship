@@ -100,11 +100,6 @@ INSTRUCTIONS:
 6. If you receive a shutdown request, respond immediately using
    SendMessage with type "shutdown_response", approve: true, and
    the request_id from the message. Do not just acknowledge in text.
-7. Phase tracking — at the START of each quest phase, update your task
-   with your current phase using TaskUpdate:
-   TaskUpdate(taskId: "{task_id}", metadata: {"phase": "<phase_name>"})
-   Valid phases: Onboard, Research, Plan, Implement, Review, Complete
-   This lets the lead track progress across all quests.
 
 CONVENTIONS:
 - Use conventional commits for all git commits (e.g., feat:, fix:, docs:, refactor:)
@@ -123,12 +118,26 @@ CONTEXT:
 - Your quest: {quest_name}
 - Your task ID: {task_id}
 - Other active quests: {brief_list}
-{if pr config exists}
-- PR config: draft={config.pr.draft}, template={config.pr.template}
-{endif}
+- PR config: {pr_config_line}
 ```
 
-**Gate config override (`{gate_config_override}`):** Default (no config or empty `autoApprove`): "All gates require lead approval. Do not proceed past any gate without receiving an explicit approval message from the lead." If `config.gates.autoApprove` contains gate names (e.g., `["Research", "Plan"]`), add: "The following gates are auto-approved and hooks will advance your state automatically: {list}. For all other gates, your tools are blocked until the lead approves."
+**Spawn prompt substitution rules:**
+
+Before sending the spawn prompt, Gandalf substitutes these placeholders with actual values:
+
+| Placeholder | Source |
+|---|---|
+| `{task_description}` | The quest task text from the user |
+| `{task_id}` | Task ID returned by `TaskCreate` |
+| `{team_name}` | The fellowship team name |
+| `{quest_name}` | Descriptive name (e.g., `"quest-auth-bug"`) |
+| `{brief_list}` | Comma-separated list of other active quest names |
+| `{gate_config_override}` | See below |
+| `{pr_config_line}` | If `config.pr` exists: `"draft=true, template=..."`. If not: `"default (not a draft, no template)"` |
+
+**`{gate_config_override}` generation:**
+- If `config.gates.autoApprove` is empty or undefined: substitute with `"All gates require lead approval. Do not proceed past any gate without receiving an explicit approval message from the lead."`
+- If it contains gate names (e.g., `["Research", "Plan"]`): substitute with `"The following gates are auto-approved and hooks will advance your state automatically: Research, Plan. For all other gates, your tools are blocked until the lead approves."`
 
 ### Spawn Palantir
 
@@ -208,7 +217,7 @@ Example (auto-approved): `"quest-2: Research gate auto-approved per config"`
 When Gandalf approves a non-auto-approved gate:
 
 1. **Read worktree path:** `TaskGet(taskId: "<task_id>")` → read `metadata.worktree_path`
-2. **Update the state file** to unblock the teammate:
+2. **Update the state file** using the Bash tool to unblock the teammate. Worktrees are on the same local filesystem as Gandalf's session, so Gandalf can write to `<worktree_path>/tmp/quest-state.json` directly:
    ```bash
    jq --arg phase "<next_phase>" \
      '.gate_pending = false | .phase = $phase | .gate_id = null | .lembas_completed = false | .metadata_updated = false' \
@@ -218,7 +227,7 @@ When Gandalf approves a non-auto-approved gate:
    Phase progression: Onboard→Research, Research→Plan, Plan→Implement, Implement→Review, Review→Complete
 3. **Send approval message** to the teammate via SendMessage
 
-This is the structural enforcement — saying "approved" in text does nothing. The teammate's hooks read `gate_pending` from the state file on every tool call. Only this file write unblocks them.
+This is the structural enforcement — saying "approved" in text does nothing. The teammate's hooks read `gate_pending` from the state file on every tool call. Only this Bash-tool file write unblocks them.
 
 ### Gate Rejection Procedure
 

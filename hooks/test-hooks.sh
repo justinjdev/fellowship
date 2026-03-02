@@ -133,6 +133,16 @@ reset_state
 run_hook_stdin gate-prereq.sh '{"tool_input":{"skill":"council"}}'
 assert_val "other skill no-op" '.lembas_completed' "false"
 
+echo "-- matches lembas substring (alternate namespace)"
+reset_state
+run_hook_stdin gate-prereq.sh '{"tool_input":{"skill":"my-plugin:lembas"}}'
+assert_val "alternate namespace lembas sets flag" '.lembas_completed' "true"
+
+echo "-- rejects malformed input"
+reset_state
+run_hook_stdin gate-prereq.sh 'not valid json'
+assert_exit "malformed input rejected" 2 "$rc"
+
 echo "-- no-op when state file missing"
 rm "$STATE_FILE"
 run_hook_stdin gate-prereq.sh '{"tool_input":{"skill":"lembas"}}'
@@ -158,6 +168,11 @@ reset_state
 run_hook_stdin metadata-track.sh '{"tool_input":{"status":"completed"}}'
 assert_val "no metadata no-op" '.metadata_updated' "false"
 
+echo "-- rejects malformed input"
+reset_state
+run_hook_stdin metadata-track.sh 'not valid json'
+assert_exit "malformed input rejected" 2 "$rc"
+
 # --- gate-submit.sh ---
 
 echo ""
@@ -166,12 +181,25 @@ echo "=== gate-submit ==="
 GATE_MSG='{"tool_input":{"content":"[GATE] Research complete\n- [x] findings documented"}}'
 NORMAL_MSG='{"tool_input":{"content":"Here is a status update on my progress"}}'
 PHASE_MSG_NO_GATE='{"tool_input":{"content":"Research complete\n- [x] findings documented"}}'
+MULTI_GATE_MSG='{"tool_input":{"content":"[GATE] Research complete\n- [x] done\n[GATE] Plan complete\n- [x] also done"}}'
 
 echo "-- allows non-gate messages through"
 reset_state
 run_hook_stdin gate-submit.sh "$NORMAL_MSG"
 assert_exit "non-gate message allowed" 0 "$rc"
 assert_val "state unchanged" '.gate_pending' "false"
+
+echo "-- rejects malformed input"
+reset_state
+run_hook_stdin gate-submit.sh 'not valid json'
+assert_exit "malformed input rejected" 2 "$rc"
+
+echo "-- rejects multiple [GATE] markers in one message"
+reset_state
+set_state '.lembas_completed = true | .metadata_updated = true'
+run_hook_stdin gate-submit.sh "$MULTI_GATE_MSG"
+assert_exit "multi-gate rejected" 2 "$rc"
+assert_val "gate_pending still false after multi-gate" '.gate_pending' "false"
 
 echo "-- allows phase+checklist messages without [GATE] prefix"
 reset_state

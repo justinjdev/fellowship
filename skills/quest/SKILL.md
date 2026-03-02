@@ -54,9 +54,12 @@ Phase 5: Complete ───→ finishing-a-development-branch
 
 ### Fellowship Integration
 
-When running as a fellowship teammate (indicated by the spawn prompt), report each phase transition to the lead:
-1. Update task metadata: `TaskUpdate(taskId: "<your_task_id>", metadata: {"phase": "<phase_name>"})`
-2. This happens at the start of each phase — no extra messages needed beyond existing gate handling.
+When running as a fellowship teammate (indicated by the spawn prompt), the gate prerequisite order at the end of each phase is:
+1. Run `/lembas` to compress context (hooks verify this)
+2. Update task metadata: `TaskUpdate(taskId: "<your_task_id>", metadata: {"phase": "<current_phase>"})` (hooks verify this)
+3. Send `[GATE]` message to the lead via SendMessage
+
+Both steps 1 and 2 must complete before step 3 — the hooks will block gate submission otherwise. Valid phase names: Onboard, Research, Plan, Implement, Review, Complete.
 
 ### Gate State Machine
 
@@ -73,7 +76,7 @@ When running as a fellowship teammate, a state file at `tmp/quest-state.json` en
 ### Phase 0: Onboard
 
 1. **Config:** Read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. Merge with defaults (see fellowship skill for the full schema). If the file does not exist, all defaults apply.
-2. **Isolate:** If already in an isolated worktree (e.g., resuming a failed quest), skip worktree creation — you're already isolated. Otherwise, if `config.worktree.enabled` is true (default), create an isolated worktree:
+2. **Isolate:** Detect whether you're resuming an existing worktree: check if task metadata contains `worktree_path` (via `TaskGet`) and the path exists on disk. If so, you're already isolated — skip worktree creation. Otherwise, if `config.worktree.enabled` is true (default), create an isolated worktree:
    - **Resolve branch name:** Determine the branch name using config:
      1. If `branch.pattern` is set: substitute `{slug}`, `{ticket}`, `{author}` placeholders (see below).
      2. Else: use `fellowship/{slug}`.
@@ -82,7 +85,7 @@ When running as a fellowship teammate, a state file at `tmp/quest-state.json` en
      - `{ticket}`: match `branch.ticketPattern` (default: `[A-Z]+-\d+`) against the task description. If matched, use the match. If not matched and the pattern contains `{ticket}`, ask the user to provide a ticket ID.
      - `{author}`: use `branch.author` from config. If not set and the pattern contains `{author}`, ask the user to provide their name.
    - **Create worktree:** Use `EnterWorktree` with the resolved branch name. If `config.worktree.directory` is set, create the worktree there instead of the default location.
-3. **State file (fellowship only):** If running as a fellowship teammate:
+3. **State file (fellowship only):** This MUST happen before any other tool calls (Skill, Bash, etc.) so that hooks can enforce gates from the start. If running as a fellowship teammate:
    - If `tmp/quest-state.json` already exists (respawn), reset `gate_pending` to `false` and preserve the existing `phase`.
    - Otherwise, create `tmp/quest-state.json`:
      ```json
