@@ -39,13 +39,16 @@ At startup, read `~/.claude/fellowship.json` (the user's personal Claude directo
 
 **Config keys used by fellowship:** `branch.*` (branch naming), `worktree.*` (isolation), `gates.autoApprove` (gate routing), `pr.*` (PR creation), `palantir.*` (monitoring). See `/settings` for the full schema, defaults, and valid values.
 
-**Example — auto-approve early gates, draft PRs:**
+**IMPORTANT — gate defaults:** When no config file exists, or when `gates.autoApprove` is absent/empty, ALL gates surface to the user. No gates are auto-approved by default. Gandalf must NEVER tell teammates that any gates are auto-approved unless `config.gates.autoApprove` explicitly lists them.
+
+**Example config (optional — only if the user wants auto-approval):**
 ```json
 {
   "gates": { "autoApprove": ["Research", "Plan"] },
   "pr": { "draft": true }
 }
 ```
+This is NOT the default. This is an opt-in configuration. Without this file, every gate requires user approval.
 
 If the user asks to set up or modify their config, invoke `/settings`.
 
@@ -135,9 +138,9 @@ Before sending the spawn prompt, Gandalf substitutes these placeholders with act
 | `{gate_config_override}` | See below |
 | `{pr_config_line}` | If `config.pr` exists: `"draft=true, template=..."`. If not: `"default (not a draft, no template)"` |
 
-**`{gate_config_override}` generation:**
-- If `config.gates.autoApprove` is empty or undefined: substitute with `"All gates require lead approval. Do not proceed past any gate without receiving an explicit approval message from the lead."`
-- If it contains gate names (e.g., `["Research", "Plan"]`): substitute with `"The following gates are auto-approved and hooks will advance your state automatically: Research, Plan. For all other gates, your tools are blocked until the lead approves."`
+**`{gate_config_override}` generation (read `config.gates.autoApprove` — default is empty):**
+- **DEFAULT (no config, or `autoApprove` absent/empty):** substitute with `"All gates require lead approval. Do not proceed past any gate without receiving an explicit approval message from the lead."` — do NOT mention auto-approval in any form.
+- **Only if `autoApprove` explicitly lists gate names** (e.g., `["Research", "Plan"]`): substitute with `"The following gates are auto-approved and hooks will advance your state automatically: Research, Plan. For all other gates, your tools are blocked until the lead approves."`
 
 ### Spawn Palantir
 
@@ -195,9 +198,9 @@ When the user says "wrap up" or "disband":
 
 Each quest runs the full `/quest` lifecycle (6 phases with gates). Gates are enforced by a state machine — plugin hooks block teammate tools after gate submission, and only Gandalf can unblock them by writing to the teammate's state file.
 
-**Default behavior (no config or empty `autoApprove`):**
+**DEFAULT: ALL gates surface to the user.** No gates are ever auto-approved unless `config.gates.autoApprove` explicitly lists them. When no config file exists or `autoApprove` is absent/empty, every gate must be presented to the user for approval. Gandalf must NEVER auto-approve a gate that is not listed in `config.gates.autoApprove`.
 
-| Gate | Handling |
+| Gate | Default Handling |
 |------|----------|
 | Onboard → Research | Surface to user |
 | Research → Plan | Surface to user |
@@ -205,9 +208,9 @@ Each quest runs the full `/quest` lifecycle (6 phases with gates). Gates are enf
 | Implement → Review | Surface to user |
 | Review → Complete | Surface to user |
 
-**With `config.gates.autoApprove`:** Gates listed in the array are auto-approved — the hooks advance the teammate's state automatically without setting `gate_pending`. Valid gate names: `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`. For example, `"autoApprove": ["Research", "Plan"]` means Research and Plan gates are auto-approved, while Implement, Review, and Complete gates still surface to the user.
+**With `config.gates.autoApprove` (opt-in only):** Gates listed in the array are auto-approved — the hooks advance the teammate's state automatically without setting `gate_pending`. Valid gate names: `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`. For example, `"autoApprove": ["Research", "Plan"]` means Research and Plan gates are auto-approved, while Implement, Review, and Complete gates still surface to the user. If a gate name is NOT in this array, it MUST surface to the user.
 
-When a gate is auto-approved: the hooks advance the teammate's phase automatically. Gandalf logs it (e.g., `"quest-2: Research gate auto-approved per config"`) but does NOT need to write to the state file. When a gate requires user approval: the lead presents the gate summary with context and waits for the user's response before approving.
+When a gate is auto-approved (per config): the hooks advance the teammate's phase automatically. Gandalf logs it (e.g., `"quest-2: Research gate auto-approved per config"`) but does NOT need to write to the state file. When a gate requires user approval (the default): the lead presents the gate summary with context and waits for the user's response before approving.
 
 Example (user-approved): `"quest-2 (rate limiting) reached Research → Plan gate [██░░░░ 1/5]. Research summary: [summary]. Approve?"`
 Example (auto-approved): `"quest-2: Research gate auto-approved per config"`
@@ -313,7 +316,7 @@ digraph gandalf {
 
 ### Reactive (responding to teammate events)
 
-- **Gate message received** → check `config.gates.autoApprove`: if gate is listed, auto-approve and relay; otherwise surface to user for approval. After handling the gate, send a "check" message to palantir (if active) to trigger a monitoring sweep.
+- **Gate message received** → check `config.gates.autoApprove` (default: empty — no auto-approvals). If the specific gate name is explicitly listed in the config, auto-approve and relay. Otherwise (including when no config exists), surface to user for approval — never auto-approve by default. After handling the gate, send a "check" message to palantir (if active) to trigger a monitoring sweep.
 - **Quest completed** → record PR URL, mark task done via `TaskUpdate`, report to user
 - **Quest stuck/errored** → report to user with context (phase, error), offer respawn
 - **Teammate idle** → normal, no action needed
