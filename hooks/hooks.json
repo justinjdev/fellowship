@@ -1,5 +1,5 @@
 {
-  "description": "Fellowship gate state machine — enforces phase gates for quest teammates",
+  "description": "Fellowship gate state machine — enforces phase gates for quest teammates. PreToolUse hooks block tool calls at unapproved gates (gate-guard), intercept SendMessage for gate submissions (gate-submit), and prevent premature task completion (completion-guard). PostToolUse hooks track skill invocations for phase prerequisites (gate-prereq) and task metadata updates (metadata-track).",
   "hooks": {
     "PreToolUse": [
       {
