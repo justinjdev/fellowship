@@ -14,12 +14,15 @@ fi
 
 # Check if tool_input contains metadata.phase.
 HAS_PHASE=$(echo "$INPUT" | jq -r '.tool_input.metadata.phase // empty')
+verbose "metadata-track: phase metadata=$HAS_PHASE"
 
 if [ -z "$HAS_PHASE" ]; then
+  verbose "metadata-track: no phase metadata, skipping"
   exit 0
 fi
 
 # Set metadata_updated = true.
+verbose "metadata-track: setting metadata_updated=true"
 if ! echo "$STATE" | jq '.metadata_updated = true' > "$STATE_FILE.tmp"; then
   echo "fellowship: failed to update state file" >&2
   rm -f "$STATE_FILE.tmp"

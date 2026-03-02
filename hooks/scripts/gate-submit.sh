@@ -19,8 +19,11 @@ GATE_MARKER=$(echo "$CONTENT" | grep -m1 '^\[GATE\]' || true)
 
 # Not a gate message — allow through.
 if [ -z "$GATE_MARKER" ]; then
+  verbose "gate-submit: not a gate message, passing through"
   exit 0
 fi
+
+verbose "gate-submit: [GATE] marker detected"
 
 # Reject multiple [GATE] markers in one message.
 GATE_COUNT=$(echo "$CONTENT" | grep -c '\[GATE\]' || true)
@@ -36,9 +39,11 @@ LEMBAS=$(echo "$STATE" | jq -r '.lembas_completed')
 METADATA=$(echo "$STATE" | jq -r '.metadata_updated')
 PHASE=$(echo "$STATE" | jq -r '.phase')
 AUTO_GATES=$(echo "$STATE" | jq -r '.auto_approve_gates // [] | .[]')
+verbose "gate-submit: phase=$PHASE lembas=$LEMBAS metadata=$METADATA gate_pending=$GATE_PENDING"
 
 # Block if a gate is already pending.
 if [ "$GATE_PENDING" = "true" ]; then
+  verbose "gate-submit: BLOCKED — gate already pending"
   echo "Gate already pending — wait for lead approval before submitting another gate." >&2
   exit 2
 fi
@@ -57,6 +62,7 @@ if [ "$METADATA" != "true" ]; then
 fi
 
 if [ -n "$MISSING" ]; then
+  verbose "gate-submit: BLOCKED — $MISSING"
   echo "Gate blocked: $MISSING. Run /lembas and update task metadata before submitting a gate." >&2
   exit 2
 fi
@@ -87,7 +93,10 @@ for gate in $AUTO_GATES; do
   fi
 done
 
+verbose "gate-submit: $PHASE -> $NEXT_PHASE"
+
 if [ "$IS_AUTO" = "true" ]; then
+  verbose "gate-submit: auto-approved $NEXT_PHASE"
   # Auto-approved: advance phase, reset prereqs, don't set gate_pending.
   if ! echo "$STATE" | jq \
     --arg phase "$NEXT_PHASE" \
@@ -102,6 +111,7 @@ if [ "$IS_AUTO" = "true" ]; then
 fi
 
 # Normal gate: set gate_pending, generate gate_id.
+verbose "gate-submit: normal gate, setting pending"
 GATE_ID="gate-${PHASE}-$(date +%s)"
 if ! echo "$STATE" | jq \
   --arg gid "$GATE_ID" \
@@ -112,5 +122,6 @@ if ! echo "$STATE" | jq \
   exit 2
 fi
 mv "$STATE_FILE.tmp" "$STATE_FILE"
+verbose "gate-submit: gate_pending=true gate_id=$GATE_ID"
 
 exit 0

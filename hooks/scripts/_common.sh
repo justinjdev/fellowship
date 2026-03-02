@@ -28,3 +28,11 @@ if [ -z "$STATE" ] || ! echo "$STATE" | jq empty 2>/dev/null; then
   echo "fellowship: state file $STATE_FILE is empty or contains invalid JSON" >&2
   exit 2
 fi
+
+# Verbose logging — enabled by FELLOWSHIP_VERBOSE=1.
+verbose() {
+  [ "${FELLOWSHIP_VERBOSE:-}" = "1" ] && echo "fellowship: $*" >&2 || true
+}
+
+verbose "state file: $STATE_FILE"
+verbose "state loaded (phase=$(echo "$STATE" | jq -r '.phase'))"

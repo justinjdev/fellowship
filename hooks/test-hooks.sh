@@ -78,6 +78,47 @@ assert_exit() {
   fi
 }
 
+# Run a hook with FELLOWSHIP_VERBOSE=1 and capture stderr.
+# Sets $rc (exit code) and $stderr (captured output).
+run_hook_verbose() {
+  local script="$1"
+  shift
+  rc=0
+  stderr=$(cd "$WORK_DIR" && FELLOWSHIP_VERBOSE=1 "$HOOKS/$script" "$@" 2>&1 >/dev/null) || rc=$?
+}
+
+# Run a hook with stdin input and FELLOWSHIP_VERBOSE=1, capturing stderr.
+run_hook_stdin_verbose() {
+  local script="$1"
+  local input="$2"
+  rc=0
+  stderr=$(cd "$WORK_DIR" && echo "$input" | FELLOWSHIP_VERBOSE=1 "$HOOKS/$script" 2>&1 >/dev/null) || rc=$?
+}
+
+assert_stderr_contains() {
+  local name="$1"
+  local expected="$2"
+  if echo "$stderr" | grep -qF "$expected"; then
+    echo "  PASS: $name (stderr contains '$expected')"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: $name — stderr does not contain '$expected'"
+    echo "        stderr was: $stderr"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+assert_stderr_empty() {
+  local name="$1"
+  if [ -z "$stderr" ]; then
+    echo "  PASS: $name (stderr empty)"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: $name — expected empty stderr, got: $stderr"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
 assert_val() {
   local name="$1"
   local jq_path="$2"
@@ -407,6 +448,89 @@ for phase_pair in "Onboard:Research" "Research:Plan" "Plan:Implement" "Implement
 done
 
 assert_val "lifecycle ends at Complete" '.phase' "Complete"
+
+# --- verbose output (FELLOWSHIP_VERBOSE) ---
+
+echo ""
+echo "=== verbose output ==="
+
+echo "-- gate-guard produces verbose output when FELLOWSHIP_VERBOSE=1"
+reset_state
+run_hook_verbose gate-guard.sh
+assert_exit "verbose gate-guard exits 0" 0 "$rc"
+assert_stderr_contains "verbose gate-guard logs allowed" "gate-guard: allowed"
+
+echo "-- gate-guard silent when FELLOWSHIP_VERBOSE unset"
+reset_state
+stderr=""
+rc=0
+stderr=$(cd "$WORK_DIR" && "$HOOKS/gate-guard.sh" 2>&1 >/dev/null) || rc=$?
+assert_exit "silent gate-guard exits 0" 0 "$rc"
+assert_stderr_empty "no verbose output without env var"
+
+echo "-- gate-submit verbose on gate detection"
+reset_state
+set_state '.lembas_completed = true | .metadata_updated = true'
+GATE_MSG='{"tool_input":{"content":"[GATE] Research complete\n- [x] findings documented"}}'
+run_hook_stdin_verbose gate-submit.sh "$GATE_MSG"
+assert_exit "verbose gate-submit exits 0" 0 "$rc"
+assert_stderr_contains "verbose gate-submit logs marker" "gate-submit: [GATE] marker detected"
+assert_stderr_contains "verbose gate-submit logs phase" "gate-submit: phase=Research"
+assert_stderr_contains "verbose gate-submit logs pending" "gate-submit: normal gate, setting pending"
+
+echo "-- gate-submit verbose on auto-approve"
+reset_state
+set_state '.lembas_completed = true | .metadata_updated = true | .auto_approve_gates = ["Plan"]'
+run_hook_stdin_verbose gate-submit.sh "$GATE_MSG"
+assert_exit "verbose auto-approve exits 0" 0 "$rc"
+assert_stderr_contains "verbose gate-submit logs auto-approve" "gate-submit: auto-approved Plan"
+
+echo "-- gate-prereq verbose on lembas match"
+reset_state
+run_hook_stdin_verbose gate-prereq.sh '{"tool_input":{"skill":"lembas"}}'
+assert_exit "verbose gate-prereq exits 0" 0 "$rc"
+assert_stderr_contains "verbose gate-prereq logs lembas" "gate-prereq: lembas detected"
+
+echo "-- gate-prereq verbose on non-lembas skip"
+reset_state
+run_hook_stdin_verbose gate-prereq.sh '{"tool_input":{"skill":"council"}}'
+assert_exit "verbose gate-prereq skip exits 0" 0 "$rc"
+assert_stderr_contains "verbose gate-prereq logs skip" "gate-prereq: not lembas, skipping"
+
+echo "-- completion-guard verbose on allowed completion"
+reset_state
+set_state '.phase = "Complete"'
+run_hook_stdin_verbose completion-guard.sh '{"tool_input":{"taskId":"1","status":"completed"}}'
+assert_exit "verbose completion-guard exits 0" 0 "$rc"
+assert_stderr_contains "verbose completion-guard logs allowed" "completion-guard: allowed"
+
+echo "-- completion-guard verbose on blocked completion"
+reset_state
+run_hook_stdin_verbose completion-guard.sh '{"tool_input":{"taskId":"1","status":"completed"}}'
+assert_exit "verbose completion-guard blocks" 2 "$rc"
+assert_stderr_contains "verbose completion-guard logs blocked" "completion-guard: BLOCKED"
+
+echo "-- metadata-track verbose on phase metadata"
+reset_state
+run_hook_stdin_verbose metadata-track.sh '{"tool_input":{"metadata":{"phase":"Research"}}}'
+assert_exit "verbose metadata-track exits 0" 0 "$rc"
+assert_stderr_contains "verbose metadata-track logs update" "metadata-track: setting metadata_updated=true"
+
+echo "-- metadata-track verbose on skip"
+reset_state
+run_hook_stdin_verbose metadata-track.sh '{"tool_input":{"status":"in_progress"}}'
+assert_exit "verbose metadata-track skip exits 0" 0 "$rc"
+assert_stderr_contains "verbose metadata-track logs skip" "metadata-track: no phase metadata, skipping"
+
+echo "-- common verbose logs state file path"
+reset_state
+run_hook_verbose gate-guard.sh
+assert_stderr_contains "verbose common logs state file" "state file:"
+
+echo "-- common verbose logs phase from state"
+reset_state
+run_hook_verbose gate-guard.sh
+assert_stderr_contains "verbose common logs phase" "state loaded (phase=Research)"
 
 # --- summary ---
 
