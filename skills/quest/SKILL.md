@@ -66,10 +66,12 @@ Both steps 1 and 2 must complete before step 3 — the hooks will block gate sub
 When running as a fellowship teammate, a state file at `tmp/quest-state.json` enforces gate discipline via plugin hooks. The hooks structurally prevent you from working after submitting a gate, skipping lembas, or skipping metadata updates. You do not need to manage this file — the hooks handle it automatically.
 
 **What the hooks enforce:**
+- **Phase-aware file guard:** During Onboard, Research, and Plan phases, Edit/Write to files outside `tmp/` are blocked. You cannot modify production code until you reach the Implement phase by submitting gates. Bash, Agent, Skill, and reads are allowed in all phases.
 - Gate messages must start with `[GATE]` to be detected (e.g., `[GATE] Research complete\n- [x] ...`)
 - After you send a gate message, your Edit/Write/Bash/Agent/Skill tools are blocked until the lead approves
 - Before you can send a gate message, you must have run `/lembas` and updated task metadata with your current phase
 - You cannot send a second gate while one is pending
+- You cannot mark your task as completed unless your phase is `Complete`
 
 **State file initialization** happens at Phase 0 (see below). If you are resuming a failed quest and `tmp/quest-state.json` already exists, the file is preserved with `gate_pending` reset to `false`.
 

@@ -98,20 +98,105 @@ assert_val() {
 echo ""
 echo "=== gate-guard ==="
 
+BASH_INPUT='{"tool_input":{"command":"ls"}}'
+EDIT_PROD='{"tool_input":{"file_path":"/repo/src/main.ts","old_string":"foo","new_string":"bar"}}'
+WRITE_PROD='{"tool_input":{"file_path":"/repo/src/main.ts","content":"code"}}'
+WRITE_TMP='{"tool_input":{"file_path":"/repo/tmp/notes.md","content":"notes"}}'
+WRITE_TMP_REL='{"tool_input":{"file_path":"tmp/checkpoint.md","content":"notes"}}'
+NOTEBOOK_PROD='{"tool_input":{"notebook_path":"/repo/src/analysis.ipynb","new_source":"code"}}'
+SKILL_INPUT='{"tool_input":{"skill":"gather-lore"}}'
+AGENT_INPUT='{"tool_input":{"prompt":"explore","subagent_type":"Explore"}}'
+
 echo "-- allows when gate_pending=false"
 reset_state
-run_hook gate-guard.sh
+run_hook_stdin gate-guard.sh "$BASH_INPUT"
 assert_exit "allow when not pending" 0 "$rc"
 
 echo "-- blocks when gate_pending=true"
 set_state '.gate_pending = true'
-run_hook gate-guard.sh
+run_hook_stdin gate-guard.sh "$BASH_INPUT"
 assert_exit "block when pending" 2 "$rc"
+
+echo "-- gate_pending blocks even file tools"
+reset_state
+set_state '.phase = "Implement" | .gate_pending = true'
+run_hook_stdin gate-guard.sh "$EDIT_PROD"
+assert_exit "gate_pending blocks Edit" 2 "$rc"
 
 echo "-- no-op when state file missing"
 rm "$STATE_FILE"
-run_hook gate-guard.sh
+run_hook_stdin gate-guard.sh "$BASH_INPUT"
 assert_exit "no-op without state file" 0 "$rc"
+
+# --- phase-aware guard ---
+
+echo ""
+echo "=== phase-aware guard ==="
+
+echo "-- blocks Edit to production file during Onboard"
+reset_state
+set_state '.phase = "Onboard"'
+run_hook_stdin gate-guard.sh "$EDIT_PROD"
+assert_exit "blocks Edit at Onboard" 2 "$rc"
+
+echo "-- blocks Write to production file during Research"
+reset_state
+run_hook_stdin gate-guard.sh "$WRITE_PROD"
+assert_exit "blocks Write at Research" 2 "$rc"
+
+echo "-- blocks Edit to production file during Plan"
+reset_state
+set_state '.phase = "Plan"'
+run_hook_stdin gate-guard.sh "$EDIT_PROD"
+assert_exit "blocks Edit at Plan" 2 "$rc"
+
+echo "-- blocks NotebookEdit to production file during Research"
+reset_state
+run_hook_stdin gate-guard.sh "$NOTEBOOK_PROD"
+assert_exit "blocks NotebookEdit at Research" 2 "$rc"
+
+echo "-- allows Write to tmp/ (absolute) during Research"
+reset_state
+run_hook_stdin gate-guard.sh "$WRITE_TMP"
+assert_exit "allows tmp/ Write at Research" 0 "$rc"
+
+echo "-- allows Write to tmp/ (relative) during Research"
+reset_state
+run_hook_stdin gate-guard.sh "$WRITE_TMP_REL"
+assert_exit "allows relative tmp/ Write at Research" 0 "$rc"
+
+echo "-- allows Bash during Research"
+reset_state
+run_hook_stdin gate-guard.sh "$BASH_INPUT"
+assert_exit "allows Bash at Research" 0 "$rc"
+
+echo "-- allows Skill during Research"
+reset_state
+run_hook_stdin gate-guard.sh "$SKILL_INPUT"
+assert_exit "allows Skill at Research" 0 "$rc"
+
+echo "-- allows Agent during Research"
+reset_state
+run_hook_stdin gate-guard.sh "$AGENT_INPUT"
+assert_exit "allows Agent at Research" 0 "$rc"
+
+echo "-- allows Edit during Implement"
+reset_state
+set_state '.phase = "Implement"'
+run_hook_stdin gate-guard.sh "$EDIT_PROD"
+assert_exit "allows Edit at Implement" 0 "$rc"
+
+echo "-- allows Edit during Review"
+reset_state
+set_state '.phase = "Review"'
+run_hook_stdin gate-guard.sh "$EDIT_PROD"
+assert_exit "allows Edit at Review" 0 "$rc"
+
+echo "-- allows Edit during Complete"
+reset_state
+set_state '.phase = "Complete"'
+run_hook_stdin gate-guard.sh "$EDIT_PROD"
+assert_exit "allows Edit at Complete" 0 "$rc"
 
 # --- gate-prereq.sh ---
 
@@ -394,15 +479,15 @@ for phase_pair in "Onboard:Research" "Research:Plan" "Plan:Implement" "Implement
   assert_exit "lifecycle $FROM: gate accepted" 0 "$rc"
   assert_val "lifecycle $FROM: gate_pending" '.gate_pending' "true"
 
-  # 4. tools blocked while pending
-  run_hook gate-guard.sh
+  # 4. tools blocked while pending (use Bash input — any tool is blocked)
+  run_hook_stdin gate-guard.sh '{"tool_input":{"command":"ls"}}'
   assert_exit "lifecycle $FROM: tools blocked" 2 "$rc"
 
   # 5. simulate lead approval (write to state file directly)
   set_state "$(printf '.gate_pending = false | .phase = "%s" | .gate_id = null | .lembas_completed = false | .metadata_updated = false' "$TO")"
 
-  # 6. tools unblocked after approval
-  run_hook gate-guard.sh
+  # 6. tools unblocked after approval (use Bash — allowed in all phases)
+  run_hook_stdin gate-guard.sh '{"tool_input":{"command":"ls"}}'
   assert_exit "lifecycle $TO: tools unblocked" 0 "$rc"
 done
 
