@@ -58,6 +58,17 @@ When running as a fellowship teammate (indicated by the spawn prompt), report ea
 1. Update task metadata: `TaskUpdate(taskId: "<your_task_id>", metadata: {"phase": "<phase_name>"})`
 2. This happens at the start of each phase — no extra messages needed beyond existing gate handling.
 
+### Gate State Machine
+
+When running as a fellowship teammate, a state file at `tmp/quest-state.json` enforces gate discipline via plugin hooks. The hooks structurally prevent you from working after submitting a gate, skipping lembas, or skipping metadata updates. You do not need to manage this file — the hooks handle it automatically.
+
+**What the hooks enforce:**
+- After you send a gate message, your Edit/Write/Bash/Agent/Skill tools are blocked until the lead approves
+- Before you can send a gate message, you must have run `/lembas` and updated task metadata with your current phase
+- You cannot send a second gate while one is pending
+
+**State file initialization** happens at Phase 0 (see below). If you are resuming a failed quest and `tmp/quest-state.json` already exists, the file is preserved with `gate_pending` reset to `false`.
+
 ### Phase 0: Onboard
 
 1. **Config:** Read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. Merge with defaults (see fellowship skill for the full schema). If the file does not exist, all defaults apply.
@@ -70,7 +81,26 @@ When running as a fellowship teammate (indicated by the spawn prompt), report ea
      - `{ticket}`: match `branch.ticketPattern` (default: `[A-Z]+-\d+`) against the task description. If matched, use the match. If not matched and the pattern contains `{ticket}`, ask the user to provide a ticket ID.
      - `{author}`: use `branch.author` from config. If not set and the pattern contains `{author}`, ask the user to provide their name.
    - **Create worktree:** Use `EnterWorktree` with the resolved branch name. If `config.worktree.directory` is set, create the worktree there instead of the default location.
-3. **Orient:** Invoke `/council` to load task-relevant context.
+3. **State file (fellowship only):** If running as a fellowship teammate:
+   - If `tmp/quest-state.json` already exists (respawn), reset `gate_pending` to `false` and preserve the existing `phase`.
+   - Otherwise, create `tmp/quest-state.json`:
+     ```json
+     {
+       "version": 1,
+       "quest_name": "<quest_name>",
+       "task_id": "<task_id>",
+       "team_name": "<team_name>",
+       "phase": "Onboard",
+       "gate_pending": false,
+       "gate_id": null,
+       "lembas_completed": false,
+       "metadata_updated": false,
+       "auto_approve_gates": []
+     }
+     ```
+     Populate `auto_approve_gates` from `config.gates.autoApprove` if set.
+   - Store the worktree path in task metadata: `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})`
+4. **Orient:** Invoke `/council` to load task-relevant context.
 
 If the user has already described their task, pass the description directly. Otherwise, council will ask.
 

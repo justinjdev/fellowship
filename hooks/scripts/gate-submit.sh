@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Gate submit — validates prerequisites and manages gate_pending on SendMessage.
+# Hook: PreToolUse | Matcher: SendMessage
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/_common.sh"
+
+# Read tool input from stdin.
+INPUT=$(cat)
+CONTENT=$(echo "$INPUT" | jq -r '.tool_input.content // empty')
+
+# Gate pattern: phase keyword + checklist marker both present.
+PHASE_MATCH=$(echo "$CONTENT" | grep -Ei '\b(Research|Plan|Implement|Review|Complete)\b' || true)
+CHECKLIST_MATCH=$(echo "$CONTENT" | grep -E '\- \[[ x]\]' || true)
+
+# Not a gate message — allow through.
+if [ -z "$PHASE_MATCH" ] || [ -z "$CHECKLIST_MATCH" ]; then
+  exit 0
+fi
+
+# --- This is a gate message ---
+
+GATE_PENDING=$(echo "$STATE" | jq -r '.gate_pending')
+LEMBAS=$(echo "$STATE" | jq -r '.lembas_completed')
+METADATA=$(echo "$STATE" | jq -r '.metadata_updated')
+PHASE=$(echo "$STATE" | jq -r '.phase')
+AUTO_GATES=$(echo "$STATE" | jq -r '.auto_approve_gates // [] | .[]')
+
+# Block if a gate is already pending.
+if [ "$GATE_PENDING" = "true" ]; then
+  echo "Gate already pending — wait for lead approval before submitting another gate." >&2
+  exit 2
+fi
+
+# Check prerequisites.
+MISSING=""
+if [ "$LEMBAS" != "true" ]; then
+  MISSING="lembas not completed"
+fi
+if [ "$METADATA" != "true" ]; then
+  if [ -n "$MISSING" ]; then
+    MISSING="$MISSING, metadata not updated"
+  else
+    MISSING="metadata not updated"
+  fi
+fi
+
+if [ -n "$MISSING" ]; then
+  echo "Gate blocked: $MISSING. Run /lembas and update task metadata before submitting a gate." >&2
+  exit 2
+fi
+
+# Determine next phase.
+case "$PHASE" in
+  Onboard)   NEXT_PHASE="Research" ;;
+  Research)  NEXT_PHASE="Plan" ;;
+  Plan)      NEXT_PHASE="Implement" ;;
+  Implement) NEXT_PHASE="Review" ;;
+  Review)    NEXT_PHASE="Complete" ;;
+  *)         NEXT_PHASE="" ;;
+esac
+
+# Check if this gate is auto-approved.
+IS_AUTO="false"
+for gate in $AUTO_GATES; do
+  if [ "$gate" = "$NEXT_PHASE" ] || [ "$gate" = "$PHASE" ]; then
+    IS_AUTO="true"
+    break
+  fi
+done
+
+if [ "$IS_AUTO" = "true" ] && [ -n "$NEXT_PHASE" ]; then
+  # Auto-approved: advance phase, reset prereqs, don't set gate_pending.
+  echo "$STATE" | jq \
+    --arg phase "$NEXT_PHASE" \
+    '.phase = $phase | .lembas_completed = false | .metadata_updated = false' \
+    > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
+  exit 0
+fi
+
+# Normal gate: set gate_pending, generate gate_id.
+GATE_ID="gate-${PHASE}-$(date +%s)"
+echo "$STATE" | jq \
+  --arg gid "$GATE_ID" \
+  '.gate_pending = true | .gate_id = $gid' \
+  > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
+
+exit 0
