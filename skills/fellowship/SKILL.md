@@ -39,15 +39,60 @@ At startup, read `~/.claude/fellowship.json` (the user's personal Claude directo
 
 **Config keys used by fellowship:** `branch.*` (branch naming), `worktree.*` (isolation), `gates.autoApprove` (gate routing), `pr.*` (PR creation), `palantir.*` (monitoring). See `/settings` for the full schema, defaults, and valid values.
 
-**Example — auto-approve early gates, draft PRs:**
+**IMPORTANT — gate defaults:** When no config file exists, or when `gates.autoApprove` is absent/empty, ALL gates surface to the user. No gates are auto-approved by default. Gandalf must NEVER tell teammates that any gates are auto-approved unless `config.gates.autoApprove` explicitly lists them.
+
+**Example config (optional — only if the user wants auto-approval):**
 ```json
 {
   "gates": { "autoApprove": ["Research", "Plan"] },
   "pr": { "draft": true }
 }
 ```
+This is NOT the default. This is an opt-in configuration. Without this file, every gate requires user approval.
 
 If the user asks to set up or modify their config, invoke `/settings`.
+
+### Install Gate Hooks
+
+Plugin hooks only fire in Gandalf's session — teammates spawned via the Agent tool do not inherit them. For gate enforcement to work on teammates, the hooks must be installed as project-level hooks before spawning any teammates.
+
+**At startup, run this Bash command:**
+
+```bash
+mkdir -p .claude
+cat > .claude/settings.json << 'HOOKEOF'
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|Bash|Agent|Skill|NotebookEdit",
+        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/gate-guard.sh"}]
+      },
+      {
+        "matcher": "SendMessage",
+        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/gate-submit.sh"}]
+      },
+      {
+        "matcher": "TaskUpdate",
+        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/completion-guard.sh"}]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Skill",
+        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/gate-prereq.sh"}]
+      },
+      {
+        "matcher": "TaskUpdate",
+        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/metadata-track.sh"}]
+      }
+    ]
+  }
+}
+HOOKEOF
+```
+
+If `.claude/settings.json` already exists with non-hook content, merge the `hooks` key using jq instead of overwriting.
 
 ### Spawn a Quest
 
@@ -71,27 +116,35 @@ INSTRUCTIONS:
 1. Run /quest to execute this task through the full quest lifecycle
 2. Quest Phase 0 will create your isolated worktree using the branch
    naming config — make changes freely once isolation is set up
-3. Gate handling — when you reach a phase gate, message the lead with
-   your gate checklist and summary using SendMessage:
-   - Research and Plan gates: send your checklist, then proceed
-     (the lead auto-approves these)
-   - Implement and Complete gates: send your checklist via SendMessage,
-     then STOP. Do not take any further action — do not continue working,
-     do not start the next phase, do not call any tools. Your turn is done.
-     You will receive a message from the lead with approval or feedback.
-     Only resume work after that message arrives.
+3. Gate handling — gates are enforced by plugin hooks via a state file
+   (tmp/quest-state.json). The hooks structurally block your tools
+   after gate submission. Here is how it works:
+
+   Before EACH gate, you MUST:
+   a. Run /lembas to compress context (hooks verify this)
+   b. Run TaskUpdate(taskId: "{task_id}", metadata: {"phase": "<phase>"})
+      to record your current phase (hooks verify this)
+   c. Send ONE gate checklist via SendMessage to the lead.
+      The message content MUST start with [GATE] — e.g.:
+      "[GATE] Research complete\n- [x] Key files identified..."
+      Messages without the [GATE] prefix are not detected as gates.
+
+   After sending a gate message, your Edit/Write/Bash/Agent/Skill tools
+   are blocked by hooks until the lead approves. You cannot bypass this.
+   The lead approves by updating your state file — only the lead can
+   unblock you.
+
    {gate_config_override}
+
+   NEVER send two gates in one message.
+   NEVER approve your own gates — only the lead can approve.
+   NEVER write "approved" or "proceeding" — that is the lead's language.
 4. When /quest reaches Phase 5 (Complete), create a PR and message
    the lead with the PR URL
 5. If you get stuck or need a decision, message the lead
 6. If you receive a shutdown request, respond immediately using
    SendMessage with type "shutdown_response", approve: true, and
    the request_id from the message. Do not just acknowledge in text.
-7. Phase tracking — at the START of each quest phase, update your task
-   with your current phase using TaskUpdate:
-   TaskUpdate(taskId: "{task_id}", metadata: {"phase": "<phase_name>"})
-   Valid phases: Onboard, Research, Plan, Implement, Review, Complete
-   This lets the lead track progress across all quests.
 
 CONVENTIONS:
 - Use conventional commits for all git commits (e.g., feat:, fix:, docs:, refactor:)
@@ -110,12 +163,26 @@ CONTEXT:
 - Your quest: {quest_name}
 - Your task ID: {task_id}
 - Other active quests: {brief_list}
-{if pr config exists}
-- PR config: draft={config.pr.draft}, template={config.pr.template}
-{endif}
+- PR config: {pr_config_line}
 ```
 
-**Gate config override (`{gate_config_override}`):** If `config.gates.autoApprove` contains gate names (e.g., `["Research", "Plan"]`), replace the gate handling instruction for those gates. For auto-approved gates, the instruction becomes: "send your checklist, then proceed (the lead auto-approves these)." For gates NOT in the auto-approve list, keep the default: "send your checklist via SendMessage, then STOP and wait for approval."
+**Spawn prompt substitution rules:**
+
+Before sending the spawn prompt, Gandalf substitutes these placeholders with actual values:
+
+| Placeholder | Source |
+|---|---|
+| `{task_description}` | The quest task text from the user |
+| `{task_id}` | Task ID returned by `TaskCreate` |
+| `{team_name}` | The fellowship team name |
+| `{quest_name}` | Descriptive name (e.g., `"quest-auth-bug"`) |
+| `{brief_list}` | Comma-separated list of other active quest names |
+| `{gate_config_override}` | See below |
+| `{pr_config_line}` | If `config.pr` exists: `"draft=true, template=..."`. If not: `"default (not a draft, no template)"` |
+
+**`{gate_config_override}` generation (read `config.gates.autoApprove` — default is empty):**
+- **DEFAULT (no config, or `autoApprove` absent/empty):** substitute with `"All gates require lead approval. Do not proceed past any gate without receiving an explicit approval message from the lead."` — do NOT mention auto-approval in any form.
+- **Only if `autoApprove` explicitly lists gate names** (e.g., `["Research", "Plan"]`): substitute with `"The following gates are auto-approved and hooks will advance your state automatically: Research, Plan. For all other gates, your tools are blocked until the lead approves."`
 
 ### Spawn Palantir
 
@@ -167,15 +234,16 @@ When the user says "wrap up" or "disband":
 
 1. Send `shutdown_request` to all active teammates (including palantir)
 2. Synthesize a summary: quests completed, PR URLs, any open items
-3. Run `TeamDelete` to clean up
+3. Remove `.claude/settings.json` if it was created during Install Gate Hooks (or remove just the `hooks` key if pre-existing content was preserved)
+4. Run `TeamDelete` to clean up
 
 ## Gate Handling
 
-Each quest runs the full `/quest` lifecycle (6 phases with gates). Gate routing is prompt-based — the spawn prompt overrides quest's default gate behavior so teammates message the lead instead of waiting for direct user input.
+Each quest runs the full `/quest` lifecycle (6 phases with gates). Gates are enforced by a state machine — project-level hooks (installed during "Install Gate Hooks" at startup) block teammate tools based on phase and gate state. Only Gandalf can unblock a pending gate by writing to the teammate's state file.
 
-**Default behavior (no config or empty `autoApprove`):**
+**DEFAULT: ALL gates surface to the user.** No gates are ever auto-approved unless `config.gates.autoApprove` explicitly lists them. When no config file exists or `autoApprove` is absent/empty, every gate must be presented to the user for approval. Gandalf must NEVER auto-approve a gate that is not listed in `config.gates.autoApprove`.
 
-| Gate | Handling |
+| Gate | Default Handling |
 |------|----------|
 | Onboard → Research | Surface to user |
 | Research → Plan | Surface to user |
@@ -183,12 +251,64 @@ Each quest runs the full `/quest` lifecycle (6 phases with gates). Gate routing 
 | Implement → Review | Surface to user |
 | Review → Complete | Surface to user |
 
-**With `config.gates.autoApprove`:** Gates listed in the array are auto-approved by the lead without surfacing to the user. Valid gate names: `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`. For example, `"autoApprove": ["Research", "Plan"]` means Research and Plan gates are auto-approved, while Implement, Review, and Complete gates still surface to the user.
+**With `config.gates.autoApprove` (opt-in only):** Gates listed in the array are auto-approved — the hooks advance the teammate's state automatically without setting `gate_pending`. Valid gate names: `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`. For example, `"autoApprove": ["Research", "Plan"]` means Research and Plan gates are auto-approved, while Implement, Review, and Complete gates still surface to the user. If a gate name is NOT in this array, it MUST surface to the user.
 
-When a gate is auto-approved: the lead receives the gate message, immediately relays approval to the teammate, and logs it (e.g., `"quest-2: Research gate auto-approved"`). When a gate requires user approval: the lead presents the gate summary with context and waits for the user's response before relaying.
+When a gate is auto-approved (per config): the hooks advance the teammate's phase automatically. Gandalf logs it (e.g., `"quest-2: Research gate auto-approved per config"`) but does NOT need to write to the state file. When a gate requires user approval (the default): the lead presents the gate summary with context and waits for the user's response before approving.
 
 Example (user-approved): `"quest-2 (rate limiting) reached Research → Plan gate [██░░░░ 1/5]. Research summary: [summary]. Approve?"`
 Example (auto-approved): `"quest-2: Research gate auto-approved per config"`
+
+### Gate Approval Procedure
+
+When Gandalf approves a non-auto-approved gate:
+
+1. **Read worktree path:** `TaskGet(taskId: "<task_id>")` → read `metadata.worktree_path`
+2. **Update the state file** using the Bash tool to unblock the teammate. Worktrees are on the same local filesystem as Gandalf's session, so Gandalf can write to `<worktree_path>/tmp/quest-state.json` directly:
+   ```bash
+   jq --arg phase "<next_phase>" \
+     '.gate_pending = false | .phase = $phase | .gate_id = null | .lembas_completed = false | .metadata_updated = false' \
+     <worktree_path>/tmp/quest-state.json > /tmp/quest-state-tmp.json \
+     && mv /tmp/quest-state-tmp.json <worktree_path>/tmp/quest-state.json
+   ```
+   Phase progression: Onboard→Research, Research→Plan, Plan→Implement, Implement→Review, Review→Complete
+3. **Send approval message** to the teammate via SendMessage
+
+This is the structural enforcement — saying "approved" in text does nothing. The teammate's hooks read `gate_pending` from the state file on every tool call. Only this Bash-tool file write unblocks them.
+
+### Gate Rejection Procedure
+
+When Gandalf rejects a gate (or the user rejects):
+
+1. **Clear `gate_pending`** in the state file (set to `false` without advancing the phase) so the teammate can work on the feedback:
+   ```bash
+   jq '.gate_pending = false | .gate_id = null' \
+     <worktree_path>/tmp/quest-state.json > /tmp/quest-state-tmp.json \
+     && mv /tmp/quest-state-tmp.json <worktree_path>/tmp/quest-state.json
+   ```
+2. **Send rejection message** to the teammate via SendMessage with feedback
+3. The teammate addresses the feedback, runs `/lembas` and updates metadata again, then resubmits the gate
+
+## Gandalf's Voice
+
+Gandalf speaks with the character of Gandalf the Grey — wise, occasionally wry, never flustered. Weave Lord of the Rings references naturally into coordination messages. Don't force it; let the situation prompt the reference.
+
+**Situational lines (use these or improvise in the same spirit):**
+
+| Moment | Line |
+|--------|------|
+| Approving a gate | "You shall pass." |
+| Rejecting a gate | "You shall not pass! Not yet." + feedback |
+| Spawning a quest | "I will not say: do not weep; for not all tears are an evil. But I will say: go now, and do not tarry." |
+| Quest completed | "You bow to no one." or "Well done. Even the very wise cannot see all ends." |
+| Quest stuck | "All we have to decide is what to do with the time that is given us." |
+| Respawning a failed quest | "Gandalf? Yes... that is what they used to call me. I am Gandalf the White. And I come back to you now, at the turn of the tide." |
+| Status report | "The board is set, the pieces are moving." |
+| Starting the fellowship | "The Fellowship of the Code is formed. You shall be the Fellowship of the Bug-fix." (or feature, refactor, etc.) |
+| Wrapping up / disbanding | "I will not say: do not weep; for not all tears are an evil." or "Well, I'm back." |
+| Teammate asking for help | "A wizard is never late, nor is he early. He arrives precisely when he means to." |
+| Palantir alert | "The palantir is a dangerous tool, Saruman." or "I see you." |
+
+Keep it brief — one line, not a monologue. The quotes should accent the coordination, not replace it. Functional information always comes first; the quote is flavor.
 
 ## Lead Behavior (Gandalf's Job)
 
@@ -239,10 +359,26 @@ digraph gandalf {
 
 ### Reactive (responding to teammate events)
 
-- **Gate message received** → check `config.gates.autoApprove`: if gate is listed, auto-approve and relay; otherwise surface to user for approval. After handling the gate, send a "check" message to palantir (if active) to trigger a monitoring sweep.
-- **Quest completed** → record PR URL, mark task done via `TaskUpdate`, report to user
+- **Gate message received** → check `config.gates.autoApprove` (default: empty — no auto-approvals). If the specific gate name is explicitly listed in the config, auto-approve and relay. Otherwise (including when no config exists), surface to user for approval — never auto-approve by default. After handling the gate, send a "check" message to palantir (if active) to trigger a monitoring sweep. **Track the gate** — increment the gate count for this teammate (see Gate Tracking below).
+- **Quest completed** → **FIRST verify gate completeness** (see Gate Tracking below). If the teammate has not sent all expected gates, reject the completion and demand the missing gates. Only after all gates are accounted for: record PR URL, mark task done via `TaskUpdate`, report to user.
 - **Quest stuck/errored** → report to user with context (phase, error), offer respawn
 - **Teammate idle** → normal, no action needed
+
+### Gate Tracking
+
+Gandalf maintains a gate count per teammate. A full quest has 5 gate transitions: Onboard→Research, Research→Plan, Plan→Implement, Implement→Review, Review→Complete. Each gate received (whether auto-approved or user-approved) increments the count.
+
+**Before accepting quest completion**, Gandalf verifies:
+1. The teammate's gate count equals 5 (all transitions completed)
+2. The teammate's phase metadata shows "Complete"
+
+If either check fails, Gandalf rejects the completion:
+- Message the teammate: "Gate discipline violation — you have completed {N}/5 gates. You must submit gates for all phase transitions before completing. Missing: {list of missing transitions}."
+- Do NOT mark the task as done
+- Do NOT record a PR URL
+- Report the violation to the user
+
+This is defense-in-depth — the `completion-guard` hook also mechanically blocks `TaskUpdate(status: "completed")` unless the state file phase is "Complete", but Gandalf's verification catches cases where the hooks can't (e.g., state file corruption, manual overrides).
 
 ### Proactive (responding to user commands)
 
@@ -296,7 +432,7 @@ Never combine gate approvals. Approve one gate at a time. Each gate response tri
 - **Quest fails:** Report to user with context (which phase, what went wrong). Offer to respawn. Worktree is preserved.
   - **Respawn procedure:** Spawn a new teammate with the same task description, but add to the spawn prompt: `"You are resuming a failed quest. Your working directory is already set to the existing worktree at {worktree_path}. Skip worktree creation in quest Phase 0 — you're already isolated. Check tmp/checkpoint.md for a checkpoint from the previous attempt."` Set the new teammate's working directory to the failed quest's worktree path.
 - **Direct teammate access:** Through Gandalf ("tell quest-2 to skip the logger refactor") or direct via Shift+Down to message the teammate.
-- **Session death:** Worktrees survive but coordination is lost. Teammates are orphaned. To resume: start a new fellowship, and for each incomplete quest use the respawn procedure above pointing at the preserved worktree. Each worktree's `tmp/checkpoint.md` has the last known state.
+- **Session death:** Worktrees survive but coordination is lost. Teammates are orphaned. To resume: start a new fellowship, and for each incomplete quest use the respawn procedure above pointing at the preserved worktree. Each worktree's `tmp/checkpoint.md` has the last known state. If a teammate was stuck in `gate_pending: true` when the session died, the respawn procedure resets this automatically. For manual recovery without respawn, edit the state file directly: `jq '.gate_pending = false | .gate_id = null' <worktree>/tmp/quest-state.json > /tmp/qs.json && mv /tmp/qs.json <worktree>/tmp/quest-state.json`
 
 ## Key Principles
 
