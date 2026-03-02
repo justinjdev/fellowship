@@ -15,7 +15,7 @@ Fellowship quest teammates violate the gate protocol ~67% of the time (4/6 quest
 
 ### New Capabilities
 - `quest-state-machine`: State file schema, lifecycle (create/read/update/delete), phase transitions, and gate pending/approval flow
-- `gate-hooks`: Plugin-distributed hooks that enforce gate discipline — PreToolUse blocking when gate pending, PostToolUse tracking of lembas/metadata completion, Stop hook for turn-end validation
+- `gate-hooks`: Plugin-distributed hooks that enforce gate discipline — PreToolUse blocking when gate pending, PostToolUse tracking of lembas/metadata completion
 - `gate-approval`: Mechanism for Gandalf to approve gates by writing to teammate state files across worktrees
 
 ### Modified Capabilities

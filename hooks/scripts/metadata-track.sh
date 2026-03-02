@@ -16,6 +16,11 @@ if [ -z "$HAS_PHASE" ]; then
 fi
 
 # Set metadata_updated = true.
-echo "$STATE" | jq '.metadata_updated = true' > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
+if ! echo "$STATE" | jq '.metadata_updated = true' > "$STATE_FILE.tmp"; then
+  echo "fellowship: failed to update state file" >&2
+  rm -f "$STATE_FILE.tmp"
+  exit 2
+fi
+mv "$STATE_FILE.tmp" "$STATE_FILE"
 
 exit 0

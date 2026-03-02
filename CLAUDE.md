@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Claude Code plugin — no build system, no runtime code. This repo is pure markdown (skills, agents, README) and one JSON manifest.
+Claude Code plugin — no build system. Skills, agents, and docs are pure markdown. Gate enforcement hooks are bash scripts (require `jq`).
 
 ## Structure
 
@@ -8,6 +8,9 @@ Claude Code plugin — no build system, no runtime code. This repo is pure markd
 .claude-plugin/plugin.json   # Plugin manifest (name, version, repo URL)
 skills/<name>/SKILL.md       # Each skill is a single SKILL.md with YAML frontmatter
 agents/<name>.md             # Agent definitions
+hooks/hooks.json             # Plugin hook definitions (gate enforcement)
+hooks/scripts/*.sh           # Bash scripts for gate state machine (require jq)
+hooks/test-hooks.sh          # Hook test suite
 README.md                    # User-facing docs, install instructions, changelog
 ```
 

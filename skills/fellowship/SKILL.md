@@ -221,16 +221,14 @@ This is the structural enforcement — saying "approved" in text does nothing. T
 
 When Gandalf rejects a gate (or the user rejects):
 
-1. **Send rejection message** to the teammate via SendMessage with feedback
-2. **Do NOT modify the state file** — the teammate remains blocked
-3. The teammate must address the feedback and resubmit the gate. The hooks will allow a new gate message once the teammate runs `/lembas` and updates metadata again (prerequisites reset is not needed since they were already met for the first attempt — but `gate_pending` is still `true`, so the teammate's tools remain blocked)
-
-**Important:** When a gate is rejected, Gandalf MUST first clear `gate_pending` in the state file (set to `false` without advancing the phase) so the teammate can work on the feedback, then send the rejection message. The command:
-```bash
-jq '.gate_pending = false | .gate_id = null' \
-  <worktree_path>/tmp/quest-state.json > /tmp/quest-state-tmp.json \
-  && mv /tmp/quest-state-tmp.json <worktree_path>/tmp/quest-state.json
-```
+1. **Clear `gate_pending`** in the state file (set to `false` without advancing the phase) so the teammate can work on the feedback:
+   ```bash
+   jq '.gate_pending = false | .gate_id = null' \
+     <worktree_path>/tmp/quest-state.json > /tmp/quest-state-tmp.json \
+     && mv /tmp/quest-state-tmp.json <worktree_path>/tmp/quest-state.json
+   ```
+2. **Send rejection message** to the teammate via SendMessage with feedback
+3. The teammate addresses the feedback, runs `/lembas` and updates metadata again, then resubmits the gate
 
 ## Lead Behavior (Gandalf's Job)
 

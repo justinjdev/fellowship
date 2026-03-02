@@ -11,9 +11,17 @@ fi
 
 # Check for jq dependency.
 if ! command -v jq &>/dev/null; then
-  echo "fellowship: jq not found, gate enforcement disabled" >&2
-  exit 0
+  echo "fellowship: jq is required for gate enforcement but was not found. Install jq to proceed." >&2
+  exit 2
 fi
 
 # Read state into variable for use by the sourcing script.
-STATE=$(cat "$STATE_FILE")
+STATE=$(cat "$STATE_FILE") || {
+  echo "fellowship: failed to read state file $STATE_FILE" >&2
+  exit 2
+}
+
+if [ -z "$STATE" ] || ! echo "$STATE" | jq empty 2>/dev/null; then
+  echo "fellowship: state file $STATE_FILE is empty or contains invalid JSON" >&2
+  exit 2
+fi

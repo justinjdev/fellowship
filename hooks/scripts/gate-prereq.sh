@@ -15,6 +15,11 @@ if [ "$SKILL" != "lembas" ] && [ "$SKILL" != "fellowship:lembas" ]; then
 fi
 
 # Set lembas_completed = true.
-echo "$STATE" | jq '.lembas_completed = true' > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
+if ! echo "$STATE" | jq '.lembas_completed = true' > "$STATE_FILE.tmp"; then
+  echo "fellowship: failed to update state file" >&2
+  rm -f "$STATE_FILE.tmp"
+  exit 2
+fi
+mv "$STATE_FILE.tmp" "$STATE_FILE"
 
 exit 0

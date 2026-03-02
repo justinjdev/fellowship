@@ -49,7 +49,7 @@ The fellowship skill SHALL include an explicit procedure for Gandalf to follow w
 
 #### Scenario: Gandalf rejects a gate
 - **WHEN** Gandalf receives a gate message and decides to reject (or the user rejects)
-- **THEN** Gandalf SHALL send a rejection message to the teammate via SendMessage WITHOUT modifying the state file, keeping the teammate blocked until the gate is resubmitted and approved
+- **THEN** Gandalf SHALL clear `gate_pending` to `false` in the state file (without advancing the phase) so the teammate can address feedback, then send a rejection message via SendMessage
 
 ### Requirement: Auto-approved gate handling by Gandalf
 When a gate is auto-approved per config, Gandalf SHALL still write to the teammate's state file to advance the phase. The `gate-submit` hook handles auto-approved gates by advancing state without setting `gate_pending`, so Gandalf's write is only needed for non-auto-approved gates. For auto-approved gates, Gandalf SHALL log the auto-approval but does NOT need to write to the state file.

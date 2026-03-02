@@ -230,6 +230,26 @@ assert_exit "non-auto gate exits 0" 0 "$rc"
 assert_val "gate_pending set for non-auto gate" '.gate_pending' "true"
 assert_val "phase unchanged" '.phase' "Plan"
 
+echo "-- does not auto-approve gate FROM the listed phase"
+reset_state
+set_state '.phase = "Plan" | .lembas_completed = true | .metadata_updated = true | .auto_approve_gates = ["Plan"]'
+run_hook_stdin gate-submit.sh "$GATE_MSG"
+assert_exit "not auto-approved by current phase" 0 "$rc"
+assert_val "gate_pending set (not auto-approved)" '.gate_pending' "true"
+assert_val "phase stays Plan" '.phase' "Plan"
+
+echo "-- blocks gate at Complete phase"
+reset_state
+set_state '.phase = "Complete" | .lembas_completed = true | .metadata_updated = true'
+run_hook_stdin gate-submit.sh "$GATE_MSG"
+assert_exit "Complete phase blocks gate" 2 "$rc"
+
+echo "-- blocks gate at unknown phase"
+reset_state
+set_state '.phase = "InvalidPhase" | .lembas_completed = true | .metadata_updated = true'
+run_hook_stdin gate-submit.sh "$GATE_MSG"
+assert_exit "unknown phase blocks gate" 2 "$rc"
+
 # --- phase transitions ---
 
 echo ""

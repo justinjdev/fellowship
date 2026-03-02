@@ -36,6 +36,10 @@ These are referenced by name in skill prompts. If a dependency isn't installed, 
 /plugin install pr-review-toolkit@claude-plugins-official
 ```
 
+#### System Dependencies
+
+- **`jq`** — required for gate enforcement hooks. Pre-installed on macOS (via Xcode CLT), available on most Linux distributions. Without `jq`, gate hooks will block tool calls with an error message.
+
 ### Project Setup (Optional)
 
 Add this hook to `.claude/settings.local.json` in repos where you use fellowship. It detects `/lembas` checkpoints from previous sessions and offers to resume:
@@ -140,6 +144,8 @@ Phase 5: Complete   → PR creation + worktree cleanup
 
 Gandalf (the coordinator) spawns quest-running teammates, each in an isolated worktree. By default, all phase gates surface to you for approval. You can auto-approve specific gates via `~/.claude/fellowship.json` (see Configuration). Each quest produces a PR. Say "status" to see a progress table showing each quest's current phase with visual progress indicators.
 
+**Gate enforcement** — gates are structurally enforced via plugin hooks. After a teammate submits a gate, their work tools (Edit, Write, Bash, etc.) are blocked until the lead approves by writing to the quest state file. Prerequisites (running `/lembas` and updating task metadata) are verified before gate submission is allowed. Self-approval is structurally impossible.
+
 ## Design Principles
 
 - **Context is the bottleneck.** Compact between every phase. Don't let research noise degrade implementation reasoning.
@@ -150,6 +156,13 @@ Gandalf (the coordinator) spawns quest-running teammates, each in an isolated wo
 - **Local scope only.** Teammates are restricted to code, tests, git, and the filesystem. MCP tools and external services (Notion, Slack, Jira, etc.) require explicit approval.
 
 ## Changelog
+
+### v1.5.0
+
+- **Gate state machine** — structural enforcement of quest phase gates via plugin hooks. Teammate tools are blocked after gate submission until the lead approves. Prerequisites (lembas + metadata) are verified before submission. Self-approval is structurally impossible. Observed compliance: ~33% with prompt-only → ~95%+ with hooks. ([#5](https://github.com/justinjdev/fellowship/pull/5))
+- **Hook scripts** — 4 plugin hooks (`gate-guard`, `gate-submit`, `gate-prereq`, `metadata-track`) with test suite
+- **`jq` dependency** — required for gate enforcement. Hooks fail-closed if `jq` is missing.
+- **BREAKING** — plugin now ships executable bash scripts (`hooks/scripts/`). Previously pure markdown only.
 
 ### v1.4.0
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Gate submit — validates prerequisites and manages gate_pending on SendMessage.
+# Gate submit — detects gate messages on SendMessage, verifies prerequisites,
+# and sets gate_pending=true for non-auto-approved gates.
 # Hook: PreToolUse | Matcher: SendMessage
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,32 +58,49 @@ case "$PHASE" in
   Plan)      NEXT_PHASE="Implement" ;;
   Implement) NEXT_PHASE="Review" ;;
   Review)    NEXT_PHASE="Complete" ;;
-  *)         NEXT_PHASE="" ;;
+  Complete)
+    echo "Quest already complete — no further gates to submit." >&2
+    exit 2
+    ;;
+  *)
+    echo "fellowship: unknown phase '$PHASE' in state file — cannot submit gate" >&2
+    exit 2
+    ;;
 esac
 
 # Check if this gate is auto-approved.
 IS_AUTO="false"
 for gate in $AUTO_GATES; do
-  if [ "$gate" = "$NEXT_PHASE" ] || [ "$gate" = "$PHASE" ]; then
+  if [ "$gate" = "$NEXT_PHASE" ]; then
     IS_AUTO="true"
     break
   fi
 done
 
-if [ "$IS_AUTO" = "true" ] && [ -n "$NEXT_PHASE" ]; then
+if [ "$IS_AUTO" = "true" ]; then
   # Auto-approved: advance phase, reset prereqs, don't set gate_pending.
-  echo "$STATE" | jq \
+  if ! echo "$STATE" | jq \
     --arg phase "$NEXT_PHASE" \
     '.phase = $phase | .lembas_completed = false | .metadata_updated = false' \
-    > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
+    > "$STATE_FILE.tmp"; then
+    echo "fellowship: failed to update state file during auto-approve" >&2
+    rm -f "$STATE_FILE.tmp"
+    exit 2
+  fi
+  mv "$STATE_FILE.tmp" "$STATE_FILE"
   exit 0
 fi
 
 # Normal gate: set gate_pending, generate gate_id.
 GATE_ID="gate-${PHASE}-$(date +%s)"
-echo "$STATE" | jq \
+if ! echo "$STATE" | jq \
   --arg gid "$GATE_ID" \
   '.gate_pending = true | .gate_id = $gid' \
-  > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
+  > "$STATE_FILE.tmp"; then
+  echo "fellowship: failed to update state file during gate submission" >&2
+  rm -f "$STATE_FILE.tmp"
+  exit 2
+fi
+mv "$STATE_FILE.tmp" "$STATE_FILE"
 
 exit 0
