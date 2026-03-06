@@ -169,12 +169,16 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 
 ## Changelog
 
+### v1.6.0
+
+- **`/scout` skill** — research & analysis workflow for lightweight research teammates alongside code quests. Autonomous (no gates/hooks), optional adversarial validation via fresh subagent. ([#12](https://github.com/justinjdev/fellowship/pull/12))
+- **Fellowship scouts** — Gandalf learns to spawn scouts via `"scout: <question>"` alongside code quests, with status tracking and optional routing to other teammates.
+
 ### v1.5.0
 
-- **Gate state machine** — structural enforcement of quest phase gates via Go CLI + plugin hooks. Teammate tools are blocked after gate submission until the lead approves. Prerequisites (lembas + metadata) are verified before submission. Self-approval is structurally impossible. Observed compliance: ~33% with prompt-only → ~95%+ with hooks. ([#5](https://github.com/justinjdev/fellowship/pull/5))
-- **Go CLI** — `fellowship` binary handles all hook logic, gate approval/rejection, install/uninstall, and status. Distributed via GitHub releases, auto-downloaded on first use.
+- **Gate state machine** — structural enforcement of quest phase gates via plugin hooks. Teammate tools are blocked after gate submission until the lead approves. Prerequisites (lembas + metadata) are verified before submission. Self-approval is structurally impossible. Observed compliance: ~33% with prompt-only → ~95%+ with hooks. ([#5](https://github.com/justinjdev/fellowship/pull/5))
+- **Go CLI** — `fellowship` binary replaces bash hook scripts. Handles hook logic, gate approval/rejection, install/uninstall, and status. Distributed via GitHub releases, auto-downloaded on first use.
 - **Plugin subfolder** — plugin files moved to `plugin/` for clean installs via marketplace `git-subdir`. Go source, CI, and build config stay at repo root.
-- **`/scout` skill** — research & analysis workflow for lightweight research teammates alongside code quests. Autonomous (no gates/hooks), optional adversarial validation via fresh subagent. ([#12](https://github.com/justinjdev/fellowship/pull/12))
 - **Quest runner agent** — `agents/quest-runner.md` for CLI-driven quest execution.
 - **BREAKING** — bash hook scripts replaced by Go CLI binary. `jq` no longer required.
 
