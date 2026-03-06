@@ -174,13 +174,19 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 - **`/scout` skill** — research & analysis workflow for lightweight research teammates alongside code quests. Autonomous (no gates/hooks), optional adversarial validation via fresh subagent. ([#12](https://github.com/justinjdev/fellowship/pull/12))
 - **Fellowship scouts** — Gandalf learns to spawn scouts via `"scout: <question>"` alongside code quests, with status tracking and optional routing to other teammates.
 
-### v1.5.0
+### v1.5.1
 
-- **Gate state machine** — structural enforcement of quest phase gates via plugin hooks. Teammate tools are blocked after gate submission until the lead approves. Prerequisites (lembas + metadata) are verified before submission. Self-approval is structurally impossible. Observed compliance: ~33% with prompt-only → ~95%+ with hooks. ([#5](https://github.com/justinjdev/fellowship/pull/5))
 - **Go CLI** — `fellowship` binary replaces bash hook scripts. Handles hook logic, gate approval/rejection, install/uninstall, and status. Distributed via GitHub releases, auto-downloaded on first use.
 - **Plugin subfolder** — plugin files moved to `plugin/` for clean installs via marketplace `git-subdir`. Go source, CI, and build config stay at repo root.
 - **Quest runner agent** — `agents/quest-runner.md` for CLI-driven quest execution.
 - **BREAKING** — bash hook scripts replaced by Go CLI binary. `jq` no longer required.
+
+### v1.5.0
+
+- **Gate state machine** — structural enforcement of quest phase gates via plugin hooks. Teammate tools are blocked after gate submission until the lead approves. Prerequisites (lembas + metadata) are verified before submission. Self-approval is structurally impossible. Observed compliance: ~33% with prompt-only → ~95%+ with hooks. ([#5](https://github.com/justinjdev/fellowship/pull/5))
+- **Hook scripts** — 4 plugin hooks (`gate-guard`, `gate-submit`, `gate-prereq`, `metadata-track`) with test suite
+- **`jq` dependency** — required for gate enforcement. Hooks fail-closed if `jq` is missing.
+- **BREAKING** — plugin now ships executable bash scripts (`hooks/scripts/`). Previously pure markdown only.
 
 ### v1.4.0
 
