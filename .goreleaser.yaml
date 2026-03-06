@@ -1,0 +1,33 @@
+version: 2
+project_name: fellowship
+before:
+  hooks:
+    - cd cli && go mod tidy
+    - cd cli && go test ./...
+builds:
+  - id: fellowship
+    dir: cli
+    main: ./cmd/fellowship
+    binary: fellowship
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+archives:
+  - id: fellowship
+    builds:
+      - fellowship
+    format: tar.gz
+    name_template: "fellowship_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+checksum:
+  name_template: 'checksums.txt'
+release:
+  github:
+    owner: justinjdev
+    name: fellowship
