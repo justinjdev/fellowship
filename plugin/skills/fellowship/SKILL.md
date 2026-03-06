@@ -157,7 +157,7 @@ For each scout, Gandalf:
 1. `TaskCreate` in the shared task list with the question and type "scout"
 2. Spawn a teammate via the `Task` tool with:
    - `team_name`: the fellowship team name
-   - `subagent_type: "fellowship:scout"` (uses the scout agent definition — tools are restricted to read-only + coordination)
+   - `subagent_type: "fellowship:scout"` (uses the scout agent definition — tools are restricted to read-only source access + coordination + Write for research notes)
    - `name`: `"scout-{n}"` or a descriptive name like `"scout-auth-analysis"`
    - Do NOT pass `isolation: "worktree"` — scouts work in the main repo
 
@@ -187,6 +187,7 @@ Substitute `{team_name}`, `{task_id}`, `{brief_list}` as described in Spawn a Qu
 
 | Placeholder | Source |
 |---|---|
+| `{scout_name}` | Descriptive name (e.g., `"scout-auth-analysis"`) |
 | `{question}` | The scout question from the user |
 | `{routing_instruction}` | See below |
 

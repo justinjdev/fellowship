@@ -125,7 +125,7 @@ Goal: Send findings to the requester in a structured format.
 
 ## Fellowship Integration
 
-When running as a fellowship teammate, the `scout` agent definition restricts your tools to read-only access (Read, Glob, Grep, Agent, Skill, TaskUpdate, SendMessage). Phase metadata names for task updates: `"Investigating"`, `"Validating"`, `"Done"`. See `agents/scout.md` for full details.
+When running as a fellowship teammate, the `scout` agent definition restricts your tools to read-only source access plus Write for research notes (Read, Glob, Grep, Agent, Skill, TaskUpdate, SendMessage, Write). Phase metadata names for task updates: `"Investigating"`, `"Validating"`, `"Done"`. See `agents/scout.md` for full details.
 
 ## Key Principles
 
