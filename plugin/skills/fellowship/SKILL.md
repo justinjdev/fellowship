@@ -157,7 +157,7 @@ For each scout, Gandalf:
 1. `TaskCreate` in the shared task list with the question and type "scout"
 2. Spawn a teammate via the `Task` tool with:
    - `team_name`: the fellowship team name
-   - `subagent_type: "general-purpose"`
+   - `subagent_type: "fellowship:scout"` (uses the scout agent definition — tools are restricted to read-only + coordination)
    - `name`: `"scout-{n}"` or a descriptive name like `"scout-auth-analysis"`
    - Do NOT pass `isolation: "worktree"` — scouts work in the main repo
 
@@ -170,22 +170,9 @@ YOUR QUESTION: {question}
 
 INSTRUCTIONS:
 1. Run /scout to investigate this question
-2. You work in the main repo — no worktree, no isolation
-3. You are read-only for production files — never modify source code
-4. You may write research files (e.g., docs/research/) but never commit
-5. When done, send your findings to the lead via SendMessage
 {routing_instruction}
-6. If you get stuck or need a decision, message the lead
-7. If you receive a shutdown request, respond immediately using
-   SendMessage with type "shutdown_response", approve: true, and
-   the request_id from the message.
-
-BOUNDARIES:
-- Do NOT modify production files. Read anything, write only to
-  docs/research/ or tmp/.
-- Do NOT commit, push, create branches, or make PRs.
-- Do NOT use MCP tools or external service integrations without
-  lead approval.
+2. Do NOT use MCP tools or external service integrations without
+   lead approval.
 
 CONTEXT:
 - Fellowship team: {team_name}
@@ -196,13 +183,11 @@ CONTEXT:
 
 **Scout spawn prompt substitution rules:**
 
+Substitute `{team_name}`, `{task_id}`, `{brief_list}` as described in Spawn a Quest above. Additional scout-specific placeholders:
+
 | Placeholder | Source |
 |---|---|
 | `{question}` | The scout question from the user |
-| `{task_id}` | Task ID returned by `TaskCreate` |
-| `{team_name}` | The fellowship team name |
-| `{scout_name}` | Descriptive name (e.g., `"scout-auth-analysis"`) |
-| `{brief_list}` | Comma-separated list of other active quest/scout names |
 | `{routing_instruction}` | See below |
 
 **`{routing_instruction}` generation:**
@@ -350,6 +335,8 @@ digraph gandalf {
     "No action (idle is normal)" [shape=box];
     "quest: {desc}?" [shape=diamond];
     "Spawn teammate in worktree" [shape=box];
+    "scout: {question}?" [shape=diamond];
+    "Spawn scout teammate" [shape=box];
     "approve/reject?" [shape=diamond];
     "Relay to teammate" [shape=box];
     "status?" [shape=diamond];
@@ -370,7 +357,9 @@ digraph gandalf {
     "Quest stuck?" -> "No action (idle is normal)" [label="no"];
     "From user?" -> "quest: {desc}?" [label="yes"];
     "quest: {desc}?" -> "Spawn teammate in worktree" [label="yes"];
-    "quest: {desc}?" -> "approve/reject?" [label="no"];
+    "quest: {desc}?" -> "scout: {question}?" [label="no"];
+    "scout: {question}?" -> "Spawn scout teammate" [label="yes"];
+    "scout: {question}?" -> "approve/reject?" [label="no"];
     "approve/reject?" -> "Relay to teammate" [label="yes"];
     "approve/reject?" -> "status?" [label="no"];
     "status?" -> "Present progress report" [label="yes"];

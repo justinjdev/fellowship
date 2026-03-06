@@ -7,14 +7,13 @@ description: Research & analysis workflow. Investigates questions, gathers findi
 
 ## Overview
 
-Investigates questions and analyzes codebases without producing code changes. Runs autonomously through Investigate → (Validate) → Deliver phases. Can write research files but never commits. Designed for fellowship teammates dispatched via `"scout: <question>"`, but also works standalone.
+Investigates questions and analyzes codebases without producing code changes. Runs autonomously through Investigate → (Validate) → Deliver phases. When used as a fellowship teammate, the `scout` agent definition enforces read-only tool access. Also works standalone.
 
 ## When to Use
 
 - Research questions about a codebase ("how does X work?")
 - Deep analysis ("what are all the entry points for auth?")
 - Data collection ("list all API endpoints and their middleware chains")
-- Standalone research when you need structured findings without code changes
 
 ## Phase Flow
 
@@ -77,17 +76,13 @@ INSTRUCTIONS:
    Does the code actually do what the finding says?
 2. For each Medium/Low confidence finding, investigate independently.
    Can you confirm or refute it?
-3. Run tests or commands if needed to verify behavioral claims
-   (e.g., "this function returns X" — actually call it)
-4. Produce a validation report:
+3. Produce a validation report:
    - CONFIRMED: claims you verified are correct
    - CONTESTED: claims that are wrong or misleading, with evidence
    - UNVERIFIED: claims you couldn't confirm or deny
 
 BOUNDARIES:
-- Read any file. Run tests/commands to verify claims.
-- Do NOT modify any files.
-- Do NOT commit anything.
+- Read any file. Do NOT modify any files or run commands.
 - Be adversarial — your value is in catching errors, not agreeing.
 ```
 
@@ -113,9 +108,9 @@ Goal: Send findings to the requester in a structured format.
 - ...
 
 ### Confidence
-- High: <claims verified directly against code>
-- Medium: <claims inferred from patterns>
-- Low: <claims based on assumptions — treat with caution>
+- High: <list>
+- Medium: <list>
+- Low: <list>
 
 ### Validation
 - Confirmed: <validated claims>
@@ -126,31 +121,15 @@ Goal: Send findings to the requester in a structured format.
 - <list any research files written, noting they are not committed>
 ```
 
-**Routing (fellowship only):** If the spawn prompt includes a routing target (e.g., "→ send to quest-auth-bug"), send findings to that teammate via SendMessage instead of (or in addition to) the lead.
-
-## Constraints
-
-- **Read-only** for production files — never modify source code
-- **Write allowed** for research output only (e.g., `docs/research/`) — never committed
-- **No git operations** — no commits, no branches, no PRs, no pushes
-- **No worktree** — scouts work in the current working directory
-- **Validator gets run permissions** — can execute tests/commands to verify claims
+**Routing (fellowship only):** If the spawn prompt includes a routing target (e.g., "→ send to quest-auth-bug"), also send findings to that teammate via SendMessage in addition to the lead.
 
 ## Fellowship Integration
 
-When running as a fellowship teammate (indicated by the spawn prompt):
-
-1. Update task metadata on phase transitions:
-   - `TaskUpdate(taskId: "<task_id>", metadata: {"phase": "Investigating"})` at start
-   - `TaskUpdate(taskId: "<task_id>", metadata: {"phase": "Validating"})` if validating
-   - `TaskUpdate(taskId: "<task_id>", metadata: {"phase": "Done"})` before delivery
-2. Send the final report to the lead via `SendMessage`
-3. If you get stuck or need a decision, message the lead
-4. If you receive a shutdown request, respond immediately
+When running as a fellowship teammate, the `scout` agent definition restricts your tools to read-only access (Read, Glob, Grep, Agent, Skill, TaskUpdate, SendMessage). Phase metadata names for task updates: `"Investigating"`, `"Validating"`, `"Done"`. See `agents/scout.md` for full details.
 
 ## Key Principles
 
 1. **Evidence over opinion.** Every finding needs a file path and line reference.
 2. **Confidence is honest.** Don't mark something High if you inferred it.
 3. **Validation catches errors.** When in doubt, validate. Fresh eyes find what you missed.
-4. **No side effects.** Scout never changes the codebase. Read, analyze, report.
+4. **No side effects.** In fellowship, tool restrictions enforce this. Standalone, respect it by convention.
