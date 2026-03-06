@@ -1,6 +1,17 @@
 {
   "description": "Fellowship gate state machine — enforces phase gates for quest teammates",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/install-hooks.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write|Bash|Agent|Skill|NotebookEdit",

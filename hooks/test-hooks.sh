@@ -332,9 +332,9 @@ echo "-- blocks duplicate gate submission"
 run_hook_stdin gate-submit.sh "$GATE_MSG"
 assert_exit "blocks duplicate gate" 2 "$rc"
 
-echo "-- auto-approves configured gates"
+echo "-- auto-approves configured gates (current phase matches)"
 reset_state
-set_state '.lembas_completed = true | .metadata_updated = true | .auto_approve_gates = ["Plan"]'
+set_state '.lembas_completed = true | .metadata_updated = true | .auto_approve_gates = ["Research"]'
 run_hook_stdin gate-submit.sh "$GATE_MSG"
 assert_exit "auto-approve exits 0" 0 "$rc"
 assert_val "phase advanced to Plan" '.phase' "Plan"
@@ -351,13 +351,20 @@ assert_exit "non-auto gate exits 0" 0 "$rc"
 assert_val "gate_pending set for non-auto gate" '.gate_pending' "true"
 assert_val "phase unchanged" '.phase' "Plan"
 
-echo "-- does not auto-approve gate FROM the listed phase"
+echo "-- auto-approves when current phase is in auto list"
 reset_state
 set_state '.phase = "Plan" | .lembas_completed = true | .metadata_updated = true | .auto_approve_gates = ["Plan"]'
 run_hook_stdin gate-submit.sh "$GATE_MSG"
-assert_exit "not auto-approved by current phase" 0 "$rc"
+assert_exit "auto-approved by current phase" 0 "$rc"
+assert_val "phase advanced to Implement" '.phase' "Implement"
+assert_val "gate_pending stays false" '.gate_pending' "false"
+
+echo "-- does not auto-approve by destination phase"
+reset_state
+set_state '.lembas_completed = true | .metadata_updated = true | .auto_approve_gates = ["Plan"]'
+run_hook_stdin gate-submit.sh "$GATE_MSG"
+assert_exit "destination phase not auto-approved" 0 "$rc"
 assert_val "gate_pending set (not auto-approved)" '.gate_pending' "true"
-assert_val "phase stays Plan" '.phase' "Plan"
 
 echo "-- blocks gate at Complete phase"
 reset_state
@@ -444,7 +451,7 @@ for phase_pair in "Onboard:Research" "Research:Plan" "Plan:Implement" "Implement
   FROM="${phase_pair%%:*}"
   TO="${phase_pair##*:}"
   reset_state
-  set_state "$(printf '.phase = "%s" | .lembas_completed = true | .metadata_updated = true | .auto_approve_gates = ["%s"]' "$FROM" "$TO")"
+  set_state "$(printf '.phase = "%s" | .lembas_completed = true | .metadata_updated = true | .auto_approve_gates = ["%s"]' "$FROM" "$FROM")"
   TRANSITION_MSG='{"tool_input":{"content":"[GATE] Phase complete\n- [x] done"}}'
   run_hook_stdin gate-submit.sh "$TRANSITION_MSG"
   assert_exit "$FROM -> $TO exits 0" 0 "$rc"

@@ -86,8 +86,11 @@ When running as a fellowship teammate, a state file at `tmp/quest-state.json` en
      - `{slug}`: slugify the task description (lowercase, hyphens for spaces, strip non-alphanumeric). If a ticket was extracted, derive slug from the remaining text after extraction.
      - `{ticket}`: match `branch.ticketPattern` (default: `[A-Z]+-\d+`) against the task description. If matched, use the match. If not matched and the pattern contains `{ticket}`, ask the user to provide a ticket ID.
      - `{author}`: use `branch.author` from config. If not set and the pattern contains `{author}`, ask the user to provide their name.
-   - **Create worktree:** Use `EnterWorktree` with the resolved branch name. If `config.worktree.directory` is set, create the worktree there instead of the default location.
-   - **Install hooks in worktree (fellowship only):** After entering the worktree, project-level hooks must be re-created so gate enforcement continues. Run the same "Install Gate Hooks" Bash command from the fellowship skill (creates `.claude/settings.json` with the gate hook configuration). This must happen before the state file creation below.
+   - **Create worktree (3-step sequence — all steps are REQUIRED):**
+     1. Run `git rev-parse HEAD` and save the full SHA in your response text (not a shell variable — shell state does not persist between tool calls). This is the base commit.
+     2. Call `EnterWorktree` with the resolved branch name. If `config.worktree.directory` is set, create the worktree there instead of the default location.
+     3. **Immediately** after entering the worktree — before ANY other action — run `git reset --hard <sha>` using the exact SHA from step 1. `EnterWorktree` bases off the default branch, not the current branch. This reset is what makes the worktree start from the correct point. Skip this and the worktree will be wrong.
+   - **Install hooks in worktree (fellowship only):** After entering the worktree, project-level hooks must be re-created so gate enforcement continues. Run: `bash hooks/scripts/install-hooks.sh`. This must happen before the state file creation below.
 3. **State file (fellowship only):** This MUST happen before any other tool calls (Skill, Bash, etc.) so that hooks can enforce gates from the start. If running as a fellowship teammate:
    - If `tmp/quest-state.json` already exists (respawn), reset `gate_pending` to `false` and preserve the existing `phase`.
    - Otherwise, create `tmp/quest-state.json`:

@@ -81,7 +81,7 @@ esac
 # Check if this gate is auto-approved.
 IS_AUTO="false"
 for gate in $AUTO_GATES; do
-  if [ "$gate" = "$NEXT_PHASE" ]; then
+  if [ "$gate" = "$PHASE" ]; then
     IS_AUTO="true"
     break
   fi

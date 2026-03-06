@@ -52,47 +52,11 @@ This is NOT the default. This is an opt-in configuration. Without this file, eve
 
 If the user asks to set up or modify their config, invoke `/settings`.
 
-### Install Gate Hooks
+### Gate Hook Propagation
 
-Plugin hooks only fire in Gandalf's session — teammates spawned via the Agent tool do not inherit them. For gate enforcement to work on teammates, the hooks must be installed as project-level hooks before spawning any teammates.
+Plugin hooks only fire in Gandalf's session — teammates spawned via the Agent tool do not inherit them. A `SessionStart` hook in the plugin automatically creates `.claude/settings.json` with project-level hooks when the plugin loads. This ensures teammates inherit gate enforcement without any manual setup.
 
-**At startup, run this Bash command:**
-
-```bash
-mkdir -p .claude
-cat > .claude/settings.json << 'HOOKEOF'
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write|Bash|Agent|Skill|NotebookEdit",
-        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/gate-guard.sh"}]
-      },
-      {
-        "matcher": "SendMessage",
-        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/gate-submit.sh"}]
-      },
-      {
-        "matcher": "TaskUpdate",
-        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/completion-guard.sh"}]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Skill",
-        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/gate-prereq.sh"}]
-      },
-      {
-        "matcher": "TaskUpdate",
-        "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/hooks/scripts/metadata-track.sh"}]
-      }
-    ]
-  }
-}
-HOOKEOF
-```
-
-If `.claude/settings.json` already exists with non-hook content, merge the `hooks` key using jq instead of overwriting.
+The installed hooks use absolute paths to the plugin's script files, so they work regardless of the session's working directory. For worktrees, quest Phase 0 re-creates the file after `EnterWorktree` (see quest skill).
 
 ### Spawn a Quest
 
@@ -234,7 +198,7 @@ When the user says "wrap up" or "disband":
 
 1. Send `shutdown_request` to all active teammates (including palantir)
 2. Synthesize a summary: quests completed, PR URLs, any open items
-3. Remove `.claude/settings.json` if it was created during Install Gate Hooks (or remove just the `hooks` key if pre-existing content was preserved)
+3. Run `./hooks/scripts/uninstall-hooks.sh` to remove gate hooks from `.claude/settings.json` (preserves other settings if present, removes the file if hooks were the only content)
 4. Run `TeamDelete` to clean up
 
 ## Gate Handling
@@ -251,7 +215,7 @@ Each quest runs the full `/quest` lifecycle (6 phases with gates). Gates are enf
 | Implement → Review | Surface to user |
 | Review → Complete | Surface to user |
 
-**With `config.gates.autoApprove` (opt-in only):** Gates listed in the array are auto-approved — the hooks advance the teammate's state automatically without setting `gate_pending`. Valid gate names: `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`. For example, `"autoApprove": ["Research", "Plan"]` means Research and Plan gates are auto-approved, while Implement, Review, and Complete gates still surface to the user. If a gate name is NOT in this array, it MUST surface to the user.
+**With `config.gates.autoApprove` (opt-in only):** Gates listed in the array are auto-approved — the hooks advance the teammate's state automatically without setting `gate_pending`. Valid gate names: `"Onboard"`, `"Research"`, `"Plan"`, `"Implement"`, `"Review"` (the phase the teammate is leaving). For example, `"autoApprove": ["Research", "Plan"]` means the Research→Plan and Plan→Implement transitions are auto-approved, while other gates still surface to the user. If a gate name is NOT in this array, it MUST surface to the user.
 
 When a gate is auto-approved (per config): the hooks advance the teammate's phase automatically. Gandalf logs it (e.g., `"quest-2: Research gate auto-approved per config"`) but does NOT need to write to the state file. When a gate requires user approval (the default): the lead presents the gate summary with context and waits for the user's response before approving.
 
