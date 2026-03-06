@@ -40,7 +40,7 @@ These are referenced by name in skill prompts. If a dependency isn't installed, 
 
 #### System Dependencies
 
-- **`jq`** — required for gate enforcement hooks. Pre-installed on macOS (via Xcode CLT), available on most Linux distributions. Without `jq`, gate hooks will block tool calls with an error message.
+- **Go CLI binary** — gate enforcement hooks use a Go binary that is automatically downloaded from GitHub releases on first use. No manual installation required.
 
 ### Project Setup (Optional)
 
@@ -114,7 +114,8 @@ The config is read at fellowship startup and quest onboard (Phase 0). Changes to
 | Skill | Purpose |
 |-------|---------|
 | `/quest` | Full Research → Plan → Implement lifecycle for non-trivial tasks. The hub that orchestrates everything else. |
-| `/fellowship` | Multi-quest orchestrator. Spawns parallel agent teammates, each running `/quest` in its own worktree. |
+| `/fellowship` | Multi-task orchestrator. Spawns parallel agent teammates running `/quest` (code) or `/scout` (research). |
+| `/scout` | Research & analysis workflow. Investigates questions, optionally validates with a fresh adversarial subagent. No code, no PRs, no commits. |
 | `/council` | Context-aware onboarding. Loads task-relevant files, conventions, and architecture at session start. |
 | `/gather-lore` | Studies reference files to extract conventions before writing code. Prevents "wrong approach" rework. |
 | `/lembas` | Context compression between phases. Keeps the context window in the reasoning sweet spot. |
@@ -128,6 +129,7 @@ The config is read at fellowship startup and quest onboard (Phase 0). Changes to
 | Agent | Role |
 |-------|------|
 | **palantir** | Background monitor during fellowship execution. Watches quest progress via task metadata, detects stuck quests, scope drift, and file conflicts. Reports to Gandalf. |
+| **quest-runner** | Quest execution agent. Uses the fellowship CLI for gate management, status checks, and phase transitions. |
 
 ## How It Works
 
@@ -142,9 +144,17 @@ Phase 4: Review     → /warden conventions + code quality + verification
 Phase 5: Complete   → PR creation + worktree cleanup
 ```
 
+**Research** — run `/scout`:
+
+```
+Investigate → (Validate) → Deliver
+```
+
+Autonomous research with confidence levels. For complex questions, spawns a fresh validator subagent to adversarially verify findings. Produces a structured report — no code changes, no PRs.
+
 **Multiple tasks** — run `/fellowship`:
 
-Gandalf (the coordinator) spawns quest-running teammates, each in an isolated worktree. By default, all phase gates surface to you for approval. You can auto-approve specific gates via `~/.claude/fellowship.json` (see Configuration). Each quest produces a PR. Say "status" to see a progress table showing each quest's current phase with visual progress indicators.
+Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolated worktrees and produce PRs. Scouts research questions and deliver findings. Say "status" to see a progress table. By default, all quest gates surface to you for approval — auto-approve specific gates via `~/.claude/fellowship.json` (see Configuration).
 
 **Gate enforcement** — gates are structurally enforced via plugin hooks. After a teammate submits a gate, their work tools (Edit, Write, Bash, etc.) are blocked until the lead approves by writing to the quest state file. Prerequisites (running `/lembas` and updating task metadata) are verified before gate submission is allowed. Self-approval is structurally impossible.
 
@@ -161,10 +171,12 @@ Gandalf (the coordinator) spawns quest-running teammates, each in an isolated wo
 
 ### v1.5.0
 
-- **Gate state machine** — structural enforcement of quest phase gates via plugin hooks. Teammate tools are blocked after gate submission until the lead approves. Prerequisites (lembas + metadata) are verified before submission. Self-approval is structurally impossible. Observed compliance: ~33% with prompt-only → ~95%+ with hooks. ([#5](https://github.com/justinjdev/fellowship/pull/5))
-- **Hook scripts** — 4 plugin hooks (`gate-guard`, `gate-submit`, `gate-prereq`, `metadata-track`) with test suite
-- **`jq` dependency** — required for gate enforcement. Hooks fail-closed if `jq` is missing.
-- **BREAKING** — plugin now ships executable bash scripts (`hooks/scripts/`). Previously pure markdown only.
+- **Gate state machine** — structural enforcement of quest phase gates via Go CLI + plugin hooks. Teammate tools are blocked after gate submission until the lead approves. Prerequisites (lembas + metadata) are verified before submission. Self-approval is structurally impossible. Observed compliance: ~33% with prompt-only → ~95%+ with hooks. ([#5](https://github.com/justinjdev/fellowship/pull/5))
+- **Go CLI** — `fellowship` binary handles all hook logic, gate approval/rejection, install/uninstall, and status. Distributed via GitHub releases, auto-downloaded on first use.
+- **Plugin subfolder** — plugin files moved to `plugin/` for clean installs via marketplace `git-subdir`. Go source, CI, and build config stay at repo root.
+- **`/scout` skill** — research & analysis workflow for lightweight research teammates alongside code quests. Autonomous (no gates/hooks), optional adversarial validation via fresh subagent. ([#12](https://github.com/justinjdev/fellowship/pull/12))
+- **Quest runner agent** — `agents/quest-runner.md` for CLI-driven quest execution.
+- **BREAKING** — bash hook scripts replaced by Go CLI binary. `jq` no longer required.
 
 ### v1.4.0
 
