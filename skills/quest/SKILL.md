@@ -90,7 +90,7 @@ When running as a fellowship teammate, a state file at `tmp/quest-state.json` en
      1. Run `git rev-parse HEAD` and save the full SHA in your response text (not a shell variable — shell state does not persist between tool calls). This is the base commit.
      2. Call `EnterWorktree` with the resolved branch name. If `config.worktree.directory` is set, create the worktree there instead of the default location.
      3. **Immediately** after entering the worktree — before ANY other action — run `git reset --hard <sha>` using the exact SHA from step 1. `EnterWorktree` bases off the default branch, not the current branch. This reset is what makes the worktree start from the correct point. Skip this and the worktree will be wrong.
-   - **Install hooks in worktree (fellowship only):** After entering the worktree, project-level hooks must be re-created so gate enforcement continues. Run: `bash hooks/scripts/install-hooks.sh`. This must happen before the state file creation below.
+   - **Install hooks in worktree (fellowship only):** After entering the worktree, project-level hooks must be re-created so gate enforcement continues. Run: `fellowship install`. This must happen before the state file creation below.
 3. **State file (fellowship only):** This MUST happen before any other tool calls (Skill, Bash, etc.) so that hooks can enforce gates from the start. If running as a fellowship teammate:
    - If `tmp/quest-state.json` already exists (respawn), reset `gate_pending` to `false` and preserve the existing `phase`.
    - Otherwise, create `tmp/quest-state.json`:

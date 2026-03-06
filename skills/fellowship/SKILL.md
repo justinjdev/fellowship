@@ -56,7 +56,7 @@ If the user asks to set up or modify their config, invoke `/settings`.
 
 Plugin hooks only fire in Gandalf's session — teammates spawned via the Agent tool do not inherit them. A `SessionStart` hook in the plugin automatically creates `.claude/settings.json` with project-level hooks when the plugin loads. This ensures teammates inherit gate enforcement without any manual setup.
 
-The installed hooks use absolute paths to the plugin's script files, so they work regardless of the session's working directory. For worktrees, quest Phase 0 re-creates the file after `EnterWorktree` (see quest skill).
+The installed hooks use absolute paths to the plugin's wrapper script (`fellowship.sh`), which ensures the Go CLI binary exists before executing hook commands. For worktrees, quest Phase 0 re-creates the file after `EnterWorktree` (see quest skill).
 
 ### Spawn a Quest
 
@@ -198,7 +198,7 @@ When the user says "wrap up" or "disband":
 
 1. Send `shutdown_request` to all active teammates (including palantir)
 2. Synthesize a summary: quests completed, PR URLs, any open items
-3. Run `./hooks/scripts/uninstall-hooks.sh` to remove gate hooks from `.claude/settings.json` (preserves other settings if present, removes the file if hooks were the only content)
+3. Run `fellowship uninstall` to remove gate hooks from `.claude/settings.json` (preserves other settings if present, removes the file if hooks were the only content)
 4. Run `TeamDelete` to clean up
 
 ## Gate Handling
@@ -227,14 +227,11 @@ Example (auto-approved): `"quest-2: Research gate auto-approved per config"`
 When Gandalf approves a non-auto-approved gate:
 
 1. **Read worktree path:** `TaskGet(taskId: "<task_id>")` → read `metadata.worktree_path`
-2. **Update the state file** using the Bash tool to unblock the teammate. Worktrees are on the same local filesystem as Gandalf's session, so Gandalf can write to `<worktree_path>/tmp/quest-state.json` directly:
+2. **Update the state file** using the `fellowship` CLI to unblock the teammate:
    ```bash
-   jq --arg phase "<next_phase>" \
-     '.gate_pending = false | .phase = $phase | .gate_id = null | .lembas_completed = false | .metadata_updated = false' \
-     <worktree_path>/tmp/quest-state.json > /tmp/quest-state-tmp.json \
-     && mv /tmp/quest-state-tmp.json <worktree_path>/tmp/quest-state.json
+   fellowship gate approve --dir <worktree_path>
    ```
-   Phase progression: Onboard→Research, Research→Plan, Plan→Implement, Implement→Review, Review→Complete
+   This advances the phase (Onboard→Research→Plan→Implement→Review→Complete), clears `gate_pending`, and resets prerequisites.
 3. **Send approval message** to the teammate via SendMessage
 
 This is the structural enforcement — saying "approved" in text does nothing. The teammate's hooks read `gate_pending` from the state file on every tool call. Only this Bash-tool file write unblocks them.
@@ -243,11 +240,9 @@ This is the structural enforcement — saying "approved" in text does nothing. T
 
 When Gandalf rejects a gate (or the user rejects):
 
-1. **Clear `gate_pending`** in the state file (set to `false` without advancing the phase) so the teammate can work on the feedback:
+1. **Clear `gate_pending`** using the `fellowship` CLI (rejects without advancing phase):
    ```bash
-   jq '.gate_pending = false | .gate_id = null' \
-     <worktree_path>/tmp/quest-state.json > /tmp/quest-state-tmp.json \
-     && mv /tmp/quest-state-tmp.json <worktree_path>/tmp/quest-state.json
+   fellowship gate reject --dir <worktree_path>
    ```
 2. **Send rejection message** to the teammate via SendMessage with feedback
 3. The teammate addresses the feedback, runs `/lembas` and updates metadata again, then resubmits the gate
@@ -396,7 +391,7 @@ Never combine gate approvals. Approve one gate at a time. Each gate response tri
 - **Quest fails:** Report to user with context (which phase, what went wrong). Offer to respawn. Worktree is preserved.
   - **Respawn procedure:** Spawn a new teammate with the same task description, but add to the spawn prompt: `"You are resuming a failed quest. Your working directory is already set to the existing worktree at {worktree_path}. Skip worktree creation in quest Phase 0 — you're already isolated. Check tmp/checkpoint.md for a checkpoint from the previous attempt."` Set the new teammate's working directory to the failed quest's worktree path.
 - **Direct teammate access:** Through Gandalf ("tell quest-2 to skip the logger refactor") or direct via Shift+Down to message the teammate.
-- **Session death:** Worktrees survive but coordination is lost. Teammates are orphaned. To resume: start a new fellowship, and for each incomplete quest use the respawn procedure above pointing at the preserved worktree. Each worktree's `tmp/checkpoint.md` has the last known state. If a teammate was stuck in `gate_pending: true` when the session died, the respawn procedure resets this automatically. For manual recovery without respawn, edit the state file directly: `jq '.gate_pending = false | .gate_id = null' <worktree>/tmp/quest-state.json > /tmp/qs.json && mv /tmp/qs.json <worktree>/tmp/quest-state.json`
+- **Session death:** Worktrees survive but coordination is lost. Teammates are orphaned. To resume: start a new fellowship, and for each incomplete quest use the respawn procedure above pointing at the preserved worktree. Each worktree's `tmp/checkpoint.md` has the last known state. If a teammate was stuck in `gate_pending: true` when the session died, the respawn procedure resets this automatically. For manual recovery without respawn, reject the pending gate: `fellowship gate reject --dir <worktree>`
 
 ## Key Principles
 
