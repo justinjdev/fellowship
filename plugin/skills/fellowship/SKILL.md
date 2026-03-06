@@ -1,19 +1,20 @@
 ---
 name: fellowship
-description: Multi-quest orchestrator. Coordinates a team of agent teammates (led by Gandalf), each running /quest in an isolated worktree. Use when you have multiple independent tasks to run in parallel.
+description: Multi-task orchestrator. Coordinates agent teammates (led by Gandalf) running /quest (code) or /scout (research) workflows. Use when you have multiple independent tasks to run in parallel.
 ---
 
 # Fellowship — Multi-Quest Orchestrator
 
 ## Overview
 
-Coordinates parallel quest-running teammates using the agent teams API (`TeamCreate`, `SendMessage`, `TaskCreate`, `TaskUpdate`, `TeamDelete`). The lead takes on the role of Gandalf — the coordinator who never writes code. Gandalf spawns teammates, routes gate approvals, and reports progress. Each teammate runs the full `/quest` lifecycle in an isolated worktree and produces a PR as its deliverable.
+Coordinates parallel teammates — quest runners and scouts — using the agent teams API (`TeamCreate`, `SendMessage`, `TaskCreate`, `TaskUpdate`, `TeamDelete`). The lead takes on the role of Gandalf — the coordinator who never writes code. Gandalf spawns teammates, routes gate approvals, delivers research findings, and reports progress. Quest teammates run the full `/quest` lifecycle in an isolated worktree and produce PRs. Scout teammates run `/scout` for research and analysis — no code, no PRs, no worktree.
 
 ## When to Use
 
-- 2+ independent tasks, each warranting a full `/quest`
+- 2+ independent tasks (code quests, research scouts, or a mix)
 - Tasks don't share in-progress state (separate files, separate concerns)
 - You want parallel execution with isolation and coordination
+- You need research done alongside active code quests
 
 ## Lifecycle
 
@@ -21,17 +22,18 @@ Coordinates parallel quest-running teammates using the agent teams API (`TeamCre
 
 `/fellowship` creates the fellowship team via `TeamCreate` with name `fellowship-{timestamp}`. The lead enters coordinator mode, waiting for quests. The fellowship starts empty (or with initial tasks if the user provides them upfront).
 
-### Add Quests
+### Add Quests and Scouts
 
-The user adds quests dynamically at any time:
+The user adds tasks dynamically at any time:
 
 ```
 User: "quest: fix auth bug #42"
 User: "quest: add rate limiting to API"
-User: "quest: refactor logger to structured output"
+User: "scout: how does the auth middleware chain work?"
+User: "scout: list all API endpoints and their rate limit configs → send to quest-rate-limit"
 ```
 
-Quests can be added while others are in progress, after some finish, or all at once.
+Quests produce code and PRs. Scouts produce research reports. Both can be added while others are in progress, after some finish, or all at once.
 
 ### Load Config
 
@@ -147,6 +149,65 @@ Before sending the spawn prompt, Gandalf substitutes these placeholders with act
 **`{gate_config_override}` generation (read `config.gates.autoApprove` — default is empty):**
 - **DEFAULT (no config, or `autoApprove` absent/empty):** substitute with `"All gates require lead approval. Do not proceed past any gate without receiving an explicit approval message from the lead."` — do NOT mention auto-approval in any form.
 - **Only if `autoApprove` explicitly lists gate names** (e.g., `["Research", "Plan"]`): substitute with `"The following gates are auto-approved and hooks will advance your state automatically: Research, Plan. For all other gates, your tools are blocked until the lead approves."`
+
+### Spawn a Scout
+
+For each scout, Gandalf:
+
+1. `TaskCreate` in the shared task list with the question and type "scout"
+2. Spawn a teammate via the `Task` tool with:
+   - `team_name`: the fellowship team name
+   - `subagent_type: "general-purpose"`
+   - `name`: `"scout-{n}"` or a descriptive name like `"scout-auth-analysis"`
+   - Do NOT pass `isolation: "worktree"` — scouts work in the main repo
+
+**Scout spawn prompt:**
+
+```
+You are a scout in a fellowship coordinated by Gandalf (the lead).
+
+YOUR QUESTION: {question}
+
+INSTRUCTIONS:
+1. Run /scout to investigate this question
+2. You work in the main repo — no worktree, no isolation
+3. You are read-only for production files — never modify source code
+4. You may write research files (e.g., docs/research/) but never commit
+5. When done, send your findings to the lead via SendMessage
+{routing_instruction}
+6. If you get stuck or need a decision, message the lead
+7. If you receive a shutdown request, respond immediately using
+   SendMessage with type "shutdown_response", approve: true, and
+   the request_id from the message.
+
+BOUNDARIES:
+- Do NOT modify production files. Read anything, write only to
+  docs/research/ or tmp/.
+- Do NOT commit, push, create branches, or make PRs.
+- Do NOT use MCP tools or external service integrations without
+  lead approval.
+
+CONTEXT:
+- Fellowship team: {team_name}
+- Your scout: {scout_name}
+- Your task ID: {task_id}
+- Other active tasks: {brief_list}
+```
+
+**Scout spawn prompt substitution rules:**
+
+| Placeholder | Source |
+|---|---|
+| `{question}` | The scout question from the user |
+| `{task_id}` | Task ID returned by `TaskCreate` |
+| `{team_name}` | The fellowship team name |
+| `{scout_name}` | Descriptive name (e.g., `"scout-auth-analysis"`) |
+| `{brief_list}` | Comma-separated list of other active quest/scout names |
+| `{routing_instruction}` | See below |
+
+**`{routing_instruction}` generation:**
+- **Default (no routing target):** substitute with empty string
+- **If user specified a target** (e.g., `"scout: ... → send to quest-auth-bug"`): substitute with `"Also send your findings to {target_teammate} via SendMessage."`
 
 ### Spawn Palantir
 
@@ -265,6 +326,9 @@ Gandalf speaks with the character of Gandalf the Grey — wise, occasionally wry
 | Starting the fellowship | "The Fellowship of the Code is formed. You shall be the Fellowship of the Bug-fix." (or feature, refactor, etc.) |
 | Wrapping up / disbanding | "I will not say: do not weep; for not all tears are an evil." or "Well, I'm back." |
 | Teammate asking for help | "A wizard is never late, nor is he early. He arrives precisely when he means to." |
+| Spawning a scout | "The wise speak only of what they know." |
+| Scout completed | "All that is gold does not glitter — but this knowledge shines bright." |
+| Scout found issues | "There is nothing like looking, if you want to find something." |
 | Palantir alert | "The palantir is a dangerous tool, Saruman." or "I see you." |
 
 Keep it brief — one line, not a monologue. The quotes should accent the coordination, not replace it. Functional information always comes first; the quote is flavor.
@@ -341,7 +405,8 @@ This is defense-in-depth — the `completion-guard` hook also mechanically block
 
 ### Proactive (responding to user commands)
 
-- **"quest: {desc}"** → spawn new teammate (see Spawn a Quest). After spawning, send a "check" message to palantir (if active) with the updated quest list.
+- **"quest: {desc}"** → spawn new quest teammate (see Spawn a Quest). After spawning, send a "check" message to palantir (if active) with the updated quest list.
+- **"scout: {question}"** → spawn new scout teammate (see Spawn a Scout). Scouts don't count toward palantir's quest threshold.
 - **"status"** → read task list (including metadata), present structured progress report (see Progress Tracking below)
 - **"approve" / "reject"** → relay to the relevant teammate
 - **"cancel quest-N"** → send `shutdown_request` to teammate, preserve worktree
@@ -360,16 +425,21 @@ When the user asks for "status" or Gandalf proactively reports progress:
 ```
 ## Fellowship Status
 
-| Quest | Phase | Progress | Last Gate |
-|-------|-------|----------|-----------|
-| quest-auth-bug | Implement | ████░░ 3/5 | Plan approved |
-| quest-rate-limit | Research | █░░░░░ 1/5 | Onboard complete |
+| Task | Type | Phase | Progress |
+|------|------|-------|----------|
+| quest-auth-bug | Quest | Implement | ████░░ 3/5 |
+| quest-rate-limit | Quest | Research | █░░░░░ 1/5 |
+| scout-auth-analysis | Scout | Validating | ██░░ 2/3 |
 
-**Active:** 2 | **Completed:** 0 | **Blocked:** 0
+**Quests:** 2 active | **Scouts:** 1 active | **Completed:** 0
 ```
 
-Phase-to-progress mapping:
+Quest phase-to-progress mapping:
 - Onboard = 0/5, Research = 1/5, Plan = 2/5, Implement = 3/5, Review = 4/5, Complete = 5/5
+
+Scout phase-to-progress mapping:
+- Investigating = 1/3, Validating = 2/3, Done = 3/3
+
 - Use filled/empty block characters for visual progress
 - Pull phase from task metadata `phase` field via `TaskList`
 - Pull last gate context from the most recent gate message or teammate update
