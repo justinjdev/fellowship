@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Claude Code plugin. Skills, agents, and docs are pure markdown. Gate enforcement is a Go CLI binary (`cli/`) distributed via GitHub releases.
+Claude Code plugin. Skills, agents, and docs are pure markdown. Gate enforcement is a Go CLI binary distributed via GitHub releases (downloaded automatically on first use).
 
 ## Structure
 
@@ -11,9 +11,6 @@ agents/<name>.md             # Agent definitions
 hooks/hooks.json             # Plugin hook definitions (gate enforcement)
 hooks/scripts/fellowship.sh  # Thin wrapper — ensures binary exists, then exec's it
 hooks/scripts/ensure-binary.sh # Downloads CLI binary from GitHub releases
-cli/                         # Go CLI source (fellowship binary)
-.goreleaser.yaml             # Cross-platform build config
-README.md                    # User-facing docs, install instructions, changelog
 ```
 
 ## Conventions
