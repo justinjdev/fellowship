@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Claude Code plugin — no build system, no runtime code. This repo is pure markdown (skills, agents, README) and one JSON manifest.
+Claude Code plugin. Skills, agents, and docs are pure markdown. Gate enforcement is a Go CLI binary distributed via GitHub releases (downloaded automatically on first use).
 
 ## Structure
 
@@ -8,7 +8,9 @@ Claude Code plugin — no build system, no runtime code. This repo is pure markd
 .claude-plugin/plugin.json   # Plugin manifest (name, version, repo URL)
 skills/<name>/SKILL.md       # Each skill is a single SKILL.md with YAML frontmatter
 agents/<name>.md             # Agent definitions
-README.md                    # User-facing docs, install instructions, changelog
+hooks/hooks.json             # Plugin hook definitions (gate enforcement)
+hooks/scripts/fellowship.sh  # Thin wrapper — ensures binary exists, then exec's it
+hooks/scripts/ensure-binary.sh # Downloads CLI binary from GitHub releases
 ```
 
 ## Conventions
