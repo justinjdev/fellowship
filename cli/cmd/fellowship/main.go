@@ -214,6 +214,7 @@ func runGate(args []string) int {
 		tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
 		c := tome.LoadOrCreate(tomePath)
 		tome.RecordGate(c, prevPhase, "approved")
+		tome.RecordPhase(c, prevPhase)
 		tome.Save(tomePath, c)
 		fmt.Printf("Gate approved. Phase advanced to %s.\n", nextPhase)
 		return 0
