@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
+	"github.com/justinjdev/fellowship/cli/internal/eagles"
 	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
@@ -49,6 +50,8 @@ func main() {
 		os.Exit(runInit())
 	case "status":
 		os.Exit(runStatus(os.Args[2:]))
+	case "eagles":
+		os.Exit(runEagles(os.Args[2:]))
 	case "errand":
 		os.Exit(runErrand(os.Args[2:]))
 	case "dashboard":
@@ -76,6 +79,10 @@ Agent/lead commands:
   gate approve           Approve a pending gate (advances to next phase)
   gate reject            Reject a pending gate (clears pending, keeps phase)
   status [--json]        Scan worktrees and show fellowship recovery status
+  eagles                 Scan quest health and write eagles report
+    --dir DIR            Git repo root (default: auto-detect)
+    --threshold N        Gate pending timeout in minutes (default: 10)
+    --json               Output as JSON
 
 Setup commands:
   install                Merge gate hooks into .claude/settings.json
@@ -350,6 +357,42 @@ func runStatus(args []string) int {
 		}
 	}
 
+	return 0
+}
+
+func runEagles(args []string) int {
+	fs := flag.NewFlagSet("eagles", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	threshold := fs.Int("threshold", 10, "Gate pending timeout in minutes")
+	jsonOut := fs.Bool("json", false, "Output as JSON")
+	fs.Parse(args)
+
+	root := *dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+
+	opts := eagles.DefaultOptions()
+	opts.GateThreshold = time.Duration(*threshold) * time.Minute
+
+	report, err := eagles.Sweep(root, opts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	// Write report to tmp/eagles-report.json
+	if err := eagles.WriteReport(root, report); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: warning: %v\n", err)
+	}
+
+	if *jsonOut {
+		data, _ := json.MarshalIndent(report, "", "  ")
+		fmt.Println(string(data))
+		return 0
+	}
+
+	fmt.Print(eagles.FormatTable(report))
 	return 0
 }
 

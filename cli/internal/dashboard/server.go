@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/justinjdev/fellowship/cli/internal/eagles"
 	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
@@ -29,6 +30,7 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 		pollInterval: pollInterval,
 	}
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
+	s.mux.HandleFunc("GET /api/eagles", s.handleEagles)
 	s.mux.HandleFunc("POST /api/gate/approve", s.handleGateApprove)
 	s.mux.HandleFunc("POST /api/gate/reject", s.handleGateReject)
 	s.mux.HandleFunc("GET /api/errand/", s.handleErrand)
@@ -159,6 +161,17 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		LembasCompleted: st.LembasCompleted,
 		MetadataUpdated: st.MetadataUpdated,
 	})
+}
+
+func (s *Server) handleEagles(w http.ResponseWriter, r *http.Request) {
+	opts := eagles.DefaultOptions()
+	report, err := eagles.Sweep(s.gitRoot, opts)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(report)
 }
 
 func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
