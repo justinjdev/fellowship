@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/justinjdev/fellowship/cli/internal/patrol"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -26,6 +27,7 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 		pollInterval: pollInterval,
 	}
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
+	s.mux.HandleFunc("GET /api/patrol", s.handlePatrol)
 	s.mux.HandleFunc("POST /api/gate/approve", s.handleGateApprove)
 	s.mux.HandleFunc("POST /api/gate/reject", s.handleGateReject)
 
@@ -155,6 +157,17 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		LembasCompleted: st.LembasCompleted,
 		MetadataUpdated: st.MetadataUpdated,
 	})
+}
+
+func (s *Server) handlePatrol(w http.ResponseWriter, r *http.Request) {
+	opts := patrol.DefaultOptions()
+	report, err := patrol.Patrol(s.gitRoot, opts)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(report)
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {

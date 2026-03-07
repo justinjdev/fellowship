@@ -10,10 +10,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
+	"github.com/justinjdev/fellowship/cli/internal/patrol"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/status"
 )
@@ -47,6 +49,8 @@ func main() {
 		os.Exit(runInit())
 	case "status":
 		os.Exit(runStatus(os.Args[2:]))
+	case "patrol":
+		os.Exit(runPatrol(os.Args[2:]))
 	case "dashboard":
 		os.Exit(runDashboard(os.Args[2:]))
 	case "version":
@@ -72,6 +76,10 @@ Agent/lead commands:
   gate approve           Approve a pending gate (advances to next phase)
   gate reject            Reject a pending gate (clears pending, keeps phase)
   status [--json]        Scan worktrees and show fellowship recovery status
+  patrol                 Scan quest health and write patrol report
+    --dir DIR            Git repo root (default: auto-detect)
+    --threshold N        Gate pending timeout in minutes (default: 10)
+    --json               Output as JSON
 
 Setup commands:
   install                Merge gate hooks into .claude/settings.json
@@ -329,6 +337,42 @@ func runStatus(args []string) int {
 		}
 	}
 
+	return 0
+}
+
+func runPatrol(args []string) int {
+	fs := flag.NewFlagSet("patrol", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	threshold := fs.Int("threshold", 10, "Gate pending timeout in minutes")
+	jsonOut := fs.Bool("json", false, "Output as JSON")
+	fs.Parse(args)
+
+	root := *dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+
+	opts := patrol.DefaultOptions()
+	opts.GateThreshold = time.Duration(*threshold) * time.Minute
+
+	report, err := patrol.Patrol(root, opts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	// Write report to tmp/patrol-report.json
+	if err := patrol.WriteReport(root, report); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: warning: %v\n", err)
+	}
+
+	if *jsonOut {
+		data, _ := json.MarshalIndent(report, "", "  ")
+		fmt.Println(string(data))
+		return 0
+	}
+
+	fmt.Print(patrol.FormatTable(report))
 	return 0
 }
 
