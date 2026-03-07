@@ -11,12 +11,12 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/justinjdev/fellowship/cli/internal/tome"
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/status"
+	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
 var version = "dev"
@@ -127,12 +127,13 @@ func runHook(name string) int {
 	case "gate-guard":
 		result = hooks.GateGuard(s, input)
 	case "gate-submit":
+		prevPhase := s.Phase
 		sr := hooks.GateSubmit(s, input)
 		result = hooks.HookResult{Block: sr.Block, Message: sr.Message}
 		stateChanged = sr.StateChanged
 		if sr.StateChanged && !sr.Block {
 			tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
-			hooks.RecordGateSubmitted(tomePath, s.Phase)
+			hooks.RecordGateSubmitted(tomePath, prevPhase, s.Phase != prevPhase)
 		}
 	case "gate-prereq":
 		stateChanged = hooks.GatePrereq(s, input)

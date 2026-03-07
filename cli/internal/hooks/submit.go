@@ -69,10 +69,14 @@ func GateSubmit(s *state.State, input *HookInput) SubmitResult {
 }
 
 // RecordGateSubmitted records a "submitted" gate event in the quest tome.
-func RecordGateSubmitted(tomePath string, phase string) {
+// If autoApproved is true, the phase is also recorded as completed.
+func RecordGateSubmitted(tomePath string, phase string, autoApproved bool) {
 	c := tome.LoadOrCreate(tomePath)
 	tome.RecordGate(c, phase, "submitted")
-	tome.RecordPhase(c, phase)
+	if autoApproved {
+		tome.RecordGate(c, phase, "approved")
+		tome.RecordPhase(c, phase)
+	}
 	tome.Save(tomePath, c)
 }
 
