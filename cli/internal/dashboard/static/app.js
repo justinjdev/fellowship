@@ -51,19 +51,83 @@
     document.getElementById("quest-count").textContent = quests.length + " quest" + (quests.length !== 1 ? "s" : "");
     document.getElementById("scout-count").textContent = scouts.length + " scout" + (scouts.length !== 1 ? "s" : "");
 
-    // Quest cards
+    // Quest cards — group by convoy
     const container = document.getElementById("quest-cards");
     container.innerHTML = "";
-    quests.forEach(function (q) {
-      container.appendChild(renderCard(q));
+    var convoys = status.convoys || [];
+    var rendered = {};
+
+    convoys.forEach(function (c) {
+      var convoyQuests = quests.filter(function (q) {
+        return c.quests && c.quests.indexOf(q.name) !== -1;
+      });
+      var convoyScouts = scouts.filter(function (s) {
+        return c.scouts && c.scouts.indexOf(s.name) !== -1;
+      });
+      if (convoyQuests.length === 0 && convoyScouts.length === 0) return;
+
+      container.appendChild(renderConvoyHeader(c, convoyQuests));
+
+      convoyQuests.forEach(function (q) {
+        container.appendChild(renderCard(q));
+        rendered[q.name] = true;
+      });
+      convoyScouts.forEach(function (s) {
+        container.appendChild(renderScoutCard(s));
+        rendered[s.name] = true;
+      });
     });
 
-    // Scouts as simple cards
-    scouts.forEach(function (s) {
-      container.appendChild(renderScoutCard(s));
-    });
+    // Ungrouped quests and scouts
+    var ungroupedQuests = quests.filter(function (q) { return !rendered[q.name]; });
+    var ungroupedScouts = scouts.filter(function (s) { return !rendered[s.name]; });
+    if (ungroupedQuests.length > 0 || ungroupedScouts.length > 0) {
+      if (convoys.length > 0) {
+        var ungroupedHeader = document.createElement("div");
+        ungroupedHeader.className = "convoy-header";
+        ungroupedHeader.innerHTML = "<h2>Ungrouped</h2>";
+        container.appendChild(ungroupedHeader);
+      }
+      ungroupedQuests.forEach(function (q) {
+        container.appendChild(renderCard(q));
+      });
+      ungroupedScouts.forEach(function (s) {
+        container.appendChild(renderScoutCard(s));
+      });
+    }
 
     prevStatus = status;
+  }
+
+  function renderConvoyHeader(convoy, convoyQuests) {
+    var header = document.createElement("div");
+    header.className = "convoy-header";
+
+    var implementPlus = 0;
+    var total = (convoy.quests || []).length + (convoy.scouts || []).length;
+    var hasPending = false;
+
+    convoyQuests.forEach(function (q) {
+      var idx = PHASES.indexOf(q.phase);
+      if (idx >= 3) implementPlus++; // Implement+
+      if (q.gate_pending) hasPending = true;
+    });
+
+    var summary = implementPlus + "/" + total + " quests in Implement+";
+    header.innerHTML = "<h2>" + escapeHTML(convoy.name) + "</h2>" +
+      '<span class="convoy-summary">' + escapeHTML(summary) + "</span>";
+
+    if (hasPending) {
+      var approveAllBtn = document.createElement("button");
+      approveAllBtn.className = "btn btn-approve";
+      approveAllBtn.textContent = "Approve All";
+      approveAllBtn.addEventListener("click", function () {
+        window.__approveConvoy(convoy.name);
+      });
+      header.appendChild(approveAllBtn);
+    }
+
+    return header;
   }
 
   function renderCard(quest) {
@@ -151,6 +215,18 @@
       poll();
     } catch (err) {
       addActivity("Approve failed: " + err.message);
+    }
+  };
+
+  window.__approveConvoy = async function (name) {
+    try {
+      var res = await fetch("/api/convoy/" + encodeURIComponent(name) + "/approve");
+      if (!res.ok) throw new Error("status " + res.status);
+      var data = await res.json();
+      addActivity("Convoy '" + name + "': approved " + data.approved.length + " gate(s)");
+      poll();
+    } catch (err) {
+      addActivity("Convoy approve failed: " + err.message);
     }
   };
 

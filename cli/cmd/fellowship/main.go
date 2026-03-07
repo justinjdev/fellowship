@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/justinjdev/fellowship/cli/internal/convoy"
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
@@ -47,6 +48,12 @@ func main() {
 		os.Exit(runInit())
 	case "status":
 		os.Exit(runStatus(os.Args[2:]))
+	case "convoy":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: fellowship convoy <list|show|approve>")
+			os.Exit(1)
+		}
+		os.Exit(runConvoy(os.Args[2:]))
 	case "dashboard":
 		os.Exit(runDashboard(os.Args[2:]))
 	case "version":
@@ -77,6 +84,14 @@ Setup commands:
   install                Merge gate hooks into .claude/settings.json
   uninstall              Remove gate hooks from .claude/settings.json
   init                   Create tmp/quest-state.json with defaults
+
+Convoy commands:
+  convoy list            List all convoys and their quest/scout counts
+    --dir PATH           Git repo root (default: auto-detect)
+  convoy show <name>     Show detailed convoy status (phases, progress)
+    --dir PATH           Git repo root (default: auto-detect)
+  convoy approve <name>  Batch-approve all pending gates in a convoy
+    --dir PATH           Git repo root (default: auto-detect)
 
 Dashboard:
   dashboard              Start live web dashboard
@@ -358,6 +373,77 @@ func runDashboard(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+func runConvoy(args []string) int {
+	sub := args[0]
+	rest := args[1:]
+
+	switch sub {
+	case "list":
+		fs := flag.NewFlagSet("convoy list", flag.ExitOnError)
+		dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+		fs.Parse(rest)
+
+		root := *dir
+		if root == "" {
+			root = gitRootOrCwd()
+		}
+		statePath := filepath.Join(root, "tmp", "fellowship-state.json")
+		if err := convoy.List(statePath); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+			return 1
+		}
+		return 0
+
+	case "show":
+		fs := flag.NewFlagSet("convoy show", flag.ExitOnError)
+		dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+		fs.Parse(rest)
+
+		if fs.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "usage: fellowship convoy show <name> [--dir PATH]")
+			return 1
+		}
+		name := fs.Arg(0)
+
+		root := *dir
+		if root == "" {
+			root = gitRootOrCwd()
+		}
+		statePath := filepath.Join(root, "tmp", "fellowship-state.json")
+		if err := convoy.Show(statePath, name); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+			return 1
+		}
+		return 0
+
+	case "approve":
+		fs := flag.NewFlagSet("convoy approve", flag.ExitOnError)
+		dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+		fs.Parse(rest)
+
+		if fs.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "usage: fellowship convoy approve <name> [--dir PATH]")
+			return 1
+		}
+		name := fs.Arg(0)
+
+		root := *dir
+		if root == "" {
+			root = gitRootOrCwd()
+		}
+		statePath := filepath.Join(root, "tmp", "fellowship-state.json")
+		if err := convoy.Approve(statePath, name); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+			return 1
+		}
+		return 0
+
+	default:
+		fmt.Fprintf(os.Stderr, "unknown convoy command: %s\n", sub)
+		return 1
+	}
 }
 
 func gitRootOrCwd() string {

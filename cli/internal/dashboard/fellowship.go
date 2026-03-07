@@ -11,13 +11,20 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
+type ConvoyEntry struct {
+	Name   string   `json:"name"`
+	Quests []string `json:"quests"` // quest names
+	Scouts []string `json:"scouts"` // scout names
+}
+
 type FellowshipState struct {
-	Version   int          `json:"version"`
-	Name      string       `json:"name"`
-	CreatedAt string       `json:"created_at"`
-	MainRepo  string       `json:"main_repo"`
-	Quests    []QuestEntry `json:"quests"`
-	Scouts    []ScoutEntry `json:"scouts"`
+	Version   int            `json:"version"`
+	Name      string         `json:"name"`
+	CreatedAt string         `json:"created_at"`
+	MainRepo  string         `json:"main_repo"`
+	Quests    []QuestEntry   `json:"quests"`
+	Scouts    []ScoutEntry   `json:"scouts"`
+	Convoys   []ConvoyEntry  `json:"convoys"`
 }
 
 type QuestEntry struct {
@@ -48,6 +55,7 @@ type DashboardStatus struct {
 	Name         string        `json:"name"`
 	Quests       []QuestStatus `json:"quests"`
 	Scouts       []ScoutEntry  `json:"scouts"`
+	Convoys      []ConvoyEntry `json:"convoys"`
 	PollInterval int           `json:"poll_interval"`
 }
 
@@ -67,10 +75,14 @@ func discoverFromFellowshipState(fs *FellowshipState) (*DashboardStatus, error) 
 		Name:         fs.Name,
 		Quests:       []QuestStatus{},
 		Scouts:       fs.Scouts,
+		Convoys:      fs.Convoys,
 		PollInterval: 5,
 	}
 	if status.Scouts == nil {
 		status.Scouts = []ScoutEntry{}
+	}
+	if status.Convoys == nil {
+		status.Convoys = []ConvoyEntry{}
 	}
 	for _, q := range fs.Quests {
 		qs, err := loadQuestStatus(q.Name, q.Worktree)
