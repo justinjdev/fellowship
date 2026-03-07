@@ -51,28 +51,28 @@
     document.getElementById("quest-count").textContent = quests.length + " quest" + (quests.length !== 1 ? "s" : "");
     document.getElementById("scout-count").textContent = scouts.length + " scout" + (scouts.length !== 1 ? "s" : "");
 
-    // Quest cards — group by convoy
+    // Quest cards — group by company
     const container = document.getElementById("quest-cards");
     container.innerHTML = "";
-    var convoys = status.convoys || [];
+    var companys = status.companys || [];
     var rendered = {};
 
-    convoys.forEach(function (c) {
-      var convoyQuests = quests.filter(function (q) {
+    companys.forEach(function (c) {
+      var companyQuests = quests.filter(function (q) {
         return c.quests && c.quests.indexOf(q.name) !== -1;
       });
-      var convoyScouts = scouts.filter(function (s) {
+      var companyScouts = scouts.filter(function (s) {
         return c.scouts && c.scouts.indexOf(s.name) !== -1;
       });
-      if (convoyQuests.length === 0 && convoyScouts.length === 0) return;
+      if (companyQuests.length === 0 && companyScouts.length === 0) return;
 
-      container.appendChild(renderConvoyHeader(c, convoyQuests));
+      container.appendChild(renderCompanyHeader(c, companyQuests));
 
-      convoyQuests.forEach(function (q) {
+      companyQuests.forEach(function (q) {
         container.appendChild(renderCard(q));
         rendered[q.name] = true;
       });
-      convoyScouts.forEach(function (s) {
+      companyScouts.forEach(function (s) {
         container.appendChild(renderScoutCard(s));
         rendered[s.name] = true;
       });
@@ -82,9 +82,9 @@
     var ungroupedQuests = quests.filter(function (q) { return !rendered[q.name]; });
     var ungroupedScouts = scouts.filter(function (s) { return !rendered[s.name]; });
     if (ungroupedQuests.length > 0 || ungroupedScouts.length > 0) {
-      if (convoys.length > 0) {
+      if (companys.length > 0) {
         var ungroupedHeader = document.createElement("div");
-        ungroupedHeader.className = "convoy-header";
+        ungroupedHeader.className = "company-header";
         ungroupedHeader.innerHTML = "<h2>Ungrouped</h2>";
         container.appendChild(ungroupedHeader);
       }
@@ -99,30 +99,30 @@
     prevStatus = status;
   }
 
-  function renderConvoyHeader(convoy, convoyQuests) {
+  function renderCompanyHeader(company, companyQuests) {
     var header = document.createElement("div");
-    header.className = "convoy-header";
+    header.className = "company-header";
 
     var implementPlus = 0;
-    var total = (convoy.quests || []).length + (convoy.scouts || []).length;
+    var total = (company.quests || []).length + (company.scouts || []).length;
     var hasPending = false;
 
-    convoyQuests.forEach(function (q) {
+    companyQuests.forEach(function (q) {
       var idx = PHASES.indexOf(q.phase);
       if (idx >= 3) implementPlus++; // Implement+
       if (q.gate_pending) hasPending = true;
     });
 
     var summary = implementPlus + "/" + total + " quests in Implement+";
-    header.innerHTML = "<h2>" + escapeHTML(convoy.name) + "</h2>" +
-      '<span class="convoy-summary">' + escapeHTML(summary) + "</span>";
+    header.innerHTML = "<h2>" + escapeHTML(company.name) + "</h2>" +
+      '<span class="company-summary">' + escapeHTML(summary) + "</span>";
 
     if (hasPending) {
       var approveAllBtn = document.createElement("button");
       approveAllBtn.className = "btn btn-approve";
       approveAllBtn.textContent = "Approve All";
       approveAllBtn.addEventListener("click", function () {
-        window.__approveConvoy(convoy.name);
+        window.__approveCompany(company.name);
       });
       header.appendChild(approveAllBtn);
     }
@@ -218,15 +218,15 @@
     }
   };
 
-  window.__approveConvoy = async function (name) {
+  window.__approveCompany = async function (name) {
     try {
-      var res = await fetch("/api/convoy/" + encodeURIComponent(name) + "/approve");
+      var res = await fetch("/api/company/" + encodeURIComponent(name) + "/approve");
       if (!res.ok) throw new Error("status " + res.status);
       var data = await res.json();
-      addActivity("Convoy '" + name + "': approved " + data.approved.length + " gate(s)");
+      addActivity("Company '" + name + "': approved " + data.approved.length + " gate(s)");
       poll();
     } catch (err) {
-      addActivity("Convoy approve failed: " + err.message);
+      addActivity("Company approve failed: " + err.message);
     }
   };
 

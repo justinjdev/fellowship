@@ -31,10 +31,10 @@ User: "quest: fix auth bug #42"
 User: "quest: add rate limiting to API"
 User: "scout: how does the auth middleware chain work?"
 User: "scout: list all API endpoints and their rate limit configs → send to quest-rate-limit"
-User: "convoy: API work — quest: add endpoint, quest: add tests, scout: review API docs"
+User: "company: API work — quest: add endpoint, quest: add tests, scout: review API docs"
 ```
 
-**Convoys** group related quests and scouts for batch operations and progress tracking. A convoy is a lightweight grouping layer — it does not change how quests execute, only how they are organized and reported.
+**Companies** group related quests and scouts for batch operations and progress tracking. A company is a lightweight grouping layer — it does not change how quests execute, only how they are organized and reported.
 
 Quests produce code and PRs. Scouts produce research reports. Both can be added while others are in progress, after some finish, or all at once.
 
@@ -69,7 +69,7 @@ After loading config, write `tmp/fellowship-state.json` in the main repo root:
   "main_repo": "<absolute path to repo root>",
   "quests": [],
   "scouts": [],
-  "convoys": []
+  "companies": []
 }
 ```
 
@@ -95,16 +95,16 @@ Scout entry:
 }
 ```
 
-Convoy entry (when the user creates a convoy):
+Company entry (when the user creates a company):
 ```json
 {
-  "name": "<convoy_name>",
+  "name": "<company_name>",
   "quests": ["<quest_name_1>", "<quest_name_2>"],
   "scouts": ["<scout_name_1>"]
 }
 ```
 
-When the user creates a convoy (e.g., `"convoy: API work — quest: add endpoint, quest: add tests, scout: review API docs"`), Gandalf records the convoy in `fellowship-state.json` and spawns the quests and scouts as normal. The convoy entry references quest and scout names for grouping.
+When the user creates a company (e.g., `"company: API work — quest: add endpoint, quest: add tests, scout: review API docs"`), Gandalf records the company in `fellowship-state.json` and spawns the quests and scouts as normal. The company entry references quest and scout names for grouping.
 
 Read the file, append to the array, write it back. The worktree path for quests is available after the quest runner reports back from Phase 0 (stored in task metadata as `worktree_path`). Update the quest entry with the worktree path when it becomes available.
 
@@ -483,7 +483,7 @@ This is defense-in-depth — the `completion-guard` hook also mechanically block
 - **"scout: {question}"** → spawn new scout teammate (see Spawn a Scout). Scouts don't count toward palantir's quest threshold.
 - **"status"** → read task list (including metadata), present structured progress report (see Progress Tracking below)
 - **"approve" / "reject"** → relay to the relevant teammate
-- **"approve all gates for {convoy_name}"** → batch-approve all pending gates in the named convoy using `fellowship convoy approve <name>`. Report which quests were approved.
+- **"approve all gates for {company_name}"** → batch-approve all pending gates in the named company using `fellowship company approve <name>`. Report which quests were approved.
 - **"cancel quest-N"** → send `shutdown_request` to teammate, preserve worktree
 - **"tell quest-N to ..."** → relay message to specific teammate via `SendMessage`
 - **"wrap up" / "disband"** → shutdown all teammates, synthesize summary, `TeamDelete`
@@ -509,10 +509,10 @@ When the user asks for "status" or Gandalf proactively reports progress:
 **Quests:** 2 active | **Scouts:** 1 active | **Completed:** 0
 ```
 
-When convoys are defined, group quests by convoy in the status report:
+When companies are defined, group quests by company in the status report:
 
 ```
-## Convoy: API Work (2/3 quests in Implement+)
+## Company: API Work (2/3 quests in Implement+)
 
 | Task | Type | Phase | Progress |
 |------|------|-------|----------|

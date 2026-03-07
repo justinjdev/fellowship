@@ -30,7 +30,7 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
 	s.mux.HandleFunc("POST /api/gate/approve", s.handleGateApprove)
 	s.mux.HandleFunc("POST /api/gate/reject", s.handleGateReject)
-	s.mux.HandleFunc("GET /api/convoy/", s.handleConvoyApprove)
+	s.mux.HandleFunc("GET /api/company/", s.handleCompanyApprove)
 
 	staticFS, _ := iofs.Sub(staticFiles, "static")
 	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
@@ -160,12 +160,12 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleConvoyApprove(w http.ResponseWriter, r *http.Request) {
-	// Extract convoy name from path: /api/convoy/<name>/approve
-	path := strings.TrimPrefix(r.URL.Path, "/api/convoy/")
+func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
+	// Extract company name from path: /api/company/<name>/approve
+	path := strings.TrimPrefix(r.URL.Path, "/api/company/")
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) != 2 || parts[1] != "approve" || parts[0] == "" {
-		http.Error(w, "usage: GET /api/convoy/<name>/approve", http.StatusBadRequest)
+		http.Error(w, "usage: GET /api/company/<name>/approve", http.StatusBadRequest)
 		return
 	}
 	name := parts[0]
@@ -177,26 +177,26 @@ func (s *Server) handleConvoyApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var target *ConvoyEntry
-	for i := range fs.Convoys {
-		if fs.Convoys[i].Name == name {
-			target = &fs.Convoys[i]
+	var target *CompanyEntry
+	for i := range fs.Companies {
+		if fs.Companies[i].Name == name {
+			target = &fs.Companies[i]
 			break
 		}
 	}
 	if target == nil {
-		http.Error(w, "convoy not found: "+name, http.StatusNotFound)
+		http.Error(w, "company not found: "+name, http.StatusNotFound)
 		return
 	}
 
-	approved, errs := batchApproveConvoy(*target, fs)
+	approved, errs := batchApproveCompany(*target, fs)
 
-	type convoyApproveResponse struct {
+	type companyApproveResponse struct {
 		Approved []string `json:"approved"`
 		Errors   []string `json:"errors,omitempty"`
 	}
 
-	resp := convoyApproveResponse{Approved: approved}
+	resp := companyApproveResponse{Approved: approved}
 	if resp.Approved == nil {
 		resp.Approved = []string{}
 	}
@@ -208,8 +208,8 @@ func (s *Server) handleConvoyApprove(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// batchApproveConvoy approves all pending gates within a convoy.
-func batchApproveConvoy(c ConvoyEntry, fs *FellowshipState) (approved []string, errs []error) {
+// batchApproveCompany approves all pending gates within a company.
+func batchApproveCompany(c CompanyEntry, fs *FellowshipState) (approved []string, errs []error) {
 	questWorktree := make(map[string]string)
 	for _, q := range fs.Quests {
 		questWorktree[q.Name] = q.Worktree

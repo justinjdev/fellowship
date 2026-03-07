@@ -11,7 +11,7 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
-type ConvoyEntry struct {
+type CompanyEntry struct {
 	Name   string   `json:"name"`
 	Quests []string `json:"quests"` // quest names
 	Scouts []string `json:"scouts"` // scout names
@@ -24,7 +24,7 @@ type FellowshipState struct {
 	MainRepo  string         `json:"main_repo"`
 	Quests    []QuestEntry   `json:"quests"`
 	Scouts    []ScoutEntry   `json:"scouts"`
-	Convoys   []ConvoyEntry  `json:"convoys"`
+	Companies []CompanyEntry  `json:"companies"`
 }
 
 type QuestEntry struct {
@@ -55,7 +55,7 @@ type DashboardStatus struct {
 	Name         string        `json:"name"`
 	Quests       []QuestStatus `json:"quests"`
 	Scouts       []ScoutEntry  `json:"scouts"`
-	Convoys      []ConvoyEntry `json:"convoys"`
+	Companies    []CompanyEntry `json:"companies"`
 	PollInterval int           `json:"poll_interval"`
 }
 
@@ -75,14 +75,14 @@ func discoverFromFellowshipState(fs *FellowshipState) (*DashboardStatus, error) 
 		Name:         fs.Name,
 		Quests:       []QuestStatus{},
 		Scouts:       fs.Scouts,
-		Convoys:      fs.Convoys,
+		Companies:    fs.Companies,
 		PollInterval: 5,
 	}
 	if status.Scouts == nil {
 		status.Scouts = []ScoutEntry{}
 	}
-	if status.Convoys == nil {
-		status.Convoys = []ConvoyEntry{}
+	if status.Companies == nil {
+		status.Companies = []CompanyEntry{}
 	}
 	for _, q := range fs.Quests {
 		qs, err := loadQuestStatus(q.Name, q.Worktree)

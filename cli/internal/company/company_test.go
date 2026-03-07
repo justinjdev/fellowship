@@ -1,4 +1,4 @@
-package convoy
+package company
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 )
 
 func TestCalculateProgress_MixedPhases(t *testing.T) {
-	convoy := dashboard.ConvoyEntry{
+	company := dashboard.CompanyEntry{
 		Name:   "API Work",
 		Quests: []string{"quest-endpoint", "quest-tests", "quest-docs"},
 		Scouts: []string{"scout-review"},
@@ -23,7 +23,7 @@ func TestCalculateProgress_MixedPhases(t *testing.T) {
 		{Name: "quest-docs", Phase: "Research", GatePending: true},
 	}
 
-	progress := CalculateProgress(convoy, quests)
+	progress := CalculateProgress(company, quests)
 
 	if progress.Name != "API Work" {
 		t.Errorf("expected name 'API Work', got %q", progress.Name)
@@ -45,8 +45,8 @@ func TestCalculateProgress_MixedPhases(t *testing.T) {
 }
 
 func TestCalculateProgress_AllComplete(t *testing.T) {
-	convoy := dashboard.ConvoyEntry{
-		Name:   "done-convoy",
+	company := dashboard.CompanyEntry{
+		Name:   "done-company",
 		Quests: []string{"q1", "q2"},
 	}
 	quests := []dashboard.QuestStatus{
@@ -54,7 +54,7 @@ func TestCalculateProgress_AllComplete(t *testing.T) {
 		{Name: "q2", Phase: "Complete"},
 	}
 
-	progress := CalculateProgress(convoy, quests)
+	progress := CalculateProgress(company, quests)
 
 	if progress.Completed != 2 {
 		t.Errorf("expected 2 completed, got %d", progress.Completed)
@@ -65,7 +65,7 @@ func TestCalculateProgress_AllComplete(t *testing.T) {
 }
 
 func TestCalculateProgress_MissingQuests(t *testing.T) {
-	convoy := dashboard.ConvoyEntry{
+	company := dashboard.CompanyEntry{
 		Name:   "sparse",
 		Quests: []string{"exists", "missing"},
 	}
@@ -73,7 +73,7 @@ func TestCalculateProgress_MissingQuests(t *testing.T) {
 		{Name: "exists", Phase: "Plan"},
 	}
 
-	progress := CalculateProgress(convoy, quests)
+	progress := CalculateProgress(company, quests)
 
 	// Missing quest should be gracefully skipped
 	if progress.Completed != 0 {
@@ -104,7 +104,7 @@ func TestBatchApprove_MultipleWorktrees(t *testing.T) {
 		GatePending: true,
 	})
 
-	convoy := dashboard.ConvoyEntry{
+	company := dashboard.CompanyEntry{
 		Name:   "batch-test",
 		Quests: []string{"q1", "q2"},
 	}
@@ -115,7 +115,7 @@ func TestBatchApprove_MultipleWorktrees(t *testing.T) {
 		},
 	}
 
-	approved, errs := BatchApprove(convoy, fs)
+	approved, errs := BatchApprove(company, fs)
 
 	if len(errs) != 0 {
 		t.Errorf("expected no errors, got %v", errs)
@@ -150,7 +150,7 @@ func TestBatchApprove_NoPendingGates(t *testing.T) {
 		GatePending: false,
 	})
 
-	convoy := dashboard.ConvoyEntry{
+	company := dashboard.CompanyEntry{
 		Name:   "no-gates",
 		Quests: []string{"q1"},
 	}
@@ -160,7 +160,7 @@ func TestBatchApprove_NoPendingGates(t *testing.T) {
 		},
 	}
 
-	approved, errs := BatchApprove(convoy, fs)
+	approved, errs := BatchApprove(company, fs)
 
 	if len(errs) != 0 {
 		t.Errorf("expected no errors, got %v", errs)
@@ -171,7 +171,7 @@ func TestBatchApprove_NoPendingGates(t *testing.T) {
 }
 
 func TestBatchApprove_MissingWorktree(t *testing.T) {
-	convoy := dashboard.ConvoyEntry{
+	company := dashboard.CompanyEntry{
 		Name:   "missing-wt",
 		Quests: []string{"q1", "q2"},
 	}
@@ -182,7 +182,7 @@ func TestBatchApprove_MissingWorktree(t *testing.T) {
 		},
 	}
 
-	approved, errs := BatchApprove(convoy, fs)
+	approved, errs := BatchApprove(company, fs)
 
 	// q1 should produce an error (can't load state), q2 is skipped (no mapping)
 	if len(approved) != 0 {
@@ -193,25 +193,25 @@ func TestBatchApprove_MissingWorktree(t *testing.T) {
 	}
 }
 
-func TestFindConvoyForQuest(t *testing.T) {
-	convoys := []dashboard.ConvoyEntry{
+func TestFindCompanyForQuest(t *testing.T) {
+	companies := []dashboard.CompanyEntry{
 		{Name: "API", Quests: []string{"q-api", "q-tests"}},
 		{Name: "Docs", Quests: []string{"q-docs"}},
 	}
 
-	if got := FindConvoyForQuest(convoys, "q-api"); got != "API" {
+	if got := FindCompanyForQuest(companies, "q-api"); got != "API" {
 		t.Errorf("expected 'API', got %q", got)
 	}
-	if got := FindConvoyForQuest(convoys, "q-docs"); got != "Docs" {
+	if got := FindCompanyForQuest(companies, "q-docs"); got != "Docs" {
 		t.Errorf("expected 'Docs', got %q", got)
 	}
-	if got := FindConvoyForQuest(convoys, "q-other"); got != "" {
+	if got := FindCompanyForQuest(companies, "q-other"); got != "" {
 		t.Errorf("expected empty string for ungrouped quest, got %q", got)
 	}
 }
 
 func TestProgressSummary(t *testing.T) {
-	p := ConvoyProgress{
+	p := CompanyProgress{
 		Name:       "API Work",
 		Total:      3,
 		InProgress: 2,
