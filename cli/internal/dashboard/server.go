@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -26,6 +27,8 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 		pollInterval: pollInterval,
 	}
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
+	s.mux.HandleFunc("GET /api/herald", s.handleHerald)
+	s.mux.HandleFunc("GET /api/herald/problems", s.handleProblems)
 	s.mux.HandleFunc("POST /api/gate/approve", s.handleGateApprove)
 	s.mux.HandleFunc("POST /api/gate/reject", s.handleGateReject)
 
@@ -155,6 +158,42 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		LembasCompleted: st.LembasCompleted,
 		MetadataUpdated: st.MetadataUpdated,
 	})
+}
+
+func (s *Server) worktreeDirs() []string {
+	status, err := DiscoverQuests(s.gitRoot)
+	if err != nil {
+		return nil
+	}
+	var dirs []string
+	for _, q := range status.Quests {
+		dirs = append(dirs, q.Worktree)
+	}
+	return dirs
+}
+
+func (s *Server) handleHerald(w http.ResponseWriter, r *http.Request) {
+	worktrees := s.worktreeDirs()
+	tidings, err := herald.ReadAll(worktrees, 50)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if tidings == nil {
+		tidings = []herald.Tiding{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tidings)
+}
+
+func (s *Server) handleProblems(w http.ResponseWriter, r *http.Request) {
+	worktrees := s.worktreeDirs()
+	problems := herald.DetectProblems(worktrees)
+	if problems == nil {
+		problems = []herald.Problem{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(problems)
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {

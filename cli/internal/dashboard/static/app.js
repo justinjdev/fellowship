@@ -12,6 +12,8 @@
     try {
       const data = await fetchStatus();
       render(data);
+      await fetchAndRenderTidings();
+      await fetchAndRenderProblems();
       const interval = (data.poll_interval || 5) * 1000;
       pollTimer = setInterval(poll, interval);
     } catch (err) {
@@ -34,6 +36,8 @@
       const data = await fetchStatus();
       detectChanges(data);
       render(data);
+      await fetchAndRenderTidings();
+      await fetchAndRenderProblems();
     } catch (err) {
       addActivity("Poll error: " + err.message);
     }
@@ -204,6 +208,91 @@
       if (old.gate_pending && !q.gate_pending) {
         addActivity((q.name || q.worktree) + ": gate resolved");
       }
+    });
+  }
+
+  // ── Event Stream ─────────────────────────────────
+
+  var EVENT_TYPE_CLASSES = {
+    gate_approved: "event-approved",
+    phase_transition: "event-approved",
+    gate_submitted: "event-submitted",
+    lembas_completed: "event-submitted",
+    metadata_updated: "event-submitted",
+    gate_rejected: "event-rejected",
+    file_modified: "event-neutral",
+  };
+
+  async function fetchAndRenderTidings() {
+    try {
+      var res = await fetch("/api/herald");
+      if (!res.ok) return;
+      var evts = await res.json();
+      renderEventStream(evts);
+    } catch (err) {
+      // silently ignore event fetch errors
+    }
+  }
+
+  function renderEventStream(evts) {
+    var container = document.getElementById("event-stream");
+    container.innerHTML = "";
+    if (!evts || evts.length === 0) {
+      var li = document.createElement("li");
+      li.className = "event-item event-neutral";
+      li.textContent = "No tidings recorded yet.";
+      container.appendChild(li);
+      return;
+    }
+    evts.forEach(function (evt) {
+      var li = document.createElement("li");
+      var cls = EVENT_TYPE_CLASSES[evt.type] || "event-neutral";
+      li.className = "event-item " + cls;
+
+      var timeStr = evt.timestamp;
+      try {
+        timeStr = new Date(evt.timestamp).toLocaleTimeString();
+      } catch (e) {}
+
+      var typeLabel = (evt.type || "").replace(/_/g, " ");
+      li.innerHTML =
+        '<span class="event-time">' + escapeHTML(timeStr) + "</span> " +
+        '<span class="event-quest">' + escapeHTML(evt.quest || "") + "</span> " +
+        '<span class="event-type-label">' + escapeHTML(typeLabel) + "</span>" +
+        (evt.detail ? ' <span class="event-detail">' + escapeHTML(evt.detail) + "</span>" : "");
+      container.appendChild(li);
+    });
+  }
+
+  // ── Problems Banner ────────────────────────────
+
+  async function fetchAndRenderProblems() {
+    try {
+      var res = await fetch("/api/herald/problems");
+      if (!res.ok) return;
+      var problems = await res.json();
+      renderProblems(problems);
+    } catch (err) {
+      // silently ignore
+    }
+  }
+
+  function renderProblems(problems) {
+    var banner = document.getElementById("problems-banner");
+    banner.innerHTML = "";
+    if (!problems || problems.length === 0) {
+      banner.style.display = "none";
+      return;
+    }
+    banner.style.display = "block";
+    problems.forEach(function (p) {
+      var badge = document.createElement("div");
+      badge.className = "problem-badge problem-" + p.severity;
+      badge.innerHTML =
+        '<span class="problem-severity">' + escapeHTML(p.severity) + "</span> " +
+        '<span class="problem-quest">' + escapeHTML(p.quest) + "</span>: " +
+        '<span class="problem-message">' + escapeHTML(p.message) + "</span>";
+      banner.appendChild(badge);
     });
   }
 
