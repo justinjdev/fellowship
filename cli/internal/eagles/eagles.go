@@ -55,7 +55,6 @@ func DefaultOptions() Options {
 	return Options{
 		GateThreshold: 10 * time.Minute,
 		ZombieTimeout: 15 * time.Minute,
-		Now:           time.Now(),
 	}
 }
 
@@ -172,7 +171,7 @@ func gateAge(gateID string, now time.Time) int {
 	return int(age.Seconds())
 }
 
-// latestModTime walks the worktree (excluding .git and tmp) to find the most
+// latestModTime walks the worktree (excluding .git, tmp, and node_modules) to find the most
 // recently modified file.
 func latestModTime(worktree string) time.Time {
 	var latest time.Time
@@ -180,9 +179,9 @@ func latestModTime(worktree string) time.Time {
 		if err != nil {
 			return nil
 		}
-		// Skip .git directory and tmp directory
+		// Skip .git, tmp (internal state), and node_modules directories
 		name := info.Name()
-		if info.IsDir() && (name == ".git" || name == "node_modules") {
+		if info.IsDir() && (name == ".git" || name == "tmp" || name == "node_modules") {
 			return filepath.SkipDir
 		}
 		if !info.IsDir() && info.ModTime().After(latest) {
