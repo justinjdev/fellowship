@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "shire rebuild --stdin",
+            "type": "command"
+          }
+        ],
+        "matcher": "Edit|Write|NotebookEdit|Bash"
+      }
+    ]
+  }
+}

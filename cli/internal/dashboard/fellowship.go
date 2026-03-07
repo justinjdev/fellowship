@@ -8,16 +8,24 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
+type CompanyEntry struct {
+	Name   string   `json:"name"`
+	Quests []string `json:"quests"` // quest names
+	Scouts []string `json:"scouts"` // scout names
+}
+
 type FellowshipState struct {
-	Version   int          `json:"version"`
-	Name      string       `json:"name"`
-	CreatedAt string       `json:"created_at"`
-	MainRepo  string       `json:"main_repo"`
-	Quests    []QuestEntry `json:"quests"`
-	Scouts    []ScoutEntry `json:"scouts"`
+	Version   int            `json:"version"`
+	Name      string         `json:"name"`
+	CreatedAt string         `json:"created_at"`
+	MainRepo  string         `json:"main_repo"`
+	Quests    []QuestEntry   `json:"quests"`
+	Scouts    []ScoutEntry   `json:"scouts"`
+	Companies []CompanyEntry  `json:"companies"`
 }
 
 type QuestEntry struct {
@@ -42,12 +50,15 @@ type QuestStatus struct {
 	GateID          *string `json:"gate_id"`
 	LembasCompleted bool    `json:"lembas_completed"`
 	MetadataUpdated bool    `json:"metadata_updated"`
+	ErrandsDone        int     `json:"errands_done"`
+	ErrandsTotal       int     `json:"errands_total"`
 }
 
 type DashboardStatus struct {
 	Name         string        `json:"name"`
 	Quests       []QuestStatus `json:"quests"`
 	Scouts       []ScoutEntry  `json:"scouts"`
+	Companies    []CompanyEntry `json:"companies"`
 	PollInterval int           `json:"poll_interval"`
 }
 
@@ -67,10 +78,14 @@ func discoverFromFellowshipState(fs *FellowshipState) (*DashboardStatus, error) 
 		Name:         fs.Name,
 		Quests:       []QuestStatus{},
 		Scouts:       fs.Scouts,
+		Companies:    fs.Companies,
 		PollInterval: 5,
 	}
 	if status.Scouts == nil {
 		status.Scouts = []ScoutEntry{}
+	}
+	if status.Companies == nil {
+		status.Companies = []CompanyEntry{}
 	}
 	for _, q := range fs.Quests {
 		qs, err := loadQuestStatus(q.Name, q.Worktree)
@@ -126,6 +141,7 @@ func loadQuestStatus(name, worktree string) (*QuestStatus, error) {
 	if err != nil {
 		return nil, err
 	}
+	done, total := LoadErrandProgress(worktree)
 	return &QuestStatus{
 		Name:            name,
 		Worktree:        worktree,
@@ -134,7 +150,19 @@ func loadQuestStatus(name, worktree string) (*QuestStatus, error) {
 		GateID:          s.GateID,
 		LembasCompleted: s.LembasCompleted,
 		MetadataUpdated: s.MetadataUpdated,
+		ErrandsDone:        done,
+		ErrandsTotal:       total,
 	}, nil
+}
+
+// LoadErrandProgress loads the hook file from a worktree and returns progress counts.
+func LoadErrandProgress(worktree string) (done, total int) {
+	errandPath := filepath.Join(worktree, "tmp", "quest-errands.json")
+	h, err := errand.Load(errandPath)
+	if err != nil {
+		return 0, 0
+	}
+	return errand.Progress(h)
 }
 
 func LoadFellowshipState(path string) (*FellowshipState, error) {

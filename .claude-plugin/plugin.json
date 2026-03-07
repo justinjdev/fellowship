@@ -1,10 +1,14 @@
 {
   "name": "fellowship",
   "description": "Multi-quest orchestrator for Claude Code. Coordinates parallel quests via agent teams, with structured research-plan-implement lifecycles and isolation via worktrees.",
-  "version": "1.6.0",
+  "version": "1.6.3",
   "author": {
     "name": "justinjdev"
   },
   "repository": "https://github.com/justinjdev/fellowship",
-  "license": "MIT"
+  "license": "MIT",
+  "skills": ["./plugin/skills/"],
+  "agents": ["./plugin/agents/palantir.md", "./plugin/agents/quest-runner.md", "./plugin/agents/scout.md"],
+  "commands": ["./plugin/commands/"],
+  "hooks": "./plugin/hooks/hooks.json"
 }

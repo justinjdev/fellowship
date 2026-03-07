@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/justinjdev/fellowship/cli/internal/tome"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -65,6 +66,18 @@ func GateSubmit(s *state.State, input *HookInput) SubmitResult {
 	s.GatePending = true
 	s.GateID = &gateID
 	return SubmitResult{StateChanged: true}
+}
+
+// RecordGateSubmitted records a "submitted" gate event in the quest tome.
+// If autoApproved is true, the phase is also recorded as completed.
+func RecordGateSubmitted(tomePath string, phase string, autoApproved bool) {
+	c := tome.LoadOrCreate(tomePath)
+	tome.RecordGate(c, phase, "submitted")
+	if autoApproved {
+		tome.RecordGate(c, phase, "approved")
+		tome.RecordPhase(c, phase)
+	}
+	tome.Save(tomePath, c)
 }
 
 func hasGateMarker(content string) bool {

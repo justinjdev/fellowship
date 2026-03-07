@@ -5,13 +5,13 @@ Claude Code plugin. Skills, agents, and docs are pure markdown. Gate enforcement
 ## Structure
 
 ```
-.claude-plugin/plugin.json   # Plugin manifest (name, version, repo URL)
-skills/<name>/SKILL.md       # Skills — auto-invocable by Claude (quest, scout, council, etc.)
-commands/<name>.md            # Commands — user-invoked only, no base context cost
-agents/<name>.md             # Agent definitions
-hooks/hooks.json             # Plugin hook definitions (gate enforcement)
-hooks/scripts/fellowship.sh  # Thin wrapper — ensures binary exists, then exec's it
-hooks/scripts/ensure-binary.sh # Downloads CLI binary from GitHub releases
+.claude-plugin/plugin.json        # Plugin manifest at repo root (points to plugin/ paths)
+plugin/skills/<name>/SKILL.md     # Skills — auto-invocable by Claude (quest, scout, council, etc.)
+plugin/commands/<name>.md          # Commands — user-invoked only, no base context cost
+plugin/agents/<name>.md           # Agent definitions
+plugin/hooks/hooks.json           # Plugin hook definitions (gate enforcement)
+plugin/hooks/scripts/fellowship.sh  # Thin wrapper — ensures binary exists, then exec's it
+plugin/hooks/scripts/ensure-binary.sh # Downloads CLI binary from GitHub releases
 ```
 
 ## Conventions
