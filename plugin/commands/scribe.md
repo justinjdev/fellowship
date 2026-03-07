@@ -38,6 +38,7 @@ Write a template with YAML frontmatter and phase-specific sections. Every line o
 
 ```markdown
 ---
+name: {name}
 description: {one-line description}
 keywords: [{comma-separated trigger words}]
 ---
