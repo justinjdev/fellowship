@@ -3,6 +3,7 @@ package hooks
 import (
 	"fmt"
 
+	"github.com/justinjdev/fellowship/cli/internal/tome"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -17,4 +18,11 @@ func CompletionGuard(s *state.State, input *HookInput) HookResult {
 		}
 	}
 	return HookResult{}
+}
+
+// MarkTomeCompleted marks the quest tome status as "completed".
+func MarkTomeCompleted(tomePath string) {
+	c := tome.LoadOrCreate(tomePath)
+	c.Status = "completed"
+	tome.Save(tomePath, c)
 }

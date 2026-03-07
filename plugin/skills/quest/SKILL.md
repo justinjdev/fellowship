@@ -89,6 +89,8 @@ If the spawn prompt contains a `RESUME CONTEXT:` block, this is a recovered ques
 6. **Skip `/council`** — the checkpoint provides equivalent context from the previous session
 7. **Jump to current phase:** Begin executing from the phase recorded in the state file (e.g., if phase is "Implement", skip Research and Plan, go directly to Implement)
 
+On respawn, your tome at `tmp/quest-tome.json` contains your full history — phases completed, gates passed/rejected, files touched. Use this to orient faster than the checkpoint alone.
+
 If no checkpoint exists (stale classification), restart the current phase from scratch — run `/council` for orientation, then begin the phase normally.
 
 After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, update metadata, send [GATE] message).
@@ -128,6 +130,7 @@ After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, upda
      ```
      Populate `auto_approve_gates` from `config.gates.autoApprove` if set.
    - Store the worktree path in task metadata: `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})`
+   - The quest tome at `tmp/quest-tome.json` is automatically maintained by hooks — it records phases completed, gate events, and files touched. You do not need to manage it manually.
 4. **Orient:** Invoke `/council` to load task-relevant context.
 
 If the user has already described their task, pass the description directly. Otherwise, council will ask.
@@ -241,7 +244,7 @@ Goal: Convention compliance, code quality, and verified passing state before com
 
 ### Phase 5: Complete
 
-Goal: Integrate the work — squash/merge, PR creation, worktree cleanup.
+Goal: Integrate the work — squash/merge, PR creation, worktree cleanup. The quest tome is automatically marked "completed" by hooks when the task completes.
 
 **Actions:**
 1. Invoke `superpowers:finishing-a-development-branch` to present integration options

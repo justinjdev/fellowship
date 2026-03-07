@@ -19,6 +19,7 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/install"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/status"
+	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
 var version = "dev"
@@ -50,6 +51,8 @@ func main() {
 		os.Exit(runInit())
 	case "status":
 		os.Exit(runStatus(os.Args[2:]))
+	case "tome":
+		os.Exit(runTome(os.Args[2:]))
 	case "eagles":
 		os.Exit(runEagles(os.Args[2:]))
 	case "errand":
@@ -73,11 +76,13 @@ Hook commands (called by Claude Code hooks, read stdin):
   hook gate-prereq       Track lembas skill invocation
   hook metadata-track    Track phase metadata updates
   hook completion-guard  Block task completion unless phase is Complete
+  hook file-track        Record file touches in quest tome
 
 Agent/lead commands:
   gate status            Show current phase, prereqs, pending state
   gate approve           Approve a pending gate (advances to next phase)
   gate reject            Reject a pending gate (clears pending, keeps phase)
+  tome show [--json]     Show quest tome (phases, gates, files touched)
   status [--json]        Scan worktrees and show fellowship recovery status
   eagles                 Scan quest health and write eagles report
     --dir DIR            Git repo root (default: auto-detect)
@@ -150,15 +155,27 @@ func runHook(name string) int {
 	case "gate-guard":
 		result = hooks.GateGuard(s, input)
 	case "gate-submit":
+		prevPhase := s.Phase
 		sr := hooks.GateSubmit(s, input)
 		result = hooks.HookResult{Block: sr.Block, Message: sr.Message}
 		stateChanged = sr.StateChanged
+		if sr.StateChanged && !sr.Block {
+			tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+			hooks.RecordGateSubmitted(tomePath, prevPhase, s.Phase != prevPhase)
+		}
 	case "gate-prereq":
 		stateChanged = hooks.GatePrereq(s, input)
 	case "metadata-track":
 		stateChanged = hooks.MetadataTrack(s, input)
 	case "completion-guard":
 		result = hooks.CompletionGuard(s, input)
+		if !result.Block && input.ToolInput.Status == "completed" {
+			tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+			hooks.MarkTomeCompleted(tomePath)
+		}
+	case "file-track":
+		tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+		hooks.FileTrack(s, input, tomePath)
 	default:
 		fmt.Fprintf(os.Stderr, "fellowship: unknown hook %q\n", name)
 		return 2
@@ -212,6 +229,7 @@ func runGate(args []string) int {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
 		}
+		prevPhase := s.Phase
 		s.GatePending = false
 		s.Phase = nextPhase
 		s.GateID = nil
@@ -221,6 +239,11 @@ func runGate(args []string) int {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
 		}
+		tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+		c := tome.LoadOrCreate(tomePath)
+		tome.RecordGate(c, prevPhase, "approved")
+		tome.RecordPhase(c, prevPhase)
+		tome.Save(tomePath, c)
 		fmt.Printf("Gate approved. Phase advanced to %s.\n", nextPhase)
 		return 0
 
@@ -235,6 +258,10 @@ func runGate(args []string) int {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
 		}
+		tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+		c := tome.LoadOrCreate(tomePath)
+		tome.RecordGate(c, s.Phase, "rejected")
+		tome.Save(tomePath, c)
 		fmt.Println("Gate rejected. Teammate unblocked to address feedback.")
 		return 0
 
@@ -421,6 +448,84 @@ func runDashboard(args []string) int {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
+	return 0
+}
+
+func runTome(args []string) int {
+	if len(args) < 1 || args[0] != "show" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship tome show [--dir <path>] [--json]")
+		return 1
+	}
+
+	fs := flag.NewFlagSet("tome show", flag.ExitOnError)
+	dir := fs.String("dir", "", "Directory to search for tome (default: auto-detect)")
+	jsonOut := fs.Bool("json", false, "Output as JSON")
+	fs.Parse(args[1:])
+
+	searchDir := *dir
+	if searchDir == "" {
+		searchDir = gitRootOrCwd()
+	}
+
+	tomePath, err := tome.FindTome(searchDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	if tomePath == "" {
+		fmt.Fprintln(os.Stderr, "No quest tome found.")
+		return 1
+	}
+
+	c, err := tome.Load(tomePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	if *jsonOut {
+		data, _ := json.MarshalIndent(c, "", "  ")
+		fmt.Println(string(data))
+		return 0
+	}
+
+	fmt.Printf("Quest Tome: %s\n", c.QuestName)
+	fmt.Printf("Status:   %s\n", c.Status)
+	fmt.Printf("Task:     %s\n", c.Task)
+	fmt.Printf("Respawns: %d\n", c.Respawns)
+	fmt.Println()
+
+	if len(c.PhasesCompleted) > 0 {
+		fmt.Println("Phases Completed:")
+		for _, p := range c.PhasesCompleted {
+			dur := ""
+			if p.Duration != "" {
+				dur = fmt.Sprintf(" (%s)", p.Duration)
+			}
+			fmt.Printf("  - %s at %s%s\n", p.Phase, p.CompletedAt, dur)
+		}
+		fmt.Println()
+	}
+
+	if len(c.GateHistory) > 0 {
+		fmt.Println("Gate History:")
+		for _, g := range c.GateHistory {
+			reason := ""
+			if g.Reason != "" {
+				reason = fmt.Sprintf(" — %s", g.Reason)
+			}
+			fmt.Printf("  - [%s] %s %s%s\n", g.Timestamp, g.Phase, g.Action, reason)
+		}
+		fmt.Println()
+	}
+
+	if len(c.FilesTouched) > 0 {
+		fmt.Printf("Files Touched (%d):\n", len(c.FilesTouched))
+		for _, f := range c.FilesTouched {
+			fmt.Printf("  - %s\n", f)
+		}
+	}
+
 	return 0
 }
 
