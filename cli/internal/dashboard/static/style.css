@@ -1,0 +1,280 @@
+:root {
+    --bg-deep: #1a1510;
+    --bg-card: #2a2118;
+    --bg-card-pending: #2e2214;
+    --text-primary: #d4c4a8;
+    --text-secondary: #8a7d6b;
+    --gold: #c8a84e;
+    --gold-dim: #8a7a3e;
+    --amber-glow: rgba(200, 168, 78, 0.15);
+    --green: #5a8a5a;
+    --red: #8a4a4a;
+    --font-heading: 'Cinzel', serif;
+    --font-body: 'Crimson Text', serif;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 0 1rem 2rem;
+}
+
+/* ── Header ─────────────────────────────────────── */
+
+header {
+    padding: 1.5rem 0 1rem;
+    border-bottom: 2px solid var(--gold-dim);
+    border-image: repeating-linear-gradient(
+        90deg,
+        var(--gold-dim) 0px,
+        var(--gold-dim) 8px,
+        transparent 8px,
+        transparent 14px,
+        var(--gold) 14px,
+        var(--gold) 16px,
+        transparent 16px,
+        transparent 22px
+    ) 2;
+    margin-bottom: 1.5rem;
+    position: relative;
+}
+
+.header-inner {
+    max-width: 720px;
+    margin: 0 auto;
+    position: relative;
+}
+
+header h1 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 1.6rem;
+    color: var(--gold);
+    letter-spacing: 0.08em;
+}
+
+.header-stats {
+    margin-top: 0.25rem;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+
+.stat-sep {
+    margin: 0 0.4rem;
+    opacity: 0.5;
+}
+
+/* Poll indicator */
+
+.poll-dot {
+    position: absolute;
+    top: 0.25rem;
+    right: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--gold-dim);
+    transition: background 0.3s;
+}
+
+.poll-dot.active {
+    background: var(--gold);
+    animation: pulse 1s ease-in-out;
+}
+
+@keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(200, 168, 78, 0.4); }
+    50% { box-shadow: 0 0 0 6px rgba(200, 168, 78, 0); }
+}
+
+/* ── Main / Cards ───────────────────────────────── */
+
+main {
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.cards-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.quest-card {
+    background: var(--bg-card);
+    border: 1px solid #3a3028;
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.quest-card.pending {
+    background: var(--bg-card-pending);
+    border-color: var(--gold-dim);
+    box-shadow: 0 0 16px var(--amber-glow), 0 0 4px var(--amber-glow);
+}
+
+.quest-card h3 {
+    font-family: var(--font-heading);
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.quest-phase {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+}
+
+/* Progress bar */
+
+.progress-bar {
+    display: flex;
+    gap: 3px;
+    height: 6px;
+    margin-bottom: 0.75rem;
+}
+
+.progress-segment {
+    flex: 1;
+    background: #332a1e;
+    border-radius: 3px;
+    transition: background 0.3s;
+}
+
+.progress-segment.filled {
+    background: var(--gold);
+}
+
+/* Gate buttons */
+
+.gate-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.btn {
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    padding: 0.4rem 1rem;
+    border: 1px solid;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.btn-approve {
+    background: rgba(90, 138, 90, 0.2);
+    border-color: var(--green);
+    color: #8aba8a;
+}
+
+.btn-approve:hover {
+    background: rgba(90, 138, 90, 0.35);
+}
+
+.btn-reject {
+    background: rgba(138, 74, 74, 0.15);
+    border-color: var(--red);
+    color: #b07070;
+}
+
+.btn-reject:hover {
+    background: rgba(138, 74, 74, 0.3);
+}
+
+/* Reject confirmation */
+
+.reject-confirm {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.reject-confirm.visible {
+    display: flex;
+}
+
+.btn-confirm-reject {
+    background: rgba(138, 74, 74, 0.3);
+    border-color: var(--red);
+    color: #c07070;
+}
+
+.btn-cancel {
+    background: transparent;
+    border-color: var(--text-secondary);
+    color: var(--text-secondary);
+}
+
+/* ── Activity Feed ──────────────────────────────── */
+
+#activity-section {
+    max-width: 720px;
+    margin: 2rem auto 0;
+}
+
+#activity-section h2 {
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gold-dim);
+    letter-spacing: 0.06em;
+    margin-bottom: 0.5rem;
+}
+
+#activity-feed {
+    list-style: none;
+    max-height: 240px;
+    overflow-y: auto;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+#activity-feed li {
+    padding: 0.2rem 0;
+    border-bottom: 1px solid rgba(58, 48, 40, 0.5);
+}
+
+#activity-feed::-webkit-scrollbar {
+    width: 4px;
+}
+
+#activity-feed::-webkit-scrollbar-thumb {
+    background: #3a3028;
+    border-radius: 2px;
+}
+
+/* ── Responsive ─────────────────────────────────── */
+
+@media (max-width: 600px) {
+    body {
+        font-size: 15px;
+        padding: 0 0.75rem 1.5rem;
+    }
+
+    header h1 {
+        font-size: 1.3rem;
+    }
+
+    .quest-card {
+        padding: 1rem 1.1rem;
+    }
+}

@@ -1,12 +1,16 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
+	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -39,6 +43,8 @@ func main() {
 		os.Exit(runUninstall())
 	case "init":
 		os.Exit(runInit())
+	case "dashboard":
+		os.Exit(runDashboard(os.Args[2:]))
 	case "version":
 		fmt.Println(version)
 	default:
@@ -66,6 +72,11 @@ Setup commands:
   install                Merge gate hooks into .claude/settings.json
   uninstall              Remove gate hooks from .claude/settings.json
   init                   Create tmp/quest-state.json with defaults
+
+Dashboard:
+  dashboard              Start live web dashboard
+    --port N             HTTP port (default: 3000)
+    --poll N             Poll interval in seconds (default: 5)
 
 Other:
   version                Print version`)
@@ -253,6 +264,34 @@ func runInit() int {
 		return 1
 	}
 	fmt.Println("State file created at tmp/quest-state.json")
+	return 0
+}
+
+func runDashboard(args []string) int {
+	fs := flag.NewFlagSet("dashboard", flag.ExitOnError)
+	port := fs.Int("port", 3000, "HTTP port")
+	poll := fs.Int("poll", 5, "Poll interval in seconds")
+	fs.Parse(args)
+
+	root := gitRootOrCwd()
+	srv := dashboard.NewServer(root, *poll)
+
+	addr := fmt.Sprintf("localhost:%d", *port)
+	url := fmt.Sprintf("http://%s", addr)
+	fmt.Printf("Fellowship dashboard: %s\n", url)
+
+	// Open browser
+	switch runtime.GOOS {
+	case "darwin":
+		exec.Command("open", url).Start()
+	case "linux":
+		exec.Command("xdg-open", url).Start()
+	}
+
+	if err := http.ListenAndServe(addr, srv); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
 	return 0
 }
 

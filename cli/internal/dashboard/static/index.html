@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fellowship Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header id="header">
+        <div class="header-inner">
+            <h1 id="fellowship-name">Fellowship</h1>
+            <div class="header-stats">
+                <span id="quest-count" class="stat">0 quests</span>
+                <span class="stat-sep">&middot;</span>
+                <span id="scout-count" class="stat">0 scouts</span>
+            </div>
+            <div id="poll-indicator" class="poll-dot" title="Polling"></div>
+        </div>
+    </header>
+
+    <main id="main">
+        <div id="quest-cards" class="cards-container"></div>
+    </main>
+
+    <section id="activity-section">
+        <h2>Activity</h2>
+        <ul id="activity-feed"></ul>
+    </section>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
