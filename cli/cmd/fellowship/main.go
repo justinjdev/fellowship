@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/justinjdev/fellowship/cli/internal/company"
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/eagles"
 	"github.com/justinjdev/fellowship/cli/internal/errand"
@@ -51,6 +52,12 @@ func main() {
 		os.Exit(runInit())
 	case "status":
 		os.Exit(runStatus(os.Args[2:]))
+	case "company":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: fellowship company <list|show|approve>")
+			os.Exit(1)
+		}
+		os.Exit(runCompany(os.Args[2:]))
 	case "tome":
 		os.Exit(runTome(os.Args[2:]))
 	case "eagles":
@@ -93,6 +100,14 @@ Setup commands:
   install                Merge gate hooks into .claude/settings.json
   uninstall              Remove gate hooks from .claude/settings.json
   init                   Create tmp/quest-state.json with defaults
+
+Company commands:
+  company list            List all companies and their quest/scout counts
+    --dir PATH            Git repo root (default: auto-detect)
+  company show <name>     Show detailed company status (phases, progress)
+    --dir PATH            Git repo root (default: auto-detect)
+  company approve <name>  Batch-approve all pending gates in a company
+    --dir PATH            Git repo root (default: auto-detect)
 
 Errands (persistent work items):
   errand init            Create initial quest-errands.json
@@ -449,6 +464,77 @@ func runDashboard(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+func runCompany(args []string) int {
+	sub := args[0]
+	rest := args[1:]
+
+	switch sub {
+	case "list":
+		fs := flag.NewFlagSet("company list", flag.ExitOnError)
+		dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+		fs.Parse(rest)
+
+		root := *dir
+		if root == "" {
+			root = gitRootOrCwd()
+		}
+		statePath := filepath.Join(root, "tmp", "fellowship-state.json")
+		if err := company.List(statePath); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+			return 1
+		}
+		return 0
+
+	case "show":
+		fs := flag.NewFlagSet("company show", flag.ExitOnError)
+		dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+		fs.Parse(rest)
+
+		if fs.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "usage: fellowship company show <name> [--dir PATH]")
+			return 1
+		}
+		name := fs.Arg(0)
+
+		root := *dir
+		if root == "" {
+			root = gitRootOrCwd()
+		}
+		statePath := filepath.Join(root, "tmp", "fellowship-state.json")
+		if err := company.Show(statePath, name); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+			return 1
+		}
+		return 0
+
+	case "approve":
+		fs := flag.NewFlagSet("company approve", flag.ExitOnError)
+		dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+		fs.Parse(rest)
+
+		if fs.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "usage: fellowship company approve <name> [--dir PATH]")
+			return 1
+		}
+		name := fs.Arg(0)
+
+		root := *dir
+		if root == "" {
+			root = gitRootOrCwd()
+		}
+		statePath := filepath.Join(root, "tmp", "fellowship-state.json")
+		if err := company.Approve(statePath, name); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+			return 1
+		}
+		return 0
+
+	default:
+		fmt.Fprintf(os.Stderr, "unknown company command: %s\n", sub)
+		return 1
+	}
 }
 
 func runTome(args []string) int {

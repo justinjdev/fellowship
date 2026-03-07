@@ -64,19 +64,83 @@
     document.getElementById("quest-count").textContent = quests.length + " quest" + (quests.length !== 1 ? "s" : "");
     document.getElementById("scout-count").textContent = scouts.length + " scout" + (scouts.length !== 1 ? "s" : "");
 
-    // Quest cards
+    // Quest cards — group by company
     const container = document.getElementById("quest-cards");
     container.innerHTML = "";
-    quests.forEach(function (q) {
-      container.appendChild(renderCard(q));
+    var companies = status.companies || [];
+    var rendered = {};
+
+    companies.forEach(function (c) {
+      var companyQuests = quests.filter(function (q) {
+        return c.quests && c.quests.indexOf(q.name) !== -1;
+      });
+      var companyScouts = scouts.filter(function (s) {
+        return c.scouts && c.scouts.indexOf(s.name) !== -1;
+      });
+      if (companyQuests.length === 0 && companyScouts.length === 0) return;
+
+      container.appendChild(renderCompanyHeader(c, companyQuests));
+
+      companyQuests.forEach(function (q) {
+        container.appendChild(renderCard(q));
+        rendered[q.name] = true;
+      });
+      companyScouts.forEach(function (s) {
+        container.appendChild(renderScoutCard(s));
+        rendered[s.name] = true;
+      });
     });
 
-    // Scouts as simple cards
-    scouts.forEach(function (s) {
-      container.appendChild(renderScoutCard(s));
-    });
+    // Ungrouped quests and scouts
+    var ungroupedQuests = quests.filter(function (q) { return !rendered[q.name]; });
+    var ungroupedScouts = scouts.filter(function (s) { return !rendered[s.name]; });
+    if (ungroupedQuests.length > 0 || ungroupedScouts.length > 0) {
+      if (companies.length > 0) {
+        var ungroupedHeader = document.createElement("div");
+        ungroupedHeader.className = "company-header";
+        ungroupedHeader.innerHTML = "<h2>Ungrouped</h2>";
+        container.appendChild(ungroupedHeader);
+      }
+      ungroupedQuests.forEach(function (q) {
+        container.appendChild(renderCard(q));
+      });
+      ungroupedScouts.forEach(function (s) {
+        container.appendChild(renderScoutCard(s));
+      });
+    }
 
     prevStatus = status;
+  }
+
+  function renderCompanyHeader(company, companyQuests) {
+    var header = document.createElement("div");
+    header.className = "company-header";
+
+    var implementPlus = 0;
+    var total = (company.quests || []).length + (company.scouts || []).length;
+    var hasPending = false;
+
+    companyQuests.forEach(function (q) {
+      var idx = PHASES.indexOf(q.phase);
+      if (idx >= 3) implementPlus++; // Implement+
+      if (q.gate_pending) hasPending = true;
+    });
+
+    var summary = implementPlus + "/" + total + " quests in Implement+";
+    header.innerHTML = "<h2>" + escapeHTML(company.name) + "</h2>" +
+      '<span class="company-summary">' + escapeHTML(summary) + "</span>";
+
+    if (hasPending) {
+      var approveAllBtn = document.createElement("button");
+      approveAllBtn.className = "btn btn-approve";
+      approveAllBtn.textContent = "Approve All";
+      approveAllBtn.addEventListener("click", function () {
+        window.__approveCompany(company.name);
+      });
+      header.appendChild(approveAllBtn);
+    }
+
+    return header;
   }
 
   function renderCard(quest) {
@@ -194,6 +258,21 @@
       poll();
     } catch (err) {
       addActivity("Approve failed: " + err.message);
+    }
+  };
+
+  window.__approveCompany = async function (name) {
+    try {
+      var res = await fetch("/api/company/" + encodeURIComponent(name) + "/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error("status " + res.status);
+      var data = await res.json();
+      addActivity("Company '" + name + "': approved " + data.approved.length + " gate(s)");
+      poll();
+    } catch (err) {
+      addActivity("Company approve failed: " + err.message);
     }
   };
 
