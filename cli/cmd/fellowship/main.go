@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
 	"github.com/justinjdev/fellowship/cli/internal/state"
+	"github.com/justinjdev/fellowship/cli/internal/status"
 )
 
 var version = "dev"
@@ -43,6 +45,8 @@ func main() {
 		os.Exit(runUninstall())
 	case "init":
 		os.Exit(runInit())
+	case "status":
+		os.Exit(runStatus(os.Args[2:]))
 	case "dashboard":
 		os.Exit(runDashboard(os.Args[2:]))
 	case "version":
@@ -67,6 +71,7 @@ Agent/lead commands:
   gate status            Show current phase, prereqs, pending state
   gate approve           Approve a pending gate (advances to next phase)
   gate reject            Reject a pending gate (clears pending, keeps phase)
+  status [--json]        Scan worktrees and show fellowship recovery status
 
 Setup commands:
   install                Merge gate hooks into .claude/settings.json
@@ -264,6 +269,66 @@ func runInit() int {
 		return 1
 	}
 	fmt.Println("State file created at tmp/quest-state.json")
+	return 0
+}
+
+func runStatus(args []string) int {
+	fs := flag.NewFlagSet("status", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	jsonOut := fs.Bool("json", false, "Output as JSON")
+	fs.Parse(args)
+
+	root := *dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+
+	result, err := status.Scan(root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	if *jsonOut {
+		data, _ := json.MarshalIndent(result, "", "  ")
+		fmt.Println(string(data))
+		return 0
+	}
+
+	fmt.Println("Fellowship Status")
+	fmt.Println(strings.Repeat("\u2501", 40))
+
+	if result.Fellowship != nil {
+		fmt.Printf("Name: %s\n", result.Fellowship.Name)
+		fmt.Println()
+	}
+
+	if len(result.Quests) == 0 && len(result.MergedBranches) == 0 {
+		fmt.Println("No active quests found.")
+		return 0
+	}
+
+	for _, q := range result.Quests {
+		checkpoint := "no checkpoint"
+		if q.HasCheckpoint {
+			checkpoint = "checkpoint \u2713"
+		}
+		changes := "clean"
+		if q.HasUncommitted {
+			changes = "uncommitted changes"
+		}
+		fmt.Printf("%-20s \u2502 %-10s \u2502 %-14s \u2502 %-20s \u2502 %s\n",
+			q.Name, q.Phase, checkpoint, changes, q.Classification)
+	}
+
+	if len(result.MergedBranches) > 0 {
+		fmt.Println()
+		fmt.Println("Merged:")
+		for _, b := range result.MergedBranches {
+			fmt.Printf("  %s\n", b)
+		}
+	}
+
 	return 0
 }
 
