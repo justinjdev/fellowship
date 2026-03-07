@@ -5,12 +5,14 @@
 
   let prevStatus = null;
   let pollTimer = null;
+  let eaglesData = null;
 
   // ── Bootstrap ──────────────────────────────────
 
   async function init() {
     try {
       const data = await fetchStatus();
+      eaglesData = await fetchEagles();
       render(data);
       const interval = (data.poll_interval || 5) * 1000;
       pollTimer = setInterval(poll, interval);
@@ -25,6 +27,16 @@
     return res.json();
   }
 
+  async function fetchEagles() {
+    try {
+      const res = await fetch("/api/eagles");
+      if (!res.ok) return null;
+      return res.json();
+    } catch (err) {
+      return null;
+    }
+  }
+
   // ── Polling ────────────────────────────────────
 
   async function poll() {
@@ -32,6 +44,7 @@
     dot.classList.add("active");
     try {
       const data = await fetchStatus();
+      eaglesData = await fetchEagles();
       detectChanges(data);
       render(data);
     } catch (err) {
@@ -79,8 +92,11 @@
     }
     progressHTML += "</div>";
 
+    var eaglesHealth = getQuestHealth(quest.worktree);
+    var badgeHTML = eaglesHealth ? " " + renderHealthBadge(eaglesHealth.health) : "";
+
     card.innerHTML =
-      "<h3>" + escapeHTML(quest.name || quest.worktree) + "</h3>" +
+      "<h3>" + escapeHTML(quest.name || quest.worktree) + badgeHTML + "</h3>" +
       '<div class="quest-phase">' + escapeHTML(quest.phase || "Unknown") + "</div>" +
       progressHTML;
 
@@ -205,6 +221,44 @@
         addActivity((q.name || q.worktree) + ": gate resolved");
       }
     });
+  }
+
+  // ── Eagles Helpers ─────────────────────────────
+
+  var HEALTH_COLORS = {
+    working: "#5a8a5a",
+    stalled: "#c8a84e",
+    zombie: "#8a4a4a",
+    idle: "#6a6a6a",
+    complete: "#5a8a5a"
+  };
+
+  var HEALTH_BG = {
+    working: "rgba(90, 138, 90, 0.2)",
+    stalled: "rgba(200, 168, 78, 0.2)",
+    zombie: "rgba(138, 74, 74, 0.2)",
+    idle: "rgba(106, 106, 106, 0.2)",
+    complete: "rgba(90, 138, 90, 0.15)"
+  };
+
+  function getQuestHealth(worktree) {
+    if (!eaglesData || !eaglesData.quests) return null;
+    for (var i = 0; i < eaglesData.quests.length; i++) {
+      if (eaglesData.quests[i].worktree === worktree) {
+        return eaglesData.quests[i];
+      }
+    }
+    return null;
+  }
+
+  function renderHealthBadge(health) {
+    if (!health) return "";
+    var color = HEALTH_COLORS[health] || "#6a6a6a";
+    var bg = HEALTH_BG[health] || "rgba(106, 106, 106, 0.2)";
+    return '<span class="health-badge" style="' +
+      "display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8rem;" +
+      "border:1px solid " + color + ";background:" + bg + ";color:" + color + ";" +
+      '">' + escapeHTML(health) + "</span>";
   }
 
   // ── Helpers ────────────────────────────────────
