@@ -1,5 +1,4 @@
 ---
-name: settings
 description: View or edit fellowship configuration (~/.claude/fellowship.json). Run /settings to see current settings, change values, or reset to defaults.
 ---
 

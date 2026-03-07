@@ -1,5 +1,4 @@
 ---
-name: red-book
 description: Use after receiving PR review feedback. Extracts conventions from reviewer comments and offers to add them to CLAUDE.md. Closes the convention learning loop.
 ---
 

@@ -1,5 +1,4 @@
 ---
-name: scribe
 description: Create a project-specific quest template by analyzing codebase conventions, team patterns, and domain rules. Use when you want to encode institutional knowledge into quest guidance.
 ---
 
@@ -39,7 +38,6 @@ Write a template with YAML frontmatter and phase-specific sections. Every line o
 
 ```markdown
 ---
-name: {name}
 description: {one-line description}
 keywords: [{comma-separated trigger words}]
 ---

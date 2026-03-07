@@ -1,5 +1,4 @@
 ---
-name: chronicle
 description: Use when joining a new codebase or starting to use AI tooling on an existing project. Interactively walks through the codebase to extract conventions, identify reference files, and generate a project-specific CLAUDE.md conventions section. Run this once per codebase, then maintain with PR feedback capture.
 ---
 
