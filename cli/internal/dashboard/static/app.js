@@ -12,7 +12,7 @@
     try {
       const data = await fetchStatus();
       render(data);
-      await fetchAndRenderEvents();
+      await fetchAndRenderTidings();
       await fetchAndRenderProblems();
       const interval = (data.poll_interval || 5) * 1000;
       pollTimer = setInterval(poll, interval);
@@ -36,7 +36,7 @@
       const data = await fetchStatus();
       detectChanges(data);
       render(data);
-      await fetchAndRenderEvents();
+      await fetchAndRenderTidings();
       await fetchAndRenderProblems();
     } catch (err) {
       addActivity("Poll error: " + err.message);
@@ -223,9 +223,9 @@
     file_modified: "event-neutral",
   };
 
-  async function fetchAndRenderEvents() {
+  async function fetchAndRenderTidings() {
     try {
-      var res = await fetch("/api/events");
+      var res = await fetch("/api/herald");
       if (!res.ok) return;
       var evts = await res.json();
       renderEventStream(evts);
@@ -240,7 +240,7 @@
     if (!evts || evts.length === 0) {
       var li = document.createElement("li");
       li.className = "event-item event-neutral";
-      li.textContent = "No events recorded yet.";
+      li.textContent = "No tidings recorded yet.";
       container.appendChild(li);
       return;
     }
@@ -268,7 +268,7 @@
 
   async function fetchAndRenderProblems() {
     try {
-      var res = await fetch("/api/problems");
+      var res = await fetch("/api/herald/problems");
       if (!res.ok) return;
       var problems = await res.json();
       renderProblems(problems);

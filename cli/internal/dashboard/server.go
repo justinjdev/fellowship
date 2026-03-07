@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/justinjdev/fellowship/cli/internal/events"
+	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -27,8 +27,8 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 		pollInterval: pollInterval,
 	}
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
-	s.mux.HandleFunc("GET /api/events", s.handleEvents)
-	s.mux.HandleFunc("GET /api/problems", s.handleProblems)
+	s.mux.HandleFunc("GET /api/herald", s.handleHerald)
+	s.mux.HandleFunc("GET /api/herald/problems", s.handleProblems)
 	s.mux.HandleFunc("POST /api/gate/approve", s.handleGateApprove)
 	s.mux.HandleFunc("POST /api/gate/reject", s.handleGateReject)
 
@@ -172,25 +172,25 @@ func (s *Server) worktreeDirs() []string {
 	return dirs
 }
 
-func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleHerald(w http.ResponseWriter, r *http.Request) {
 	worktrees := s.worktreeDirs()
-	evts, err := events.ReadAll(worktrees, 50)
+	tidings, err := herald.ReadAll(worktrees, 50)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if evts == nil {
-		evts = []events.Event{}
+	if tidings == nil {
+		tidings = []herald.Tiding{}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(evts)
+	json.NewEncoder(w).Encode(tidings)
 }
 
 func (s *Server) handleProblems(w http.ResponseWriter, r *http.Request) {
 	worktrees := s.worktreeDirs()
-	problems := events.DetectProblems(worktrees)
+	problems := herald.DetectProblems(worktrees)
 	if problems == nil {
-		problems = []events.Problem{}
+		problems = []herald.Problem{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(problems)

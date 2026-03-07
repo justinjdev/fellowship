@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
-	"github.com/justinjdev/fellowship/cli/internal/events"
+	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -50,8 +50,8 @@ func main() {
 		os.Exit(runInit())
 	case "status":
 		os.Exit(runStatus(os.Args[2:]))
-	case "feed":
-		os.Exit(runFeed(os.Args[2:]))
+	case "herald":
+		os.Exit(runHerald(os.Args[2:]))
 	case "dashboard":
 		os.Exit(runDashboard(os.Args[2:]))
 	case "version":
@@ -83,8 +83,8 @@ Setup commands:
   uninstall              Remove gate hooks from .claude/settings.json
   init                   Create tmp/quest-state.json with defaults
 
-Activity feed:
-  feed                   Show recent activity events
+Herald (activity tidings):
+  herald                 Show recent quest tidings
     --dir PATH           Git repo root (default: auto-detect)
     --problems           Show only detected problems
     --json               Output as JSON
@@ -143,10 +143,10 @@ func runHook(name string) int {
 		result = hooks.HookResult{Block: sr.Block, Message: sr.Message}
 		stateChanged = sr.StateChanged
 		if stateChanged && !sr.Block {
-			events.Append(dir, events.Event{
+			herald.Announce(dir, herald.Tiding{
 				Timestamp: time.Now().UTC().Format(time.RFC3339),
 				Quest:     questName,
-				Type:      events.GateSubmitted,
+				Type:      herald.GateSubmitted,
 				Phase:     s.Phase,
 				Detail:    "Gate submitted for review",
 			})
@@ -154,10 +154,10 @@ func runHook(name string) int {
 	case "gate-prereq":
 		stateChanged = hooks.GatePrereq(s, input)
 		if stateChanged {
-			events.Append(dir, events.Event{
+			herald.Announce(dir, herald.Tiding{
 				Timestamp: time.Now().UTC().Format(time.RFC3339),
 				Quest:     questName,
-				Type:      events.LembasCompleted,
+				Type:      herald.LembasCompleted,
 				Phase:     s.Phase,
 				Detail:    "Lembas skill completed",
 			})
@@ -165,10 +165,10 @@ func runHook(name string) int {
 	case "metadata-track":
 		stateChanged = hooks.MetadataTrack(s, input)
 		if stateChanged {
-			events.Append(dir, events.Event{
+			herald.Announce(dir, herald.Tiding{
 				Timestamp: time.Now().UTC().Format(time.RFC3339),
 				Quest:     questName,
-				Type:      events.MetadataUpdated,
+				Type:      herald.MetadataUpdated,
 				Phase:     s.Phase,
 				Detail:    "Task metadata updated",
 			})
@@ -244,17 +244,17 @@ func runGate(args []string) int {
 			questName = filepath.Base(dir)
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
-		events.Append(dir, events.Event{
+		herald.Announce(dir, herald.Tiding{
 			Timestamp: now,
 			Quest:     questName,
-			Type:      events.GateApproved,
+			Type:      herald.GateApproved,
 			Phase:     prevPhase,
 			Detail:    fmt.Sprintf("Gate approved for %s", prevPhase),
 		})
-		events.Append(dir, events.Event{
+		herald.Announce(dir, herald.Tiding{
 			Timestamp: now,
 			Quest:     questName,
-			Type:      events.PhaseTransition,
+			Type:      herald.PhaseTransition,
 			Phase:     nextPhase,
 			Detail:    fmt.Sprintf("Phase advanced from %s to %s", prevPhase, nextPhase),
 		})
@@ -278,10 +278,10 @@ func runGate(args []string) int {
 		if questName == "" {
 			questName = filepath.Base(dir)
 		}
-		events.Append(dir, events.Event{
+		herald.Announce(dir, herald.Tiding{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 			Quest:     questName,
-			Type:      events.GateRejected,
+			Type:      herald.GateRejected,
 			Phase:     prevPhase,
 			Detail:    fmt.Sprintf("Gate rejected for %s", prevPhase),
 		})
@@ -438,8 +438,8 @@ func runDashboard(args []string) int {
 	return 0
 }
 
-func runFeed(args []string) int {
-	fs := flag.NewFlagSet("feed", flag.ExitOnError)
+func runHerald(args []string) int {
+	fs := flag.NewFlagSet("herald", flag.ExitOnError)
 	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
 	problems := fs.Bool("problems", false, "Show only detected problems")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
@@ -463,7 +463,7 @@ func runFeed(args []string) int {
 	}
 
 	if *problems {
-		detected := events.DetectProblems(worktrees)
+		detected := herald.DetectProblems(worktrees)
 		if *jsonOut {
 			data, _ := json.MarshalIndent(detected, "", "  ")
 			fmt.Println(string(data))
@@ -482,7 +482,7 @@ func runFeed(args []string) int {
 		return 0
 	}
 
-	evts, err := events.ReadAll(worktrees, 20)
+	evts, err := herald.ReadAll(worktrees, 20)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
@@ -495,7 +495,7 @@ func runFeed(args []string) int {
 	}
 
 	if len(evts) == 0 {
-		fmt.Println("No events recorded yet.")
+		fmt.Println("No tidings recorded yet.")
 		return 0
 	}
 

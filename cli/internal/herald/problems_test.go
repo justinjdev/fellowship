@@ -1,4 +1,4 @@
-package events
+package herald
 
 import (
 	"encoding/json"
@@ -71,9 +71,9 @@ func TestZombieDetection(t *testing.T) {
 	dir := t.TempDir()
 	writeQuestState(t, dir, "Implement", false, nil)
 
-	// Write an old event
+	// Write an old tiding
 	oldTime := time.Now().Add(-20 * time.Minute).UTC().Format(time.RFC3339)
-	Append(dir, Event{
+	Announce(dir, Tiding{
 		Timestamp: oldTime,
 		Quest:     "test-quest",
 		Type:      MetadataUpdated,
@@ -100,7 +100,7 @@ func TestZombieNotDetectedWhenComplete(t *testing.T) {
 	writeQuestState(t, dir, "Complete", false, nil)
 
 	oldTime := time.Now().Add(-20 * time.Minute).UTC().Format(time.RFC3339)
-	Append(dir, Event{
+	Announce(dir, Tiding{
 		Timestamp: oldTime,
 		Quest:     "test-quest",
 		Type:      MetadataUpdated,
@@ -121,13 +121,13 @@ func TestStrugglingDetection(t *testing.T) {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	// Two rejections for the same phase
-	Append(dir, Event{
+	Announce(dir, Tiding{
 		Timestamp: now,
 		Quest:     "test-quest",
 		Type:      GateRejected,
 		Phase:     "Plan",
 	})
-	Append(dir, Event{
+	Announce(dir, Tiding{
 		Timestamp: now,
 		Quest:     "test-quest",
 		Type:      GateRejected,
@@ -155,7 +155,7 @@ func TestStrugglingNotDetectedWithOneRejection(t *testing.T) {
 	writeQuestState(t, dir, "Plan", false, nil)
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	Append(dir, Event{
+	Announce(dir, Tiding{
 		Timestamp: now,
 		Quest:     "test-quest",
 		Type:      GateRejected,
@@ -176,7 +176,7 @@ func TestNoProblemsForHealthyQuest(t *testing.T) {
 	writeQuestState(t, dir, "Implement", false, nil)
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	Append(dir, Event{
+	Announce(dir, Tiding{
 		Timestamp: now,
 		Quest:     "test-quest",
 		Type:      GateApproved,
