@@ -3,6 +3,7 @@ package hooks
 import (
 	"fmt"
 
+	"github.com/justinjdev/fellowship/cli/internal/cv"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -17,4 +18,11 @@ func CompletionGuard(s *state.State, input *HookInput) HookResult {
 		}
 	}
 	return HookResult{}
+}
+
+// MarkCVCompleted marks the quest CV status as "completed".
+func MarkCVCompleted(cvPath string) {
+	c := cv.LoadOrCreate(cvPath)
+	c.Status = "completed"
+	cv.Save(cvPath, c)
 }

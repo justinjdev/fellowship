@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/justinjdev/fellowship/cli/internal/cv"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -65,6 +66,14 @@ func GateSubmit(s *state.State, input *HookInput) SubmitResult {
 	s.GatePending = true
 	s.GateID = &gateID
 	return SubmitResult{StateChanged: true}
+}
+
+// RecordGateSubmitted records a "submitted" gate event in the quest CV.
+func RecordGateSubmitted(cvPath string, phase string) {
+	c := cv.LoadOrCreate(cvPath)
+	cv.RecordGate(c, phase, "submitted")
+	cv.RecordPhase(c, phase)
+	cv.Save(cvPath, c)
 }
 
 func hasGateMarker(content string) bool {
