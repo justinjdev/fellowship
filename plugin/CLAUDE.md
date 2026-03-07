@@ -6,7 +6,8 @@ Claude Code plugin. Skills, agents, and docs are pure markdown. Gate enforcement
 
 ```
 .claude-plugin/plugin.json   # Plugin manifest (name, version, repo URL)
-skills/<name>/SKILL.md       # Each skill is a single SKILL.md with YAML frontmatter
+skills/<name>/SKILL.md       # Skills — auto-invocable by Claude (quest, scout, council, etc.)
+commands/<name>.md            # Commands — user-invoked only, no base context cost
 agents/<name>.md             # Agent definitions
 hooks/hooks.json             # Plugin hook definitions (gate enforcement)
 hooks/scripts/fellowship.sh  # Thin wrapper — ensures binary exists, then exec's it
@@ -16,7 +17,8 @@ hooks/scripts/ensure-binary.sh # Downloads CLI binary from GitHub releases
 ## Conventions
 
 - **Skill names** must not collide with Claude Code built-in commands (e.g., don't name a skill `config`, `help`, `clear`).
-- **YAML frontmatter** in SKILL.md files has two fields: `name` (matches directory name) and `description`.
+- **YAML frontmatter** in SKILL.md files has two fields: `name` (matches directory name) and `description`. Command files use `description` only (no `name` field).
+- **Skills vs commands:** Skills are for things Claude needs to know about and invoke automatically (quest phases, context compression). Commands are for user-invoked actions that don't need to consume base context (guide, settings, scribe). If only the user types it, make it a command.
 - **Changelog** in README.md is append-only per version. Don't edit historical entries — they describe what shipped at that version.
 
 ## Releasing
