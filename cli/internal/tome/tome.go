@@ -1,4 +1,4 @@
-package cv
+package tome
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-type QuestCV struct {
+type QuestTome struct {
 	Version         int           `json:"version"`
 	QuestName       string        `json:"quest_name"`
 	CreatedAt       string        `json:"created_at"`
@@ -36,26 +36,26 @@ type GateEvent struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
-func Load(path string) (*QuestCV, error) {
+func Load(path string) (*QuestTome, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading cv file: %w", err)
+		return nil, fmt.Errorf("reading tome file: %w", err)
 	}
 	if len(data) == 0 {
-		return nil, fmt.Errorf("cv file is empty")
+		return nil, fmt.Errorf("tome file is empty")
 	}
-	var c QuestCV
+	var c QuestTome
 	if err := json.Unmarshal(data, &c); err != nil {
-		return nil, fmt.Errorf("parsing cv file: %w", err)
+		return nil, fmt.Errorf("parsing tome file: %w", err)
 	}
 	return &c, nil
 }
 
-func Save(path string, c *QuestCV) error {
+func Save(path string, c *QuestTome) error {
 	c.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshaling cv: %w", err)
+		return fmt.Errorf("marshaling tome: %w", err)
 	}
 	data = append(data, '\n')
 	tmp := path + ".tmp"
@@ -69,14 +69,14 @@ func Save(path string, c *QuestCV) error {
 	return nil
 }
 
-func RecordPhase(c *QuestCV, phase string) {
+func RecordPhase(c *QuestTome, phase string) {
 	c.PhasesCompleted = append(c.PhasesCompleted, PhaseRecord{
 		Phase:       phase,
 		CompletedAt: time.Now().UTC().Format(time.RFC3339),
 	})
 }
 
-func RecordGate(c *QuestCV, phase, action string) {
+func RecordGate(c *QuestTome, phase, action string) {
 	c.GateHistory = append(c.GateHistory, GateEvent{
 		Phase:     phase,
 		Action:    action,
@@ -84,7 +84,7 @@ func RecordGate(c *QuestCV, phase, action string) {
 	})
 }
 
-func RecordFiles(c *QuestCV, files []string) {
+func RecordFiles(c *QuestTome, files []string) {
 	seen := make(map[string]bool, len(c.FilesTouched))
 	for _, f := range c.FilesTouched {
 		seen[f] = true
@@ -97,12 +97,12 @@ func RecordFiles(c *QuestCV, files []string) {
 	}
 }
 
-func FindCV(fromDir string) (string, error) {
+func FindTome(fromDir string) (string, error) {
 	root, err := gitRoot(fromDir)
 	if err != nil {
 		root = fromDir
 	}
-	path := filepath.Join(root, "tmp", "quest-cv.json")
+	path := filepath.Join(root, "tmp", "quest-tome.json")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return "", nil
 	} else if err != nil {
@@ -111,13 +111,13 @@ func FindCV(fromDir string) (string, error) {
 	return path, nil
 }
 
-// LoadOrCreate loads the CV from path, or creates a new one if the file does not exist.
-func LoadOrCreate(path string) *QuestCV {
+// LoadOrCreate loads the tome from path, or creates a new one if the file does not exist.
+func LoadOrCreate(path string) *QuestTome {
 	c, err := Load(path)
 	if err == nil {
 		return c
 	}
-	return &QuestCV{
+	return &QuestTome{
 		Version:         1,
 		CreatedAt:       time.Now().UTC().Format(time.RFC3339),
 		Status:          "active",

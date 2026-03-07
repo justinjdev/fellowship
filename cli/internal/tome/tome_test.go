@@ -1,4 +1,4 @@
-package cv
+package tome
 
 import (
 	"encoding/json"
@@ -9,9 +9,9 @@ import (
 
 func TestLoadSaveRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "quest-cv.json")
+	path := filepath.Join(dir, "quest-tome.json")
 
-	original := &QuestCV{
+	original := &QuestTome{
 		Version:   1,
 		QuestName: "test-quest",
 		CreatedAt: "2025-01-01T00:00:00Z",
@@ -64,7 +64,7 @@ func TestLoadSaveRoundTrip(t *testing.T) {
 
 func TestLoadEmptyFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "quest-cv.json")
+	path := filepath.Join(dir, "quest-tome.json")
 	os.WriteFile(path, []byte{}, 0644)
 
 	_, err := Load(path)
@@ -74,7 +74,7 @@ func TestLoadEmptyFile(t *testing.T) {
 }
 
 func TestLoadMissingFile(t *testing.T) {
-	_, err := Load("/nonexistent/quest-cv.json")
+	_, err := Load("/nonexistent/quest-tome.json")
 	if err == nil {
 		t.Error("Load should fail on missing file")
 	}
@@ -82,8 +82,8 @@ func TestLoadMissingFile(t *testing.T) {
 
 func TestSaveAtomicWrite(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "quest-cv.json")
-	c := &QuestCV{Version: 1, Status: "active", PhasesCompleted: []PhaseRecord{}, GateHistory: []GateEvent{}, FilesTouched: []string{}}
+	path := filepath.Join(dir, "quest-tome.json")
+	c := &QuestTome{Version: 1, Status: "active", PhasesCompleted: []PhaseRecord{}, GateHistory: []GateEvent{}, FilesTouched: []string{}}
 
 	if err := Save(path, c); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -97,14 +97,14 @@ func TestSaveAtomicWrite(t *testing.T) {
 
 	// Verify file is valid JSON
 	data, _ := os.ReadFile(path)
-	var check QuestCV
+	var check QuestTome
 	if err := json.Unmarshal(data, &check); err != nil {
 		t.Errorf("saved file is not valid JSON: %v", err)
 	}
 }
 
 func TestRecordPhase(t *testing.T) {
-	c := &QuestCV{PhasesCompleted: []PhaseRecord{}}
+	c := &QuestTome{PhasesCompleted: []PhaseRecord{}}
 
 	RecordPhase(c, "Research")
 	if len(c.PhasesCompleted) != 1 {
@@ -127,7 +127,7 @@ func TestRecordPhase(t *testing.T) {
 }
 
 func TestRecordGate(t *testing.T) {
-	c := &QuestCV{GateHistory: []GateEvent{}}
+	c := &QuestTome{GateHistory: []GateEvent{}}
 
 	RecordGate(c, "Research", "submitted")
 	if len(c.GateHistory) != 1 {
@@ -150,7 +150,7 @@ func TestRecordGate(t *testing.T) {
 }
 
 func TestRecordFiles_Deduplication(t *testing.T) {
-	c := &QuestCV{FilesTouched: []string{"main.go"}}
+	c := &QuestTome{FilesTouched: []string{"main.go"}}
 
 	RecordFiles(c, []string{"main.go", "lib.go", "main.go"})
 	if len(c.FilesTouched) != 2 {
@@ -166,44 +166,44 @@ func TestRecordFiles_Deduplication(t *testing.T) {
 }
 
 func TestRecordFiles_Empty(t *testing.T) {
-	c := &QuestCV{FilesTouched: []string{"a.go"}}
+	c := &QuestTome{FilesTouched: []string{"a.go"}}
 	RecordFiles(c, []string{})
 	if len(c.FilesTouched) != 1 {
 		t.Errorf("FilesTouched len = %d, want 1", len(c.FilesTouched))
 	}
 }
 
-func TestFindCV_Exists(t *testing.T) {
+func TestFindTome_Exists(t *testing.T) {
 	dir := t.TempDir()
 	tmpDir := filepath.Join(dir, "tmp")
 	os.MkdirAll(tmpDir, 0755)
-	cvPath := filepath.Join(tmpDir, "quest-cv.json")
-	os.WriteFile(cvPath, []byte(`{}`), 0644)
+	tomePath := filepath.Join(tmpDir, "quest-tome.json")
+	os.WriteFile(tomePath, []byte(`{}`), 0644)
 
-	// FindCV uses git root; test with direct dir since no git repo
-	found, err := FindCV(dir)
+	// FindTome uses git root; test with direct dir since no git repo
+	found, err := FindTome(dir)
 	if err != nil {
-		t.Fatalf("FindCV: %v", err)
+		t.Fatalf("FindTome: %v", err)
 	}
-	// In a non-git dir, FindCV falls back to fromDir
-	if found != cvPath {
-		t.Errorf("FindCV = %q, want %q", found, cvPath)
+	// In a non-git dir, FindTome falls back to fromDir
+	if found != tomePath {
+		t.Errorf("FindTome = %q, want %q", found, tomePath)
 	}
 }
 
-func TestFindCV_NotExists(t *testing.T) {
+func TestFindTome_NotExists(t *testing.T) {
 	dir := t.TempDir()
-	found, err := FindCV(dir)
+	found, err := FindTome(dir)
 	if err != nil {
-		t.Fatalf("FindCV: %v", err)
+		t.Fatalf("FindTome: %v", err)
 	}
 	if found != "" {
-		t.Errorf("FindCV = %q, want empty string", found)
+		t.Errorf("FindTome = %q, want empty string", found)
 	}
 }
 
-func TestLoadOrCreate_NewCV(t *testing.T) {
-	c := LoadOrCreate("/nonexistent/quest-cv.json")
+func TestLoadOrCreate_NewTome(t *testing.T) {
+	c := LoadOrCreate("/nonexistent/quest-tome.json")
 	if c.Version != 1 {
 		t.Errorf("Version = %d, want 1", c.Version)
 	}
@@ -215,10 +215,10 @@ func TestLoadOrCreate_NewCV(t *testing.T) {
 	}
 }
 
-func TestLoadOrCreate_ExistingCV(t *testing.T) {
+func TestLoadOrCreate_ExistingTome(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "quest-cv.json")
-	original := &QuestCV{Version: 1, QuestName: "existing", Status: "active", PhasesCompleted: []PhaseRecord{}, GateHistory: []GateEvent{}, FilesTouched: []string{}}
+	path := filepath.Join(dir, "quest-tome.json")
+	original := &QuestTome{Version: 1, QuestName: "existing", Status: "active", PhasesCompleted: []PhaseRecord{}, GateHistory: []GateEvent{}, FilesTouched: []string{}}
 	Save(path, original)
 
 	c := LoadOrCreate(path)

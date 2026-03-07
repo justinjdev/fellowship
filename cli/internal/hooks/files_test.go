@@ -6,30 +6,30 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/justinjdev/fellowship/cli/internal/cv"
+	"github.com/justinjdev/fellowship/cli/internal/tome"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
 func TestFileTrack_EditToolInput(t *testing.T) {
 	dir := t.TempDir()
-	cvPath := filepath.Join(dir, "quest-cv.json")
+	tomePath := filepath.Join(dir, "quest-tome.json")
 	s := &state.State{Phase: "Implement"}
 	input := &HookInput{
 		ToolInput: ToolInput{FilePath: "/home/user/project/main.go"},
 	}
 
-	modified := FileTrack(s, input, cvPath)
+	modified := FileTrack(s, input, tomePath)
 	if !modified {
 		t.Error("FileTrack should return true on first file write")
 	}
 
-	data, err := os.ReadFile(cvPath)
+	data, err := os.ReadFile(tomePath)
 	if err != nil {
-		t.Fatalf("reading cv: %v", err)
+		t.Fatalf("reading tome: %v", err)
 	}
-	var c cv.QuestCV
+	var c tome.QuestTome
 	if err := json.Unmarshal(data, &c); err != nil {
-		t.Fatalf("parsing cv: %v", err)
+		t.Fatalf("parsing tome: %v", err)
 	}
 	if len(c.FilesTouched) != 1 {
 		t.Fatalf("FilesTouched len = %d, want 1", len(c.FilesTouched))
@@ -41,18 +41,18 @@ func TestFileTrack_EditToolInput(t *testing.T) {
 
 func TestFileTrack_NotebookPath(t *testing.T) {
 	dir := t.TempDir()
-	cvPath := filepath.Join(dir, "quest-cv.json")
+	tomePath := filepath.Join(dir, "quest-tome.json")
 	s := &state.State{Phase: "Implement"}
 	input := &HookInput{
 		ToolInput: ToolInput{NotebookPath: "/home/user/project/analysis.ipynb"},
 	}
 
-	modified := FileTrack(s, input, cvPath)
+	modified := FileTrack(s, input, tomePath)
 	if !modified {
 		t.Error("FileTrack should return true for notebook path")
 	}
 
-	c, _ := cv.Load(cvPath)
+	c, _ := tome.Load(tomePath)
 	if len(c.FilesTouched) != 1 || c.FilesTouched[0] != "/home/user/project/analysis.ipynb" {
 		t.Errorf("expected notebook path in FilesTouched, got %v", c.FilesTouched)
 	}
@@ -60,7 +60,7 @@ func TestFileTrack_NotebookPath(t *testing.T) {
 
 func TestFileTrack_TmpPathExclusion(t *testing.T) {
 	dir := t.TempDir()
-	cvPath := filepath.Join(dir, "quest-cv.json")
+	tomePath := filepath.Join(dir, "quest-tome.json")
 	s := &state.State{Phase: "Implement"}
 
 	tests := []struct {
@@ -76,7 +76,7 @@ func TestFileTrack_TmpPathExclusion(t *testing.T) {
 			input := &HookInput{
 				ToolInput: ToolInput{FilePath: tt.path},
 			}
-			modified := FileTrack(s, input, cvPath)
+			modified := FileTrack(s, input, tomePath)
 			if modified {
 				t.Errorf("FileTrack should return false for tmp path %q", tt.path)
 			}
@@ -86,13 +86,13 @@ func TestFileTrack_TmpPathExclusion(t *testing.T) {
 
 func TestFileTrack_EmptyFilePath(t *testing.T) {
 	dir := t.TempDir()
-	cvPath := filepath.Join(dir, "quest-cv.json")
+	tomePath := filepath.Join(dir, "quest-tome.json")
 	s := &state.State{Phase: "Implement"}
 	input := &HookInput{
 		ToolInput: ToolInput{},
 	}
 
-	modified := FileTrack(s, input, cvPath)
+	modified := FileTrack(s, input, tomePath)
 	if modified {
 		t.Error("FileTrack should return false when no file path present")
 	}
@@ -100,44 +100,44 @@ func TestFileTrack_EmptyFilePath(t *testing.T) {
 
 func TestFileTrack_Deduplication(t *testing.T) {
 	dir := t.TempDir()
-	cvPath := filepath.Join(dir, "quest-cv.json")
+	tomePath := filepath.Join(dir, "quest-tome.json")
 	s := &state.State{Phase: "Implement"}
 	input := &HookInput{
 		ToolInput: ToolInput{FilePath: "/home/user/project/main.go"},
 	}
 
-	FileTrack(s, input, cvPath)
-	modified := FileTrack(s, input, cvPath)
+	FileTrack(s, input, tomePath)
+	modified := FileTrack(s, input, tomePath)
 	if modified {
 		t.Error("FileTrack should return false on duplicate file")
 	}
 
-	c, _ := cv.Load(cvPath)
+	c, _ := tome.Load(tomePath)
 	if len(c.FilesTouched) != 1 {
 		t.Errorf("FilesTouched len = %d, want 1", len(c.FilesTouched))
 	}
 }
 
-func TestFileTrack_CVCreationOnFirstWrite(t *testing.T) {
+func TestFileTrack_TomeCreationOnFirstWrite(t *testing.T) {
 	dir := t.TempDir()
-	cvPath := filepath.Join(dir, "quest-cv.json")
+	tomePath := filepath.Join(dir, "quest-tome.json")
 	s := &state.State{Phase: "Implement"}
 	input := &HookInput{
 		ToolInput: ToolInput{FilePath: "/home/user/project/new.go"},
 	}
 
-	// CV file should not exist yet
-	if _, err := os.Stat(cvPath); !os.IsNotExist(err) {
-		t.Fatal("CV file should not exist before first FileTrack call")
+	// Tome file should not exist yet
+	if _, err := os.Stat(tomePath); !os.IsNotExist(err) {
+		t.Fatal("Tome file should not exist before first FileTrack call")
 	}
 
-	modified := FileTrack(s, input, cvPath)
+	modified := FileTrack(s, input, tomePath)
 	if !modified {
-		t.Error("FileTrack should return true and create CV on first file write")
+		t.Error("FileTrack should return true and create tome on first file write")
 	}
 
-	// CV file should now exist
-	c, err := cv.Load(cvPath)
+	// Tome file should now exist
+	c, err := tome.Load(tomePath)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}

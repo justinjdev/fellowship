@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/justinjdev/fellowship/cli/internal/cv"
+	"github.com/justinjdev/fellowship/cli/internal/tome"
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
@@ -48,8 +48,8 @@ func main() {
 		os.Exit(runInit())
 	case "status":
 		os.Exit(runStatus(os.Args[2:]))
-	case "cv":
-		os.Exit(runCV(os.Args[2:]))
+	case "tome":
+		os.Exit(runTome(os.Args[2:]))
 	case "dashboard":
 		os.Exit(runDashboard(os.Args[2:]))
 	case "version":
@@ -69,13 +69,13 @@ Hook commands (called by Claude Code hooks, read stdin):
   hook gate-prereq       Track lembas skill invocation
   hook metadata-track    Track phase metadata updates
   hook completion-guard  Block task completion unless phase is Complete
-  hook file-track        Record file touches in quest CV
+  hook file-track        Record file touches in quest tome
 
 Agent/lead commands:
   gate status            Show current phase, prereqs, pending state
   gate approve           Approve a pending gate (advances to next phase)
   gate reject            Reject a pending gate (clears pending, keeps phase)
-  cv show [--json]       Show quest CV (phases, gates, files touched)
+  tome show [--json]     Show quest tome (phases, gates, files touched)
   status [--json]        Scan worktrees and show fellowship recovery status
 
 Setup commands:
@@ -131,8 +131,8 @@ func runHook(name string) int {
 		result = hooks.HookResult{Block: sr.Block, Message: sr.Message}
 		stateChanged = sr.StateChanged
 		if sr.StateChanged && !sr.Block {
-			cvPath := filepath.Join(filepath.Dir(statePath), "quest-cv.json")
-			hooks.RecordGateSubmitted(cvPath, s.Phase)
+			tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+			hooks.RecordGateSubmitted(tomePath, s.Phase)
 		}
 	case "gate-prereq":
 		stateChanged = hooks.GatePrereq(s, input)
@@ -141,12 +141,12 @@ func runHook(name string) int {
 	case "completion-guard":
 		result = hooks.CompletionGuard(s, input)
 		if !result.Block && input.ToolInput.Status == "completed" {
-			cvPath := filepath.Join(filepath.Dir(statePath), "quest-cv.json")
-			hooks.MarkCVCompleted(cvPath)
+			tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+			hooks.MarkTomeCompleted(tomePath)
 		}
 	case "file-track":
-		cvPath := filepath.Join(filepath.Dir(statePath), "quest-cv.json")
-		hooks.FileTrack(s, input, cvPath)
+		tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+		hooks.FileTrack(s, input, tomePath)
 	default:
 		fmt.Fprintf(os.Stderr, "fellowship: unknown hook %q\n", name)
 		return 2
@@ -210,10 +210,10 @@ func runGate(args []string) int {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
 		}
-		cvPath := filepath.Join(filepath.Dir(statePath), "quest-cv.json")
-		c := cv.LoadOrCreate(cvPath)
-		cv.RecordGate(c, prevPhase, "approved")
-		cv.Save(cvPath, c)
+		tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+		c := tome.LoadOrCreate(tomePath)
+		tome.RecordGate(c, prevPhase, "approved")
+		tome.Save(tomePath, c)
 		fmt.Printf("Gate approved. Phase advanced to %s.\n", nextPhase)
 		return 0
 
@@ -228,10 +228,10 @@ func runGate(args []string) int {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
 		}
-		cvPath := filepath.Join(filepath.Dir(statePath), "quest-cv.json")
-		c := cv.LoadOrCreate(cvPath)
-		cv.RecordGate(c, s.Phase, "rejected")
-		cv.Save(cvPath, c)
+		tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+		c := tome.LoadOrCreate(tomePath)
+		tome.RecordGate(c, s.Phase, "rejected")
+		tome.Save(tomePath, c)
 		fmt.Println("Gate rejected. Teammate unblocked to address feedback.")
 		return 0
 
@@ -385,14 +385,14 @@ func runDashboard(args []string) int {
 	return 0
 }
 
-func runCV(args []string) int {
+func runTome(args []string) int {
 	if len(args) < 1 || args[0] != "show" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship cv show [--dir <path>] [--json]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship tome show [--dir <path>] [--json]")
 		return 1
 	}
 
-	fs := flag.NewFlagSet("cv show", flag.ExitOnError)
-	dir := fs.String("dir", "", "Directory to search for CV (default: auto-detect)")
+	fs := flag.NewFlagSet("tome show", flag.ExitOnError)
+	dir := fs.String("dir", "", "Directory to search for tome (default: auto-detect)")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Parse(args[1:])
 
@@ -401,17 +401,17 @@ func runCV(args []string) int {
 		searchDir = gitRootOrCwd()
 	}
 
-	cvPath, err := cv.FindCV(searchDir)
+	tomePath, err := tome.FindTome(searchDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
-	if cvPath == "" {
-		fmt.Fprintln(os.Stderr, "No quest CV found.")
+	if tomePath == "" {
+		fmt.Fprintln(os.Stderr, "No quest tome found.")
 		return 1
 	}
 
-	c, err := cv.Load(cvPath)
+	c, err := tome.Load(tomePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
@@ -423,7 +423,7 @@ func runCV(args []string) int {
 		return 0
 	}
 
-	fmt.Printf("Quest CV: %s\n", c.QuestName)
+	fmt.Printf("Quest Tome: %s\n", c.QuestName)
 	fmt.Printf("Status:   %s\n", c.Status)
 	fmt.Printf("Task:     %s\n", c.Task)
 	fmt.Printf("Respawns: %d\n", c.Respawns)
