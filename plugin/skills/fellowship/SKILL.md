@@ -174,13 +174,12 @@ Before sending the spawn prompt, Gandalf substitutes these placeholders with act
 
 **`{template_guidance}` generation:**
 - **No template selected:** substitute with empty string (no extra content in spawn prompt)
-- **Template selected:** Read the template file, strip the YAML frontmatter, and substitute with:
+- **Template selected:** substitute with:
   ```
-  TEMPLATE GUIDANCE (from "{template_name}" template — advisory, not prescriptive):
-
-  {template_body}
+  TEMPLATE: "{template_name}"
+  At the start of each quest phase, invoke /lorebook to load
+  phase-specific guidance for this template.
   ```
-  Where `{template_body}` is the markdown content after the frontmatter.
 
 ### Spawn a Scout
 
