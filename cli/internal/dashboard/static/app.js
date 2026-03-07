@@ -54,10 +54,10 @@
     // Quest cards — group by company
     const container = document.getElementById("quest-cards");
     container.innerHTML = "";
-    var companys = status.companys || [];
+    var companies = status.companies || [];
     var rendered = {};
 
-    companys.forEach(function (c) {
+    companies.forEach(function (c) {
       var companyQuests = quests.filter(function (q) {
         return c.quests && c.quests.indexOf(q.name) !== -1;
       });
@@ -82,7 +82,7 @@
     var ungroupedQuests = quests.filter(function (q) { return !rendered[q.name]; });
     var ungroupedScouts = scouts.filter(function (s) { return !rendered[s.name]; });
     if (ungroupedQuests.length > 0 || ungroupedScouts.length > 0) {
-      if (companys.length > 0) {
+      if (companies.length > 0) {
         var ungroupedHeader = document.createElement("div");
         ungroupedHeader.className = "company-header";
         ungroupedHeader.innerHTML = "<h2>Ungrouped</h2>";
@@ -220,7 +220,10 @@
 
   window.__approveCompany = async function (name) {
     try {
-      var res = await fetch("/api/company/" + encodeURIComponent(name) + "/approve");
+      var res = await fetch("/api/company/" + encodeURIComponent(name) + "/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
       if (!res.ok) throw new Error("status " + res.status);
       var data = await res.json();
       addActivity("Company '" + name + "': approved " + data.approved.length + " gate(s)");
