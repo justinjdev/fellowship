@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -103,6 +104,98 @@ func TestAPIStatus(t *testing.T) {
 	}
 	if q.GateID == nil || *q.GateID != "gate-plan-review" {
 		t.Errorf("Quest.GateID = %v, want %q", q.GateID, "gate-plan-review")
+	}
+}
+
+func TestAPIGateApprove(t *testing.T) {
+	root := setupTestRoot(t)
+	srv := NewServer(root, 5)
+
+	worktreeDir := filepath.Join(root, "worktrees", "quest-login")
+	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
+	req := httptest.NewRequest("POST", "/api/gate/approve", body)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var qs QuestStatus
+	if err := json.NewDecoder(w.Body).Decode(&qs); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+
+	if qs.Phase != "Implement" {
+		t.Errorf("Phase = %q, want %q", qs.Phase, "Implement")
+	}
+	if qs.GatePending {
+		t.Errorf("GatePending = true, want false")
+	}
+	if qs.GateID != nil {
+		t.Errorf("GateID = %v, want nil", qs.GateID)
+	}
+}
+
+func TestAPIGateReject(t *testing.T) {
+	root := setupTestRoot(t)
+	srv := NewServer(root, 5)
+
+	worktreeDir := filepath.Join(root, "worktrees", "quest-login")
+	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
+	req := httptest.NewRequest("POST", "/api/gate/reject", body)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var qs QuestStatus
+	if err := json.NewDecoder(w.Body).Decode(&qs); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+
+	if qs.Phase != "Plan" {
+		t.Errorf("Phase = %q, want %q", qs.Phase, "Plan")
+	}
+	if qs.GatePending {
+		t.Errorf("GatePending = true, want false")
+	}
+	if qs.GateID != nil {
+		t.Errorf("GateID = %v, want nil", qs.GateID)
+	}
+}
+
+func TestAPIGateApprove_NoPending(t *testing.T) {
+	root := setupTestRoot(t)
+	srv := NewServer(root, 5)
+
+	// Overwrite quest-state.json with gate_pending: false
+	worktreeDir := filepath.Join(root, "worktrees", "quest-login")
+	questState := `{
+  "version": 1,
+  "quest_name": "quest-login",
+  "task_id": "t1",
+  "team_name": "team",
+  "phase": "Plan",
+  "gate_pending": false,
+  "gate_id": null,
+  "lembas_completed": false,
+  "metadata_updated": false,
+  "auto_approve_gates": []
+}`
+	if err := os.WriteFile(filepath.Join(worktreeDir, "tmp", "quest-state.json"), []byte(questState), 0644); err != nil {
+		t.Fatalf("writing quest-state.json: %v", err)
+	}
+
+	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
+	req := httptest.NewRequest("POST", "/api/gate/approve", body)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusBadRequest, w.Body.String())
 	}
 }
 
