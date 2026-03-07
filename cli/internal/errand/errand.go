@@ -1,4 +1,4 @@
-package hook
+package errand
 
 import (
 	"encoding/json"
@@ -10,53 +10,53 @@ import (
 	"time"
 )
 
-type WorkStatus string
+type ErrandStatus string
 
 const (
-	Pending WorkStatus = "pending"
-	Active  WorkStatus = "active"
-	Done    WorkStatus = "done"
-	Blocked WorkStatus = "blocked"
+	Pending ErrandStatus = "pending"
+	Active  ErrandStatus = "active"
+	Done    ErrandStatus = "done"
+	Blocked ErrandStatus = "blocked"
 )
 
-type WorkItem struct {
-	ID          string     `json:"id"`
-	Description string     `json:"description"`
-	Status      WorkStatus `json:"status"`
-	Phase       string     `json:"phase,omitempty"`
-	DependsOn   []string   `json:"depends_on,omitempty"`
-	CreatedAt   string     `json:"created_at"`
-	UpdatedAt   string     `json:"updated_at"`
+type Errand struct {
+	ID          string       `json:"id"`
+	Description string       `json:"description"`
+	Status      ErrandStatus `json:"status"`
+	Phase       string       `json:"phase,omitempty"`
+	DependsOn   []string     `json:"depends_on,omitempty"`
+	CreatedAt   string       `json:"created_at"`
+	UpdatedAt   string       `json:"updated_at"`
 }
 
-type QuestHook struct {
-	Version   int        `json:"version"`
-	QuestName string     `json:"quest_name"`
-	Task      string     `json:"task"`
-	Items     []WorkItem `json:"items"`
-	CreatedAt string     `json:"created_at"`
-	UpdatedAt string     `json:"updated_at"`
+type QuestErrandList struct {
+	Version   int      `json:"version"`
+	QuestName string   `json:"quest_name"`
+	Task      string   `json:"task"`
+	Items     []Errand `json:"items"`
+	CreatedAt string   `json:"created_at"`
+	UpdatedAt string   `json:"updated_at"`
 }
 
-func Load(path string) (*QuestHook, error) {
+func Load(path string) (*QuestErrandList, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading hook file: %w", err)
+		return nil, fmt.Errorf("reading errand file: %w", err)
 	}
 	if len(data) == 0 {
-		return nil, fmt.Errorf("hook file is empty")
+		return nil, fmt.Errorf("errand file is empty")
 	}
-	var h QuestHook
+	var h QuestErrandList
 	if err := json.Unmarshal(data, &h); err != nil {
-		return nil, fmt.Errorf("parsing hook file: %w", err)
+		return nil, fmt.Errorf("parsing errand file: %w", err)
 	}
 	return &h, nil
 }
 
-func Save(path string, h *QuestHook) error {
+func Save(path string, h *QuestErrandList) error {
 	data, err := json.MarshalIndent(h, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshaling hook: %w", err)
+		return fmt.Errorf("marshaling errand: %w", err)
 	}
 	data = append(data, '\n')
 	tmp := path + ".tmp"
@@ -70,12 +70,12 @@ func Save(path string, h *QuestHook) error {
 	return nil
 }
 
-func FindHook(fromDir string) (string, error) {
+func FindErrands(fromDir string) (string, error) {
 	root, err := gitRoot(fromDir)
 	if err != nil {
 		root = fromDir
 	}
-	path := filepath.Join(root, "tmp", "quest-hook.json")
+	path := filepath.Join(root, "tmp", "quest-errands.json")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return "", nil
 	} else if err != nil {
@@ -84,10 +84,10 @@ func FindHook(fromDir string) (string, error) {
 	return path, nil
 }
 
-func AddItem(h *QuestHook, desc string, phase string) string {
+func AddErrand(h *QuestErrandList, desc string, phase string) string {
 	now := time.Now().UTC().Format(time.RFC3339)
 	id := NextID(h)
-	item := WorkItem{
+	item := Errand{
 		ID:          id,
 		Description: desc,
 		Status:      Pending,
@@ -100,7 +100,7 @@ func AddItem(h *QuestHook, desc string, phase string) string {
 	return id
 }
 
-func UpdateStatus(h *QuestHook, id string, status WorkStatus) error {
+func UpdateStatus(h *QuestErrandList, id string, status ErrandStatus) error {
 	for i := range h.Items {
 		if h.Items[i].ID == id {
 			h.Items[i].Status = status
@@ -109,10 +109,10 @@ func UpdateStatus(h *QuestHook, id string, status WorkStatus) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("work item %q not found", id)
+	return fmt.Errorf("errand %q not found", id)
 }
 
-func NextID(h *QuestHook) string {
+func NextID(h *QuestErrandList) string {
 	max := 0
 	for _, item := range h.Items {
 		var n int
@@ -123,17 +123,17 @@ func NextID(h *QuestHook) string {
 	return fmt.Sprintf("w-%03d", max+1)
 }
 
-// ValidStatus checks whether a string is a valid WorkStatus.
-func ValidStatus(s string) (WorkStatus, bool) {
-	switch WorkStatus(s) {
+// ValidStatus checks whether a string is a valid ErrandStatus.
+func ValidStatus(s string) (ErrandStatus, bool) {
+	switch ErrandStatus(s) {
 	case Pending, Active, Done, Blocked:
-		return WorkStatus(s), true
+		return ErrandStatus(s), true
 	default:
 		return "", false
 	}
 }
 
-func Progress(h *QuestHook) (done int, total int) {
+func Progress(h *QuestErrandList) (done int, total int) {
 	total = len(h.Items)
 	for _, item := range h.Items {
 		if item.Status == Done {
@@ -143,7 +143,7 @@ func Progress(h *QuestHook) (done int, total int) {
 	return done, total
 }
 
-func PendingItems(h *QuestHook) []WorkItem {
+func PendingErrands(h *QuestErrandList) []Errand {
 	doneSet := make(map[string]bool)
 	for _, item := range h.Items {
 		if item.Status == Done {
@@ -151,7 +151,7 @@ func PendingItems(h *QuestHook) []WorkItem {
 		}
 	}
 
-	var result []WorkItem
+	var result []Errand
 	for _, item := range h.Items {
 		if item.Status != Pending && item.Status != Blocked {
 			continue

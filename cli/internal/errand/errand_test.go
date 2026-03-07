@@ -1,6 +1,7 @@
-package hook
+package errand
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,14 +10,14 @@ import (
 
 func TestLoadSaveRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "quest-hook.json")
+	path := filepath.Join(dir, "quest-errands.json")
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	h := &QuestHook{
+	h := &QuestErrandList{
 		Version:   1,
 		QuestName: "test-quest",
 		Task:      "fix the bug",
-		Items: []WorkItem{
+		Items: []Errand{
 			{
 				ID:          "w-001",
 				Description: "write tests",
@@ -58,7 +59,7 @@ func TestLoadSaveRoundTrip(t *testing.T) {
 
 func TestLoadEmptyFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "quest-hook.json")
+	path := filepath.Join(dir, "quest-errands.json")
 	os.WriteFile(path, []byte{}, 0644)
 
 	_, err := Load(path)
@@ -68,14 +69,14 @@ func TestLoadEmptyFile(t *testing.T) {
 }
 
 func TestLoadMissingFile(t *testing.T) {
-	_, err := Load("/nonexistent/quest-hook.json")
+	_, err := Load("/nonexistent/quest-errands.json")
 	if err == nil {
 		t.Fatal("expected error for missing file")
 	}
 }
 
-func TestAddItemSequentialIDs(t *testing.T) {
-	h := &QuestHook{
+func TestAddErrandSequentialIDs(t *testing.T) {
+	h := &QuestErrandList{
 		Version:   1,
 		QuestName: "test",
 		Task:      "task",
@@ -83,17 +84,17 @@ func TestAddItemSequentialIDs(t *testing.T) {
 		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 
-	id1 := AddItem(h, "first item", "Implement")
+	id1 := AddErrand(h, "first item", "Implement")
 	if id1 != "w-001" {
 		t.Errorf("first ID = %q, want %q", id1, "w-001")
 	}
 
-	id2 := AddItem(h, "second item", "Implement")
+	id2 := AddErrand(h, "second item", "Implement")
 	if id2 != "w-002" {
 		t.Errorf("second ID = %q, want %q", id2, "w-002")
 	}
 
-	id3 := AddItem(h, "third item", "Review")
+	id3 := AddErrand(h, "third item", "Review")
 	if id3 != "w-003" {
 		t.Errorf("third ID = %q, want %q", id3, "w-003")
 	}
@@ -111,7 +112,7 @@ func TestAddItemSequentialIDs(t *testing.T) {
 }
 
 func TestUpdateStatus(t *testing.T) {
-	h := &QuestHook{
+	h := &QuestErrandList{
 		Version:   1,
 		QuestName: "test",
 		Task:      "task",
@@ -119,8 +120,8 @@ func TestUpdateStatus(t *testing.T) {
 		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 
-	AddItem(h, "item one", "Implement")
-	AddItem(h, "item two", "Implement")
+	AddErrand(h, "item one", "Implement")
+	AddErrand(h, "item two", "Implement")
 
 	if err := UpdateStatus(h, "w-001", Active); err != nil {
 		t.Fatalf("UpdateStatus: %v", err)
@@ -144,7 +145,7 @@ func TestUpdateStatus(t *testing.T) {
 }
 
 func TestProgress(t *testing.T) {
-	h := &QuestHook{
+	h := &QuestErrandList{
 		Version:   1,
 		QuestName: "test",
 		Task:      "task",
@@ -152,9 +153,9 @@ func TestProgress(t *testing.T) {
 		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 
-	AddItem(h, "item one", "")
-	AddItem(h, "item two", "")
-	AddItem(h, "item three", "")
+	AddErrand(h, "item one", "")
+	AddErrand(h, "item two", "")
+	AddErrand(h, "item three", "")
 
 	done, total := Progress(h)
 	if done != 0 || total != 3 {
@@ -175,13 +176,13 @@ func TestProgress(t *testing.T) {
 	}
 }
 
-func TestPendingItemsDependencyResolution(t *testing.T) {
+func TestPendingErrandsDependencyResolution(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339)
-	h := &QuestHook{
+	h := &QuestErrandList{
 		Version:   1,
 		QuestName: "test",
 		Task:      "task",
-		Items: []WorkItem{
+		Items: []Errand{
 			{ID: "w-001", Description: "foundation", Status: Pending, CreatedAt: now, UpdatedAt: now},
 			{ID: "w-002", Description: "depends on foundation", Status: Pending, DependsOn: []string{"w-001"}, CreatedAt: now, UpdatedAt: now},
 			{ID: "w-003", Description: "independent", Status: Pending, CreatedAt: now, UpdatedAt: now},
@@ -197,9 +198,9 @@ func TestPendingItemsDependencyResolution(t *testing.T) {
 	// w-002 depends on w-001 (pending) -> not returned
 	// w-004 depends on w-001 (pending) and w-003 (pending) -> not returned
 	// w-005 is done, w-006 is active -> not returned
-	pending := PendingItems(h)
+	pending := PendingErrands(h)
 	if len(pending) != 2 {
-		t.Fatalf("PendingItems count = %d, want 2", len(pending))
+		t.Fatalf("PendingErrands count = %d, want 2", len(pending))
 	}
 	ids := map[string]bool{}
 	for _, p := range pending {
@@ -211,7 +212,7 @@ func TestPendingItemsDependencyResolution(t *testing.T) {
 
 	// Mark w-001 as done -> w-002 should now be available
 	h.Items[0].Status = Done
-	pending = PendingItems(h)
+	pending = PendingErrands(h)
 	pendingIDs := map[string]bool{}
 	for _, p := range pending {
 		pendingIDs[p.ID] = true
@@ -229,7 +230,7 @@ func TestPendingItemsDependencyResolution(t *testing.T) {
 
 	// Mark w-003 as done -> w-004 should now be available
 	h.Items[2].Status = Done
-	pending = PendingItems(h)
+	pending = PendingErrands(h)
 	pendingIDs = map[string]bool{}
 	for _, p := range pending {
 		pendingIDs[p.ID] = true
@@ -240,7 +241,7 @@ func TestPendingItemsDependencyResolution(t *testing.T) {
 }
 
 func TestNextIDSequence(t *testing.T) {
-	h := &QuestHook{
+	h := &QuestErrandList{
 		Version:   1,
 		QuestName: "test",
 		Task:      "task",
@@ -252,30 +253,30 @@ func TestNextIDSequence(t *testing.T) {
 		t.Errorf("NextID empty = %q, want %q", id, "w-001")
 	}
 
-	h.Items = append(h.Items, WorkItem{ID: "w-001"})
+	h.Items = append(h.Items, Errand{ID: "w-001"})
 	if id := NextID(h); id != "w-002" {
 		t.Errorf("NextID after 1 = %q, want %q", id, "w-002")
 	}
 
 	// Add 8 more to test padding
 	for i := 0; i < 8; i++ {
-		h.Items = append(h.Items, WorkItem{ID: fmt.Sprintf("w-%03d", i+2)})
+		h.Items = append(h.Items, Errand{ID: fmt.Sprintf("w-%03d", i+2)})
 	}
 	if id := NextID(h); id != "w-010" {
 		t.Errorf("NextID after 9 = %q, want %q", id, "w-010")
 	}
 }
 
-func TestFindHookNoFile(t *testing.T) {
+func TestFindErrandsNoFile(t *testing.T) {
 	dir := t.TempDir()
-	// Create a tmp dir but no hook file
+	// Create a tmp dir but no errand file
 	os.MkdirAll(filepath.Join(dir, "tmp"), 0755)
 
-	path, err := FindHook(dir)
+	path, err := FindErrands(dir)
 	if err != nil {
-		t.Fatalf("FindHook: %v", err)
+		t.Fatalf("FindErrands: %v", err)
 	}
 	if path != "" {
-		t.Errorf("FindHook = %q, want empty", path)
+		t.Errorf("FindErrands = %q, want empty", path)
 	}
 }

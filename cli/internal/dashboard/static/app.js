@@ -79,10 +79,10 @@
     }
     progressHTML += "</div>";
 
-    var workProgressHTML = "";
-    if (quest.work_total > 0) {
-      workProgressHTML = '<div class="work-progress">' +
-        quest.work_done + "/" + quest.work_total + " items done" +
+    var errandProgressHTML = "";
+    if (quest.errands_total > 0) {
+      errandProgressHTML = '<div class="errand-progress">' +
+        quest.errands_done + "/" + quest.errands_total + " errands done" +
         "</div>";
     }
 
@@ -90,21 +90,21 @@
       "<h3>" + escapeHTML(quest.name || quest.worktree) + "</h3>" +
       '<div class="quest-phase">' + escapeHTML(quest.phase || "Unknown") + "</div>" +
       progressHTML +
-      workProgressHTML;
+      errandProgressHTML;
 
-    if (quest.work_total > 0) {
-      var workDetails = document.createElement("div");
-      workDetails.className = "work-details";
-      workDetails.style.display = "none";
-      card.appendChild(workDetails);
+    if (quest.errands_total > 0) {
+      var errandDetails = document.createElement("div");
+      errandDetails.className = "errand-details";
+      errandDetails.style.display = "none";
+      card.appendChild(errandDetails);
 
       card.style.cursor = "pointer";
       card.addEventListener("click", function (e) {
         if (e.target.tagName === "BUTTON") return;
-        var details = card.querySelector(".work-details");
+        var details = card.querySelector(".errand-details");
         if (details.style.display === "none") {
           details.style.display = "block";
-          loadWorkItems(quest.worktree, details);
+          loadErrandItems(quest.worktree, details);
         } else {
           details.style.display = "none";
         }
@@ -231,29 +231,29 @@
       if (old.gate_pending && !q.gate_pending) {
         addActivity((q.name || q.worktree) + ": gate resolved");
       }
-      if (q.work_total > 0 && old.work_done !== q.work_done) {
-        addActivity((q.name || q.worktree) + ": work progress " + q.work_done + "/" + q.work_total);
+      if (q.errands_total > 0 && old.errands_done !== q.errands_done) {
+        addActivity((q.name || q.worktree) + ": errand progress " + q.errands_done + "/" + q.errands_total);
       }
     });
   }
 
-  // ── Work Items ────────────────────────────────
+  // ── Errands ──────────────────────────────────
 
-  async function loadWorkItems(worktree, container) {
+  async function loadErrandItems(worktree, container) {
     try {
       var encoded = btoa(worktree);
-      var res = await fetch("/api/work/" + encoded);
+      var res = await fetch("/api/errand/" + encoded);
       if (!res.ok) {
-        container.innerHTML = "<p>No work items available.</p>";
+        container.innerHTML = "<p>No errands available.</p>";
         return;
       }
       var data = await res.json();
       var items = data.items || [];
       if (items.length === 0) {
-        container.innerHTML = "<p>No work items.</p>";
+        container.innerHTML = "<p>No errands.</p>";
         return;
       }
-      var html = '<ul class="work-item-list">';
+      var html = '<ul class="errand-item-list">';
       for (var i = 0; i < items.length; i++) {
         var item = items[i];
         var badge = '<span class="status-badge status-' + escapeHTML(item.status) + '">' + escapeHTML(item.status) + "</span>";
@@ -262,7 +262,7 @@
       html += "</ul>";
       container.innerHTML = html;
     } catch (err) {
-      container.innerHTML = "<p>Failed to load work items.</p>";
+      container.innerHTML = "<p>Failed to load errands.</p>";
     }
   }
 

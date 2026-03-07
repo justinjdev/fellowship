@@ -223,28 +223,28 @@ main {
     color: var(--text-secondary);
 }
 
-/* ── Work Items ────────────────────────────────── */
+/* ── Errands ───────────────────────────────────── */
 
-.work-progress {
+.errand-progress {
     font-family: var(--font-body);
     font-size: 0.85rem;
     color: var(--gold-dim);
     margin-top: 0.5rem;
 }
 
-.work-details {
+.errand-details {
     margin-top: 0.75rem;
     border-top: 1px solid rgba(58, 48, 40, 0.5);
     padding-top: 0.5rem;
 }
 
-.work-item-list {
+.errand-item-list {
     list-style: none;
     font-size: 0.85rem;
     color: var(--text-secondary);
 }
 
-.work-item-list li {
+.errand-item-list li {
     padding: 0.25rem 0;
 }
 

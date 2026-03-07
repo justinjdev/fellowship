@@ -174,7 +174,7 @@ Goal: Outline explicit steps with file:line references and a test strategy.
 
 Goal: Execute the plan with small, verifiable changes and tight feedback loops. Default to TDD.
 
-**Work item tracking:** If `tmp/quest-hook.json` exists, use it as your work checklist. The hook file is the source of truth for remaining work, not just the original prompt. Update item status as you complete each one: `fellowship work update --dir . <id> done`. Mark items as `active` when you start them and `done` when finished. Check `fellowship work list --dir .` to see what remains.
+**Errand tracking:** If `tmp/quest-errands.json` exists, use it as your errand checklist. The errand file is the source of truth for remaining work, not just the original prompt. Update errand status as you complete each one: `fellowship errand update --dir . <id> done`. Mark errands as `active` when you start them and `done` when finished. Check `fellowship errand list --dir .` to see what remains.
 
 **Execution mode — choose based on plan structure:**
 
