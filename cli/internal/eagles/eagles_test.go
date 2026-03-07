@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/justinjdev/fellowship/cli/internal/gitutil"
 )
 
 // writeQuestState creates a quest-state.json in worktree/tmp.
@@ -307,9 +309,9 @@ func TestGateAge(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.gateID, func(t *testing.T) {
-			got := gateAge(tt.gateID, now)
+			got := gitutil.GateAge(tt.gateID, now)
 			if got != tt.want {
-				t.Errorf("gateAge(%q) = %d, want %d", tt.gateID, got, tt.want)
+				t.Errorf("gitutil.GateAge(%q) = %d, want %d", tt.gateID, got, tt.want)
 			}
 		})
 	}

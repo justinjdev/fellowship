@@ -169,7 +169,7 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 
 ## Changelog
 
-### v1.6.1
+### v1.6.3
 
 - **Fix plugin discovery** — moved `.claude-plugin/plugin.json` to repo root with explicit path fields for skills, agents, commands, and hooks. Fixes skills not showing up after install.
 

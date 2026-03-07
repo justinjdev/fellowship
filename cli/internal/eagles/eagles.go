@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/justinjdev/fellowship/cli/internal/gitutil"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -64,9 +63,9 @@ func Sweep(gitRoot string, opts Options) (*EaglesReport, error) {
 		opts.Now = time.Now()
 	}
 
-	worktrees, err := listWorktrees(gitRoot)
+	worktrees, err := gitutil.ListWorktrees(gitRoot)
 	if err != nil {
-		return nil, fmt.Errorf("listing worktrees: %w", err)
+		return nil, err
 	}
 
 	report := &EaglesReport{
@@ -97,7 +96,7 @@ func classifyQuest(worktree string, opts Options) (*QuestHealth, error) {
 		return nil, err
 	}
 
-	hasCheckpoint := fileExists(filepath.Join(worktree, "tmp", "checkpoint.md"))
+	hasCheckpoint := gitutil.FileExists(filepath.Join(worktree, "tmp", "checkpoint.md"))
 	lastActivity := latestModTime(worktree)
 
 	qh := &QuestHealth{
@@ -115,7 +114,7 @@ func classifyQuest(worktree string, opts Options) (*QuestHealth, error) {
 		qh.Action = "none"
 
 	case s.GatePending && s.GateID != nil:
-		pendingSec := gateAge(*s.GateID, opts.Now)
+		pendingSec := gitutil.GateAge(*s.GateID, opts.Now)
 		qh.GatePendingSec = pendingSec
 		if time.Duration(pendingSec)*time.Second >= opts.GateThreshold {
 			qh.Health = Stalled
@@ -150,26 +149,6 @@ func classifyQuest(worktree string, opts Options) (*QuestHealth, error) {
 	return qh, nil
 }
 
-// gateAge parses the unix timestamp from a gate ID (format: gate-{Phase}-{unix_timestamp})
-// and returns the number of seconds since then.
-func gateAge(gateID string, now time.Time) int {
-	parts := strings.Split(gateID, "-")
-	if len(parts) < 3 {
-		return 0
-	}
-	// The timestamp is the last part
-	tsStr := parts[len(parts)-1]
-	ts, err := strconv.ParseInt(tsStr, 10, 64)
-	if err != nil {
-		return 0
-	}
-	gateTime := time.Unix(ts, 0)
-	age := now.Sub(gateTime)
-	if age < 0 {
-		return 0
-	}
-	return int(age.Seconds())
-}
 
 // latestModTime walks the worktree (excluding .git, tmp, and node_modules) to find the most
 // recently modified file.
@@ -238,28 +217,3 @@ func FormatTable(report *EaglesReport) string {
 	return sb.String()
 }
 
-// listWorktrees parses `git worktree list --porcelain` and returns worktree paths.
-func listWorktrees(gitRoot string) ([]string, error) {
-	cmd := exec.Command("git", "worktree", "list", "--porcelain")
-	cmd.Dir = gitRoot
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-	var paths []string
-	for _, line := range strings.Split(string(out), "\n") {
-		if strings.HasPrefix(line, "worktree ") {
-			paths = append(paths, strings.TrimPrefix(line, "worktree "))
-		}
-	}
-	return paths, nil
-}
-
-// fileExists returns true if the path exists and is not a directory.
-func fileExists(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return !info.IsDir()
-}
