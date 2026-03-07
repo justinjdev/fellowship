@@ -54,6 +54,45 @@ This is NOT the default. This is an opt-in configuration. Without this file, eve
 
 If the user asks to set up or modify their config, invoke `/settings`.
 
+### Write Fellowship State
+
+After loading config, write `tmp/fellowship-state.json` in the main repo root:
+
+```json
+{
+  "version": 1,
+  "name": "<fellowship_name>",
+  "created_at": "<ISO 8601 timestamp>",
+  "main_repo": "<absolute path to repo root>",
+  "quests": [],
+  "scouts": []
+}
+```
+
+Create the `tmp/` directory if it doesn't exist. The fellowship name comes from the `TeamCreate` name (e.g., `"fellowship-1709734200"`). This file is the primary recovery artifact — `/rekindle` uses it to reconstruct state after a crash.
+
+**Update on quest/scout spawn:** After spawning each quest or scout, append to the `quests` or `scouts` array:
+
+Quest entry:
+```json
+{
+  "name": "<quest_name>",
+  "task_description": "<original task text from user>",
+  "worktree": "<worktree path from TaskGet metadata>",
+  "branch": "<resolved branch name>"
+}
+```
+
+Scout entry:
+```json
+{
+  "name": "<scout_name>",
+  "question": "<original question from user>"
+}
+```
+
+Read the file, append to the array, write it back. The worktree path for quests is available after the quest runner reports back from Phase 0 (stored in task metadata as `worktree_path`). Update the quest entry with the worktree path when it becomes available.
+
 ### Discover Templates
 
 At startup (or when spawning a quest), Gandalf discovers available templates from two directories, highest priority first:
