@@ -1,0 +1,117 @@
+@import './theme.css';
+
+*, *::before, *::after {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+html {
+	font-size: 100%;
+	scroll-behavior: smooth;
+}
+
+body {
+	font-family: var(--font-body);
+	font-size: 1.125rem;
+	line-height: 1.7;
+	color: var(--color-text);
+	background-color: var(--color-bg);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+	font-family: var(--font-heading);
+	color: var(--color-heading);
+	line-height: 1.2;
+	letter-spacing: 0.02em;
+}
+
+h1 { font-size: 2.5rem; }
+h2 { font-size: 1.875rem; }
+h3 { font-size: 1.5rem; }
+
+a {
+	color: var(--color-link);
+	text-decoration: none;
+	transition: color var(--transition-fast);
+}
+
+a:hover { color: var(--color-link-hover); }
+
+:focus-visible {
+	outline: 2px solid var(--color-focus);
+	outline-offset: 2px;
+	border-radius: 2px;
+}
+
+code {
+	font-family: var(--font-code);
+	font-size: 0.9em;
+	background-color: var(--color-code-bg);
+	padding: 0.15em 0.4em;
+	border-radius: 4px;
+}
+
+pre {
+	font-family: var(--font-code);
+	font-size: 0.875rem;
+	line-height: 1.6;
+	background-color: var(--color-code-bg);
+	padding: var(--space-md);
+	border-radius: 8px;
+	overflow-x: auto;
+	border: 1px solid var(--color-border);
+}
+
+pre code { background: none; padding: 0; }
+
+.container {
+	max-width: var(--max-width);
+	margin: 0 auto;
+	padding: 0 var(--space-md);
+}
+
+.skip-link {
+	position: absolute;
+	top: -100%;
+	left: var(--space-md);
+	background: var(--color-accent);
+	color: var(--color-bg);
+	padding: var(--space-sm) var(--space-md);
+	border-radius: 0 0 4px 4px;
+	z-index: 1000;
+	font-family: var(--font-body);
+	font-weight: 600;
+}
+
+.skip-link:focus { top: 0; }
+
+.divider {
+	display: flex;
+	align-items: center;
+	gap: var(--space-md);
+	margin: var(--space-xl) 0;
+}
+
+.divider::before, .divider::after {
+	content: '';
+	flex: 1;
+	height: 1px;
+	background: linear-gradient(to right, transparent, var(--color-accent), transparent);
+}
+
+.divider-ring {
+	width: 1rem;
+	height: 1rem;
+	border: 2px solid var(--color-accent);
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+	h1 { font-size: 1.875rem; }
+	h2 { font-size: 1.5rem; }
+	h3 { font-size: 1.25rem; }
+}

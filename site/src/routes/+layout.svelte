@@ -1,11 +1,9 @@
-<script lang="ts">
-	import favicon from '$lib/assets/favicon.svg';
-
+<script>
+	import '$lib/styles/global.css';
 	let { children } = $props();
 </script>
 
-<svelte:head>
-	<link rel="icon" href={favicon} />
-</svelte:head>
-
-{@render children()}
+<a href="#main-content" class="skip-link">Skip to content</a>
+<main id="main-content">
+	{@render children()}
+</main>
