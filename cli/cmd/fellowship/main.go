@@ -10,8 +10,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
+	"github.com/justinjdev/fellowship/cli/internal/hook"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -47,6 +49,8 @@ func main() {
 		os.Exit(runInit())
 	case "status":
 		os.Exit(runStatus(os.Args[2:]))
+	case "work":
+		os.Exit(runWork(os.Args[2:]))
 	case "dashboard":
 		os.Exit(runDashboard(os.Args[2:]))
 	case "version":
@@ -77,6 +81,23 @@ Setup commands:
   install                Merge gate hooks into .claude/settings.json
   uninstall              Remove gate hooks from .claude/settings.json
   init                   Create tmp/quest-state.json with defaults
+
+Work items (hook persistence):
+  work init              Create initial quest-hook.json
+    --dir PATH           Worktree directory
+    --quest NAME         Quest name
+    --task "DESC"        Task description
+  work list              Show all work items with status
+    --dir PATH           Worktree directory
+  work add               Add a new work item
+    --dir PATH           Worktree directory
+    --phase PHASE        Quest phase (optional)
+    "description"        Work item description (positional arg)
+  work update            Update a work item's status
+    --dir PATH           Worktree directory
+    <id> <status>        Item ID and new status (positional args)
+  work show              Show full hook file as JSON
+    --dir PATH           Worktree directory
 
 Dashboard:
   dashboard              Start live web dashboard
@@ -358,6 +379,195 @@ func runDashboard(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+func runWork(args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: fellowship work <init|list|add|update|show>")
+		return 1
+	}
+
+	switch args[0] {
+	case "init":
+		return runWorkInit(args[1:])
+	case "list":
+		return runWorkList(args[1:])
+	case "add":
+		return runWorkAdd(args[1:])
+	case "update":
+		return runWorkUpdate(args[1:])
+	case "show":
+		return runWorkShow(args[1:])
+	default:
+		fmt.Fprintf(os.Stderr, "unknown work command: %s\n", args[0])
+		return 1
+	}
+}
+
+func runWorkInit(args []string) int {
+	fs := flag.NewFlagSet("work init", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	quest := fs.String("quest", "", "Quest name")
+	task := fs.String("task", "", "Task description")
+	fs.Parse(args)
+
+	root := *dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+
+	hookDir := filepath.Join(root, "tmp")
+	os.MkdirAll(hookDir, 0755)
+	hookPath := filepath.Join(hookDir, "quest-hook.json")
+
+	if _, err := os.Stat(hookPath); err == nil {
+		fmt.Fprintln(os.Stderr, "fellowship: quest-hook.json already exists")
+		return 1
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	h := &hook.QuestHook{
+		Version:   1,
+		QuestName: *quest,
+		Task:      *task,
+		Items:     []hook.WorkItem{},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := hook.Save(hookPath, h); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Hook file created at %s\n", hookPath)
+	return 0
+}
+
+func runWorkList(args []string) int {
+	fs := flag.NewFlagSet("work list", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	fs.Parse(args)
+
+	h, _, err := loadHook(*dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	if len(h.Items) == 0 {
+		fmt.Println("No work items.")
+		return 0
+	}
+
+	for _, item := range h.Items {
+		phase := ""
+		if item.Phase != "" {
+			phase = fmt.Sprintf(" [%s]", item.Phase)
+		}
+		deps := ""
+		if len(item.DependsOn) > 0 {
+			deps = fmt.Sprintf(" (depends: %s)", strings.Join(item.DependsOn, ", "))
+		}
+		fmt.Printf("%-6s %-8s %s%s%s\n", item.ID, item.Status, item.Description, phase, deps)
+	}
+
+	done, total := hook.Progress(h)
+	fmt.Printf("\nProgress: %d/%d done\n", done, total)
+	return 0
+}
+
+func runWorkAdd(args []string) int {
+	fs := flag.NewFlagSet("work add", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	phase := fs.String("phase", "", "Quest phase")
+	fs.Parse(args)
+
+	desc := strings.Join(fs.Args(), " ")
+	if desc == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship work add --dir <path> \"description\"")
+		return 1
+	}
+
+	h, hookPath, err := loadHook(*dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	id := hook.AddItem(h, desc, *phase)
+	if err := hook.Save(hookPath, h); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Added %s: %s\n", id, desc)
+	return 0
+}
+
+func runWorkUpdate(args []string) int {
+	fs := flag.NewFlagSet("work update", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	fs.Parse(args)
+
+	remaining := fs.Args()
+	if len(remaining) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: fellowship work update --dir <path> <id> <status>")
+		return 1
+	}
+
+	id := remaining[0]
+	statusStr := remaining[1]
+
+	ws, ok := hook.ValidStatus(statusStr)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "fellowship: invalid status %q (use: pending, active, done, blocked)\n", statusStr)
+		return 1
+	}
+
+	h, hookPath, err := loadHook(*dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	if err := hook.UpdateStatus(h, id, ws); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	if err := hook.Save(hookPath, h); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Updated %s → %s\n", id, statusStr)
+	return 0
+}
+
+func runWorkShow(args []string) int {
+	fs := flag.NewFlagSet("work show", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	fs.Parse(args)
+
+	h, _, err := loadHook(*dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	data, _ := json.MarshalIndent(h, "", "  ")
+	fmt.Println(string(data))
+	return 0
+}
+
+func loadHook(dir string) (*hook.QuestHook, string, error) {
+	root := dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+	hookPath := filepath.Join(root, "tmp", "quest-hook.json")
+	h, err := hook.Load(hookPath)
+	if err != nil {
+		return nil, "", err
+	}
+	return h, hookPath, nil
 }
 
 func gitRootOrCwd() string {

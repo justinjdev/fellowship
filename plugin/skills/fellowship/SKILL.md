@@ -129,6 +129,15 @@ For each quest, Gandalf:
    - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
    - Do NOT pass `isolation: "worktree"` — the teammate creates its own worktree during quest Phase 0, using the branch naming config. This avoids double-worktree conflicts and ensures config-resolved branch names are used.
 
+**Work item persistence:** After spawning a teammate, Gandalf writes the initial work items to `tmp/quest-hook.json` in the quest's worktree by running `fellowship work init`. This creates a persistent record of what work was assigned. To add work to a running quest: `fellowship work add --dir <worktree> 'handle edge case X'`. To re-sling unfinished items from a dead quest: read its hook file (`fellowship work show --dir <dead-worktree>`), extract pending items, and add them to a new quest's hook (`fellowship work add --dir <new-worktree> "description"`).
+
+**Work CLI commands:**
+- `fellowship work init --dir <path> --quest <name> --task "description"` — create initial hook file
+- `fellowship work add --dir <path> "description"` — add a new work item
+- `fellowship work update --dir <path> <id> <status>` — update a work item's status (pending, active, done, blocked)
+- `fellowship work list --dir <path>` — show all work items with status
+- `fellowship work show --dir <path>` — JSON output of the full hook
+
 **Teammate spawn prompt:**
 
 ```

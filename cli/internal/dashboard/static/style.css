@@ -223,6 +223,61 @@ main {
     color: var(--text-secondary);
 }
 
+/* ── Work Items ────────────────────────────────── */
+
+.work-progress {
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    color: var(--gold-dim);
+    margin-top: 0.5rem;
+}
+
+.work-details {
+    margin-top: 0.75rem;
+    border-top: 1px solid rgba(58, 48, 40, 0.5);
+    padding-top: 0.5rem;
+}
+
+.work-item-list {
+    list-style: none;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.work-item-list li {
+    padding: 0.25rem 0;
+}
+
+.status-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-family: var(--font-body);
+}
+
+.status-pending {
+    background: rgba(138, 125, 107, 0.2);
+    color: var(--text-secondary);
+}
+
+.status-active {
+    background: rgba(200, 168, 78, 0.2);
+    color: var(--gold);
+}
+
+.status-done {
+    background: rgba(90, 138, 90, 0.2);
+    color: var(--green);
+}
+
+.status-blocked {
+    background: rgba(138, 74, 74, 0.2);
+    color: #c07070;
+}
+
 /* ── Activity Feed ──────────────────────────────── */
 
 #activity-section {

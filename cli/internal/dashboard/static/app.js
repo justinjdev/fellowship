@@ -79,10 +79,37 @@
     }
     progressHTML += "</div>";
 
+    var workProgressHTML = "";
+    if (quest.work_total > 0) {
+      workProgressHTML = '<div class="work-progress">' +
+        quest.work_done + "/" + quest.work_total + " items done" +
+        "</div>";
+    }
+
     card.innerHTML =
       "<h3>" + escapeHTML(quest.name || quest.worktree) + "</h3>" +
       '<div class="quest-phase">' + escapeHTML(quest.phase || "Unknown") + "</div>" +
-      progressHTML;
+      progressHTML +
+      workProgressHTML;
+
+    if (quest.work_total > 0) {
+      var workDetails = document.createElement("div");
+      workDetails.className = "work-details";
+      workDetails.style.display = "none";
+      card.appendChild(workDetails);
+
+      card.style.cursor = "pointer";
+      card.addEventListener("click", function (e) {
+        if (e.target.tagName === "BUTTON") return;
+        var details = card.querySelector(".work-details");
+        if (details.style.display === "none") {
+          details.style.display = "block";
+          loadWorkItems(quest.worktree, details);
+        } else {
+          details.style.display = "none";
+        }
+      });
+    }
 
     if (quest.gate_pending) {
       var actions = document.createElement("div");
@@ -204,7 +231,39 @@
       if (old.gate_pending && !q.gate_pending) {
         addActivity((q.name || q.worktree) + ": gate resolved");
       }
+      if (q.work_total > 0 && old.work_done !== q.work_done) {
+        addActivity((q.name || q.worktree) + ": work progress " + q.work_done + "/" + q.work_total);
+      }
     });
+  }
+
+  // ── Work Items ────────────────────────────────
+
+  async function loadWorkItems(worktree, container) {
+    try {
+      var encoded = btoa(worktree);
+      var res = await fetch("/api/work/" + encoded);
+      if (!res.ok) {
+        container.innerHTML = "<p>No work items available.</p>";
+        return;
+      }
+      var data = await res.json();
+      var items = data.items || [];
+      if (items.length === 0) {
+        container.innerHTML = "<p>No work items.</p>";
+        return;
+      }
+      var html = '<ul class="work-item-list">';
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        var badge = '<span class="status-badge status-' + escapeHTML(item.status) + '">' + escapeHTML(item.status) + "</span>";
+        html += "<li>" + badge + " <strong>" + escapeHTML(item.id) + "</strong> " + escapeHTML(item.description) + "</li>";
+      }
+      html += "</ul>";
+      container.innerHTML = html;
+    } catch (err) {
+      container.innerHTML = "<p>Failed to load work items.</p>";
+    }
   }
 
   // ── Helpers ────────────────────────────────────

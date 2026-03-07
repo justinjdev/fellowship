@@ -1,11 +1,14 @@
 package dashboard
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	iofs "io/fs"
 	"net/http"
 	"path/filepath"
+	"strings"
 
+	"github.com/justinjdev/fellowship/cli/internal/hook"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -28,6 +31,7 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
 	s.mux.HandleFunc("POST /api/gate/approve", s.handleGateApprove)
 	s.mux.HandleFunc("POST /api/gate/reject", s.handleGateReject)
+	s.mux.HandleFunc("GET /api/work/", s.handleWork)
 
 	staticFS, _ := iofs.Sub(staticFiles, "static")
 	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
@@ -155,6 +159,37 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		LembasCompleted: st.LembasCompleted,
 		MetadataUpdated: st.MetadataUpdated,
 	})
+}
+
+func (s *Server) handleWork(w http.ResponseWriter, r *http.Request) {
+	// Extract base64-encoded worktree path from URL: /api/work/<base64>
+	pathPart := strings.TrimPrefix(r.URL.Path, "/api/work/")
+	if pathPart == "" {
+		http.Error(w, "missing worktree path", http.StatusBadRequest)
+		return
+	}
+
+	dirBytes, err := base64.URLEncoding.DecodeString(pathPart)
+	if err != nil {
+		http.Error(w, "invalid base64 path", http.StatusBadRequest)
+		return
+	}
+	dir := string(dirBytes)
+
+	if !s.validWorktreeDir(dir) {
+		http.Error(w, "invalid worktree directory", http.StatusBadRequest)
+		return
+	}
+
+	hookPath := filepath.Join(dir, "tmp", "quest-hook.json")
+	h, err := hook.Load(hookPath)
+	if err != nil {
+		http.Error(w, "no hook file found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(h)
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
