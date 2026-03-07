@@ -7,8 +7,8 @@
   },
   "repository": "https://github.com/justinjdev/fellowship",
   "license": "MIT",
-  "skills": "./plugin/skills/",
-  "agents": "./plugin/agents/",
-  "commands": "./plugin/commands/",
+  "skills": ["./plugin/skills/"],
+  "agents": ["./plugin/agents/"],
+  "commands": ["./plugin/commands/"],
   "hooks": "./plugin/hooks/hooks.json"
 }
