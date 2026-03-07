@@ -54,6 +54,26 @@ This is NOT the default. This is an opt-in configuration. Without this file, eve
 
 If the user asks to set up or modify their config, invoke `/settings`.
 
+### Discover Templates
+
+At startup (or when spawning a quest), Gandalf discovers available templates from three directories, highest priority first:
+
+1. **Project** — `.claude/fellowship-templates/` in the repo root
+2. **User** — `~/.claude/fellowship-templates/`
+3. **Built-in** — `plugin/templates/` (ships with fellowship)
+
+Read all `.md` files from each directory. If the same filename exists in multiple tiers, the highest-priority tier wins. Parse YAML frontmatter to extract `name`, `description`, and `keywords`.
+
+### Select Template for Quest
+
+When spawning a quest, Gandalf selects a template:
+
+1. **Explicit:** If the user specified `template: <name>` in their quest request, use that template. If the named template doesn't exist, warn the user and proceed without a template.
+2. **Auto-suggest:** If no explicit template, match the task description words against each template's `keywords` array. Pick the template with the most keyword matches. Ties go to the first match found.
+3. **No match:** If no keywords match, proceed without a template.
+
+When a template is selected (explicitly or via auto-suggest), announce it when spawning: e.g., `"Using 'bugfix' template for this quest."` The user can course-correct but Gandalf doesn't block on confirmation.
+
 ### Gate Hook Propagation
 
 Plugin hooks only fire in Gandalf's session — teammates spawned via the Agent tool do not inherit them. A `SessionStart` hook in the plugin automatically creates `.claude/settings.json` with project-level hooks when the plugin loads. This ensures teammates inherit gate enforcement without any manual setup.
@@ -130,6 +150,7 @@ CONTEXT:
 - Your task ID: {task_id}
 - Other active quests: {brief_list}
 - PR config: {pr_config_line}
+{template_guidance}
 ```
 
 **Spawn prompt substitution rules:**
@@ -145,10 +166,21 @@ Before sending the spawn prompt, Gandalf substitutes these placeholders with act
 | `{brief_list}` | Comma-separated list of other active quest names |
 | `{gate_config_override}` | See below |
 | `{pr_config_line}` | If `config.pr` exists: `"draft=true, template=..."`. If not: `"default (not a draft, no template)"` |
+| `{template_guidance}` | See below |
 
 **`{gate_config_override}` generation (read `config.gates.autoApprove` — default is empty):**
 - **DEFAULT (no config, or `autoApprove` absent/empty):** substitute with `"All gates require lead approval. Do not proceed past any gate without receiving an explicit approval message from the lead."` — do NOT mention auto-approval in any form.
 - **Only if `autoApprove` explicitly lists gate names** (e.g., `["Research", "Plan"]`): substitute with `"The following gates are auto-approved and hooks will advance your state automatically: Research, Plan. For all other gates, your tools are blocked until the lead approves."`
+
+**`{template_guidance}` generation:**
+- **No template selected:** substitute with empty string (no extra content in spawn prompt)
+- **Template selected:** Read the template file, strip the YAML frontmatter, and substitute with:
+  ```
+  TEMPLATE GUIDANCE (from "{template_name}" template — advisory, not prescriptive):
+
+  {template_body}
+  ```
+  Where `{template_body}` is the markdown content after the frontmatter.
 
 ### Spawn a Scout
 
