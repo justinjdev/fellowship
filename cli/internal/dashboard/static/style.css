@@ -262,6 +262,123 @@ main {
     border-radius: 2px;
 }
 
+/* ── Problems Banner ────────────────────────────── */
+
+#problems-banner {
+    max-width: 720px;
+    margin: 0 auto 1rem;
+    display: none;
+}
+
+.problem-badge {
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.problem-warning {
+    background: rgba(200, 168, 78, 0.15);
+    border: 1px solid var(--gold-dim);
+    color: var(--gold);
+}
+
+.problem-critical {
+    background: rgba(138, 74, 74, 0.2);
+    border: 1px solid var(--red);
+    color: #c07070;
+}
+
+.problem-severity {
+    text-transform: uppercase;
+    font-weight: 600;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+}
+
+.problem-quest {
+    font-family: var(--font-heading);
+    font-weight: 600;
+}
+
+/* ── Event Stream ──────────────────────────────── */
+
+#event-stream-section {
+    max-width: 720px;
+    margin: 2rem auto 0;
+}
+
+#event-stream-section h2 {
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gold-dim);
+    letter-spacing: 0.06em;
+    margin-bottom: 0.5rem;
+}
+
+#event-stream {
+    list-style: none;
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.event-item {
+    padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid rgba(58, 48, 40, 0.5);
+    border-left: 3px solid transparent;
+}
+
+.event-approved {
+    border-left-color: var(--green);
+}
+
+.event-submitted {
+    border-left-color: var(--gold-dim);
+}
+
+.event-rejected {
+    border-left-color: var(--red);
+}
+
+.event-neutral {
+    border-left-color: var(--text-secondary);
+}
+
+.event-time {
+    color: var(--text-secondary);
+    margin-right: 0.3rem;
+}
+
+.event-quest {
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    margin-right: 0.3rem;
+}
+
+.event-type-label {
+    color: var(--gold-dim);
+    font-size: 0.8rem;
+}
+
+.event-detail {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+#event-stream::-webkit-scrollbar {
+    width: 4px;
+}
+
+#event-stream::-webkit-scrollbar-thumb {
+    background: #3a3028;
+    border-radius: 2px;
+}
+
 /* ── Responsive ─────────────────────────────────── */
 
 @media (max-width: 600px) {

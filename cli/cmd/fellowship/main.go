@@ -10,8 +10,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"text/tabwriter"
+	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
+	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -47,6 +50,8 @@ func main() {
 		os.Exit(runInit())
 	case "status":
 		os.Exit(runStatus(os.Args[2:]))
+	case "feed":
+		os.Exit(runFeed(os.Args[2:]))
 	case "dashboard":
 		os.Exit(runDashboard(os.Args[2:]))
 	case "version":
@@ -77,6 +82,12 @@ Setup commands:
   install                Merge gate hooks into .claude/settings.json
   uninstall              Remove gate hooks from .claude/settings.json
   init                   Create tmp/quest-state.json with defaults
+
+Activity feed:
+  feed                   Show recent activity events
+    --dir PATH           Git repo root (default: auto-detect)
+    --problems           Show only detected problems
+    --json               Output as JSON
 
 Dashboard:
   dashboard              Start live web dashboard
@@ -115,6 +126,12 @@ func runHook(name string) int {
 		}
 	}
 
+	dir := filepath.Dir(filepath.Dir(statePath)) // strip tmp/quest-state.json
+	questName := s.QuestName
+	if questName == "" {
+		questName = filepath.Base(dir)
+	}
+
 	var result hooks.HookResult
 	stateChanged := false
 
@@ -125,10 +142,37 @@ func runHook(name string) int {
 		sr := hooks.GateSubmit(s, input)
 		result = hooks.HookResult{Block: sr.Block, Message: sr.Message}
 		stateChanged = sr.StateChanged
+		if stateChanged && !sr.Block {
+			events.Append(dir, events.Event{
+				Timestamp: time.Now().UTC().Format(time.RFC3339),
+				Quest:     questName,
+				Type:      events.GateSubmitted,
+				Phase:     s.Phase,
+				Detail:    "Gate submitted for review",
+			})
+		}
 	case "gate-prereq":
 		stateChanged = hooks.GatePrereq(s, input)
+		if stateChanged {
+			events.Append(dir, events.Event{
+				Timestamp: time.Now().UTC().Format(time.RFC3339),
+				Quest:     questName,
+				Type:      events.LembasCompleted,
+				Phase:     s.Phase,
+				Detail:    "Lembas skill completed",
+			})
+		}
 	case "metadata-track":
 		stateChanged = hooks.MetadataTrack(s, input)
+		if stateChanged {
+			events.Append(dir, events.Event{
+				Timestamp: time.Now().UTC().Format(time.RFC3339),
+				Quest:     questName,
+				Type:      events.MetadataUpdated,
+				Phase:     s.Phase,
+				Detail:    "Task metadata updated",
+			})
+		}
 	case "completion-guard":
 		result = hooks.CompletionGuard(s, input)
 	default:
@@ -179,6 +223,7 @@ func runGate(args []string) int {
 			fmt.Fprintln(os.Stderr, "No gate pending")
 			return 1
 		}
+		prevPhase := s.Phase
 		nextPhase, err := state.NextPhase(s.Phase)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -193,6 +238,26 @@ func runGate(args []string) int {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
 		}
+		dir := filepath.Dir(filepath.Dir(statePath))
+		questName := s.QuestName
+		if questName == "" {
+			questName = filepath.Base(dir)
+		}
+		now := time.Now().UTC().Format(time.RFC3339)
+		events.Append(dir, events.Event{
+			Timestamp: now,
+			Quest:     questName,
+			Type:      events.GateApproved,
+			Phase:     prevPhase,
+			Detail:    fmt.Sprintf("Gate approved for %s", prevPhase),
+		})
+		events.Append(dir, events.Event{
+			Timestamp: now,
+			Quest:     questName,
+			Type:      events.PhaseTransition,
+			Phase:     nextPhase,
+			Detail:    fmt.Sprintf("Phase advanced from %s to %s", prevPhase, nextPhase),
+		})
 		fmt.Printf("Gate approved. Phase advanced to %s.\n", nextPhase)
 		return 0
 
@@ -201,12 +266,25 @@ func runGate(args []string) int {
 			fmt.Fprintln(os.Stderr, "No gate pending")
 			return 1
 		}
+		prevPhase := s.Phase
 		s.GatePending = false
 		s.GateID = nil
 		if err := state.Save(statePath, s); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
 		}
+		dir := filepath.Dir(filepath.Dir(statePath))
+		questName := s.QuestName
+		if questName == "" {
+			questName = filepath.Base(dir)
+		}
+		events.Append(dir, events.Event{
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Quest:     questName,
+			Type:      events.GateRejected,
+			Phase:     prevPhase,
+			Detail:    fmt.Sprintf("Gate rejected for %s", prevPhase),
+		})
 		fmt.Println("Gate rejected. Teammate unblocked to address feedback.")
 		return 0
 
@@ -357,6 +435,76 @@ func runDashboard(args []string) int {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
+	return 0
+}
+
+func runFeed(args []string) int {
+	fs := flag.NewFlagSet("feed", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	problems := fs.Bool("problems", false, "Show only detected problems")
+	jsonOut := fs.Bool("json", false, "Output as JSON")
+	fs.Parse(args)
+
+	root := *dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+
+	// Discover worktrees
+	ds, err := dashboard.DiscoverQuests(root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	var worktrees []string
+	for _, q := range ds.Quests {
+		worktrees = append(worktrees, q.Worktree)
+	}
+
+	if *problems {
+		detected := events.DetectProblems(worktrees)
+		if *jsonOut {
+			data, _ := json.MarshalIndent(detected, "", "  ")
+			fmt.Println(string(data))
+			return 0
+		}
+		if len(detected) == 0 {
+			fmt.Println("No problems detected.")
+			return 0
+		}
+		tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+		fmt.Fprintf(tw, "SEVERITY\tQUEST\tTYPE\tMESSAGE\n")
+		for _, p := range detected {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", p.Severity, p.Quest, p.Type, p.Message)
+		}
+		tw.Flush()
+		return 0
+	}
+
+	evts, err := events.ReadAll(worktrees, 20)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	if *jsonOut {
+		data, _ := json.MarshalIndent(evts, "", "  ")
+		fmt.Println(string(data))
+		return 0
+	}
+
+	if len(evts) == 0 {
+		fmt.Println("No events recorded yet.")
+		return 0
+	}
+
+	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	fmt.Fprintf(tw, "TIMESTAMP\tQUEST\tTYPE\tPHASE\tDETAIL\n")
+	for _, e := range evts {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", e.Timestamp, e.Quest, e.Type, e.Phase, e.Detail)
+	}
+	tw.Flush()
 	return 0
 }
 

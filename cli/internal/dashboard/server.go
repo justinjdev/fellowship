@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -26,6 +27,8 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 		pollInterval: pollInterval,
 	}
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
+	s.mux.HandleFunc("GET /api/events", s.handleEvents)
+	s.mux.HandleFunc("GET /api/problems", s.handleProblems)
 	s.mux.HandleFunc("POST /api/gate/approve", s.handleGateApprove)
 	s.mux.HandleFunc("POST /api/gate/reject", s.handleGateReject)
 
@@ -155,6 +158,42 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		LembasCompleted: st.LembasCompleted,
 		MetadataUpdated: st.MetadataUpdated,
 	})
+}
+
+func (s *Server) worktreeDirs() []string {
+	status, err := DiscoverQuests(s.gitRoot)
+	if err != nil {
+		return nil
+	}
+	var dirs []string
+	for _, q := range status.Quests {
+		dirs = append(dirs, q.Worktree)
+	}
+	return dirs
+}
+
+func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	worktrees := s.worktreeDirs()
+	evts, err := events.ReadAll(worktrees, 50)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if evts == nil {
+		evts = []events.Event{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(evts)
+}
+
+func (s *Server) handleProblems(w http.ResponseWriter, r *http.Request) {
+	worktrees := s.worktreeDirs()
+	problems := events.DetectProblems(worktrees)
+	if problems == nil {
+		problems = []events.Problem{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(problems)
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
