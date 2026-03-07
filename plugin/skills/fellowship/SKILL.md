@@ -144,6 +144,15 @@ For each quest, Gandalf:
    - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
    - Do NOT pass `isolation: "worktree"` — the teammate creates its own worktree during quest Phase 0, using the branch naming config. This avoids double-worktree conflicts and ensures config-resolved branch names are used.
 
+**Errand persistence:** After spawning a teammate, Gandalf writes the initial errands to `tmp/quest-errands.json` in the quest's worktree by running `fellowship errand init`. This creates a persistent record of what errands were assigned. To add errands to a running quest: `fellowship errand add --dir <worktree> 'handle edge case X'`. To re-sling unfinished errands from a dead quest: read its errand file (`fellowship errand show --dir <dead-worktree>`), extract pending errands, and add them to a new quest's errand list (`fellowship errand add --dir <new-worktree> "description"`).
+
+**Errand CLI commands:**
+- `fellowship errand init --dir <path> --quest <name> --task "description"` — create initial errand file
+- `fellowship errand add --dir <path> "description"` — add a new errand
+- `fellowship errand update --dir <path> <id> <status>` — update an errand's status (pending, active, done, blocked)
+- `fellowship errand list --dir <path>` — show all errands with status
+- `fellowship errand show --dir <path>` — JSON output of the full errand list
+
 **Teammate spawn prompt:**
 
 ```

@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	iofs "io/fs"
@@ -8,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/justinjdev/fellowship/cli/internal/eagles"
+	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -28,9 +31,11 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 		pollInterval: pollInterval,
 	}
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
+	s.mux.HandleFunc("GET /api/eagles", s.handleEagles)
 	s.mux.HandleFunc("POST /api/gate/approve", s.handleGateApprove)
 	s.mux.HandleFunc("POST /api/gate/reject", s.handleGateReject)
 	s.mux.HandleFunc("POST /api/company/", s.handleCompanyApprove)
+	s.mux.HandleFunc("GET /api/errand/", s.handleErrand)
 
 	staticFS, _ := iofs.Sub(staticFiles, "static")
 	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
@@ -165,7 +170,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/company/")
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) != 2 || parts[1] != "approve" || parts[0] == "" {
-		http.Error(w, "usage: GET /api/company/<name>/approve", http.StatusBadRequest)
+		http.Error(w, "usage: POST /api/company/<name>/approve", http.StatusBadRequest)
 		return
 	}
 	name := parts[0]
@@ -253,6 +258,48 @@ func batchApproveCompany(c CompanyEntry, fs *FellowshipState) (approved []string
 	}
 
 	return approved, errs
+}
+
+func (s *Server) handleEagles(w http.ResponseWriter, r *http.Request) {
+	opts := eagles.DefaultOptions()
+	report, err := eagles.Sweep(s.gitRoot, opts)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(report)
+}
+
+func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
+	// Extract base64-encoded worktree path from URL: /api/errand/<base64>
+	pathPart := strings.TrimPrefix(r.URL.Path, "/api/errand/")
+	if pathPart == "" {
+		http.Error(w, "missing worktree path", http.StatusBadRequest)
+		return
+	}
+
+	dirBytes, err := base64.URLEncoding.DecodeString(pathPart)
+	if err != nil {
+		http.Error(w, "invalid base64 path", http.StatusBadRequest)
+		return
+	}
+	dir := string(dirBytes)
+
+	if !s.validWorktreeDir(dir) {
+		http.Error(w, "invalid worktree directory", http.StatusBadRequest)
+		return
+	}
+
+	errandPath := filepath.Join(dir, "tmp", "quest-errands.json")
+	h, err := errand.Load(errandPath)
+	if err != nil {
+		http.Error(w, "no errand file found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(h)
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {

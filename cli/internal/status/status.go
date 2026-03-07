@@ -1,13 +1,11 @@
 package status
 
 import (
-	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
+	"github.com/justinjdev/fellowship/cli/internal/gitutil"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -91,7 +89,7 @@ func Scan(gitRoot string) (*StatusResult, error) {
 	}
 
 	// Discover merged branches.
-	mergedOutput, err := runGit(gitRoot, "branch", "--merged", "main")
+	mergedOutput, err := gitutil.RunGit(gitRoot, "branch", "--merged", "main")
 	if err == nil {
 		result.MergedBranches = ParseMergedBranches(mergedOutput)
 	}
@@ -101,14 +99,14 @@ func Scan(gitRoot string) (*StatusResult, error) {
 	}
 
 	// Enumerate worktrees.
-	worktrees, err := listWorktrees(gitRoot)
+	worktrees, err := gitutil.ListWorktrees(gitRoot)
 	if err != nil {
-		return nil, fmt.Errorf("listing worktrees: %w", err)
+		return nil, err
 	}
 
 	for _, wt := range worktrees {
 		questStatePath := filepath.Join(wt, "tmp", "quest-state.json")
-		if !fileExists(questStatePath) {
+		if !gitutil.FileExists(questStatePath) {
 			continue
 		}
 
@@ -117,9 +115,9 @@ func Scan(gitRoot string) (*StatusResult, error) {
 			continue
 		}
 
-		branch := branchForWorktree(wt)
-		hasCheckpoint := fileExists(filepath.Join(wt, "tmp", "checkpoint.md"))
-		hasUncommitted := checkUncommitted(wt)
+		branch := gitutil.BranchForWorktree(wt)
+		hasCheckpoint := gitutil.FileExists(filepath.Join(wt, "tmp", "checkpoint.md"))
+		hasUncommitted := gitutil.CheckUncommitted(wt)
 
 		qi := QuestInfo{
 			Name:            s.QuestName,
@@ -139,55 +137,3 @@ func Scan(gitRoot string) (*StatusResult, error) {
 	return result, nil
 }
 
-// listWorktrees parses `git worktree list --porcelain` and returns worktree paths.
-func listWorktrees(gitRoot string) ([]string, error) {
-	out, err := runGit(gitRoot, "worktree", "list", "--porcelain")
-	if err != nil {
-		return nil, err
-	}
-	var paths []string
-	for _, line := range strings.Split(out, "\n") {
-		if strings.HasPrefix(line, "worktree ") {
-			paths = append(paths, strings.TrimPrefix(line, "worktree "))
-		}
-	}
-	return paths, nil
-}
-
-// branchForWorktree returns the current branch name for a worktree directory.
-func branchForWorktree(wtPath string) string {
-	out, err := runGit(wtPath, "rev-parse", "--abbrev-ref", "HEAD")
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(out)
-}
-
-// checkUncommitted returns true if `git status --porcelain` produces any output.
-func checkUncommitted(wtPath string) bool {
-	out, err := runGit(wtPath, "status", "--porcelain")
-	if err != nil {
-		return false
-	}
-	return strings.TrimSpace(out) != ""
-}
-
-// runGit executes a git command in the given directory and returns stdout.
-func runGit(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return string(out), nil
-}
-
-// fileExists returns true if the path exists and is not a directory.
-func fileExists(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return !info.IsDir()
-}

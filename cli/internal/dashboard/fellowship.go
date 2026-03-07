@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -49,6 +50,8 @@ type QuestStatus struct {
 	GateID          *string `json:"gate_id"`
 	LembasCompleted bool    `json:"lembas_completed"`
 	MetadataUpdated bool    `json:"metadata_updated"`
+	ErrandsDone        int     `json:"errands_done"`
+	ErrandsTotal       int     `json:"errands_total"`
 }
 
 type DashboardStatus struct {
@@ -138,6 +141,7 @@ func loadQuestStatus(name, worktree string) (*QuestStatus, error) {
 	if err != nil {
 		return nil, err
 	}
+	done, total := LoadErrandProgress(worktree)
 	return &QuestStatus{
 		Name:            name,
 		Worktree:        worktree,
@@ -146,7 +150,19 @@ func loadQuestStatus(name, worktree string) (*QuestStatus, error) {
 		GateID:          s.GateID,
 		LembasCompleted: s.LembasCompleted,
 		MetadataUpdated: s.MetadataUpdated,
+		ErrandsDone:        done,
+		ErrandsTotal:       total,
 	}, nil
+}
+
+// LoadErrandProgress loads the hook file from a worktree and returns progress counts.
+func LoadErrandProgress(worktree string) (done, total int) {
+	errandPath := filepath.Join(worktree, "tmp", "quest-errands.json")
+	h, err := errand.Load(errandPath)
+	if err != nil {
+		return 0, 0
+	}
+	return errand.Progress(h)
 }
 
 func LoadFellowshipState(path string) (*FellowshipState, error) {

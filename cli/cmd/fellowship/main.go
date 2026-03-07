@@ -10,13 +10,17 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/company"
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
+	"github.com/justinjdev/fellowship/cli/internal/eagles"
+	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/status"
+	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
 var version = "dev"
@@ -54,6 +58,12 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(runCompany(os.Args[2:]))
+	case "tome":
+		os.Exit(runTome(os.Args[2:]))
+	case "eagles":
+		os.Exit(runEagles(os.Args[2:]))
+	case "errand":
+		os.Exit(runErrand(os.Args[2:]))
 	case "dashboard":
 		os.Exit(runDashboard(os.Args[2:]))
 	case "version":
@@ -73,12 +83,18 @@ Hook commands (called by Claude Code hooks, read stdin):
   hook gate-prereq       Track lembas skill invocation
   hook metadata-track    Track phase metadata updates
   hook completion-guard  Block task completion unless phase is Complete
+  hook file-track        Record file touches in quest tome
 
 Agent/lead commands:
   gate status            Show current phase, prereqs, pending state
   gate approve           Approve a pending gate (advances to next phase)
   gate reject            Reject a pending gate (clears pending, keeps phase)
+  tome show [--json]     Show quest tome (phases, gates, files touched)
   status [--json]        Scan worktrees and show fellowship recovery status
+  eagles                 Scan quest health and write eagles report
+    --dir DIR            Git repo root (default: auto-detect)
+    --threshold N        Gate pending timeout in minutes (default: 10)
+    --json               Output as JSON
 
 Setup commands:
   install                Merge gate hooks into .claude/settings.json
@@ -92,6 +108,23 @@ Company commands:
     --dir PATH            Git repo root (default: auto-detect)
   company approve <name>  Batch-approve all pending gates in a company
     --dir PATH            Git repo root (default: auto-detect)
+
+Errands (persistent work items):
+  errand init            Create initial quest-errands.json
+    --dir PATH           Worktree directory
+    --quest NAME         Quest name
+    --task "DESC"        Task description
+  errand list            Show all errands with status
+    --dir PATH           Worktree directory
+  errand add             Add a new errand
+    --dir PATH           Worktree directory
+    --phase PHASE        Quest phase (optional)
+    "description"        Errand description (positional arg)
+  errand update          Update an errand's status
+    --dir PATH           Worktree directory
+    <id> <status>        Item ID and new status (positional args)
+  errand show            Show full errand file as JSON
+    --dir PATH           Worktree directory
 
 Dashboard:
   dashboard              Start live web dashboard
@@ -137,15 +170,27 @@ func runHook(name string) int {
 	case "gate-guard":
 		result = hooks.GateGuard(s, input)
 	case "gate-submit":
+		prevPhase := s.Phase
 		sr := hooks.GateSubmit(s, input)
 		result = hooks.HookResult{Block: sr.Block, Message: sr.Message}
 		stateChanged = sr.StateChanged
+		if sr.StateChanged && !sr.Block {
+			tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+			hooks.RecordGateSubmitted(tomePath, prevPhase, s.Phase != prevPhase)
+		}
 	case "gate-prereq":
 		stateChanged = hooks.GatePrereq(s, input)
 	case "metadata-track":
 		stateChanged = hooks.MetadataTrack(s, input)
 	case "completion-guard":
 		result = hooks.CompletionGuard(s, input)
+		if !result.Block && input.ToolInput.Status == "completed" {
+			tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+			hooks.MarkTomeCompleted(tomePath)
+		}
+	case "file-track":
+		tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+		hooks.FileTrack(s, input, tomePath)
 	default:
 		fmt.Fprintf(os.Stderr, "fellowship: unknown hook %q\n", name)
 		return 2
@@ -199,6 +244,7 @@ func runGate(args []string) int {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
 		}
+		prevPhase := s.Phase
 		s.GatePending = false
 		s.Phase = nextPhase
 		s.GateID = nil
@@ -208,6 +254,11 @@ func runGate(args []string) int {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
 		}
+		tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+		c := tome.LoadOrCreate(tomePath)
+		tome.RecordGate(c, prevPhase, "approved")
+		tome.RecordPhase(c, prevPhase)
+		tome.Save(tomePath, c)
 		fmt.Printf("Gate approved. Phase advanced to %s.\n", nextPhase)
 		return 0
 
@@ -222,6 +273,10 @@ func runGate(args []string) int {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
 		}
+		tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+		c := tome.LoadOrCreate(tomePath)
+		tome.RecordGate(c, s.Phase, "rejected")
+		tome.Save(tomePath, c)
 		fmt.Println("Gate rejected. Teammate unblocked to address feedback.")
 		return 0
 
@@ -347,6 +402,42 @@ func runStatus(args []string) int {
 	return 0
 }
 
+func runEagles(args []string) int {
+	fs := flag.NewFlagSet("eagles", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	threshold := fs.Int("threshold", 10, "Gate pending timeout in minutes")
+	jsonOut := fs.Bool("json", false, "Output as JSON")
+	fs.Parse(args)
+
+	root := *dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+
+	opts := eagles.DefaultOptions()
+	opts.GateThreshold = time.Duration(*threshold) * time.Minute
+
+	report, err := eagles.Sweep(root, opts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	// Write report to tmp/eagles-report.json
+	if err := eagles.WriteReport(root, report); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: warning: %v\n", err)
+	}
+
+	if *jsonOut {
+		data, _ := json.MarshalIndent(report, "", "  ")
+		fmt.Println(string(data))
+		return 0
+	}
+
+	fmt.Print(eagles.FormatTable(report))
+	return 0
+}
+
 func runDashboard(args []string) int {
 	fs := flag.NewFlagSet("dashboard", flag.ExitOnError)
 	port := fs.Int("port", 3000, "HTTP port")
@@ -444,6 +535,273 @@ func runCompany(args []string) int {
 		fmt.Fprintf(os.Stderr, "unknown company command: %s\n", sub)
 		return 1
 	}
+}
+
+func runTome(args []string) int {
+	if len(args) < 1 || args[0] != "show" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship tome show [--dir <path>] [--json]")
+		return 1
+	}
+
+	fs := flag.NewFlagSet("tome show", flag.ExitOnError)
+	dir := fs.String("dir", "", "Directory to search for tome (default: auto-detect)")
+	jsonOut := fs.Bool("json", false, "Output as JSON")
+	fs.Parse(args[1:])
+
+	searchDir := *dir
+	if searchDir == "" {
+		searchDir = gitRootOrCwd()
+	}
+
+	tomePath, err := tome.FindTome(searchDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	if tomePath == "" {
+		fmt.Fprintln(os.Stderr, "No quest tome found.")
+		return 1
+	}
+
+	c, err := tome.Load(tomePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	if *jsonOut {
+		data, _ := json.MarshalIndent(c, "", "  ")
+		fmt.Println(string(data))
+		return 0
+	}
+
+	fmt.Printf("Quest Tome: %s\n", c.QuestName)
+	fmt.Printf("Status:   %s\n", c.Status)
+	fmt.Printf("Task:     %s\n", c.Task)
+	fmt.Printf("Respawns: %d\n", c.Respawns)
+	fmt.Println()
+
+	if len(c.PhasesCompleted) > 0 {
+		fmt.Println("Phases Completed:")
+		for _, p := range c.PhasesCompleted {
+			dur := ""
+			if p.Duration != "" {
+				dur = fmt.Sprintf(" (%s)", p.Duration)
+			}
+			fmt.Printf("  - %s at %s%s\n", p.Phase, p.CompletedAt, dur)
+		}
+		fmt.Println()
+	}
+
+	if len(c.GateHistory) > 0 {
+		fmt.Println("Gate History:")
+		for _, g := range c.GateHistory {
+			reason := ""
+			if g.Reason != "" {
+				reason = fmt.Sprintf(" — %s", g.Reason)
+			}
+			fmt.Printf("  - [%s] %s %s%s\n", g.Timestamp, g.Phase, g.Action, reason)
+		}
+		fmt.Println()
+	}
+
+	if len(c.FilesTouched) > 0 {
+		fmt.Printf("Files Touched (%d):\n", len(c.FilesTouched))
+		for _, f := range c.FilesTouched {
+			fmt.Printf("  - %s\n", f)
+		}
+	}
+
+	return 0
+}
+
+func runErrand(args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: fellowship errand <init|list|add|update|show>")
+		return 1
+	}
+
+	switch args[0] {
+	case "init":
+		return runErrandInit(args[1:])
+	case "list":
+		return runErrandList(args[1:])
+	case "add":
+		return runErrandAdd(args[1:])
+	case "update":
+		return runErrandUpdate(args[1:])
+	case "show":
+		return runErrandShow(args[1:])
+	default:
+		fmt.Fprintf(os.Stderr, "unknown errand command: %s\n", args[0])
+		return 1
+	}
+}
+
+func runErrandInit(args []string) int {
+	fs := flag.NewFlagSet("errand init", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	quest := fs.String("quest", "", "Quest name")
+	task := fs.String("task", "", "Task description")
+	fs.Parse(args)
+
+	root := *dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+
+	errandDir := filepath.Join(root, "tmp")
+	os.MkdirAll(errandDir, 0755)
+	errandPath := filepath.Join(errandDir, "quest-errands.json")
+
+	if _, err := os.Stat(errandPath); err == nil {
+		fmt.Fprintln(os.Stderr, "fellowship: quest-errands.json already exists")
+		return 1
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	h := &errand.QuestErrandList{
+		Version:   1,
+		QuestName: *quest,
+		Task:      *task,
+		Items:     []errand.Errand{},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := errand.Save(errandPath, h); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Errand file created at %s\n", errandPath)
+	return 0
+}
+
+func runErrandList(args []string) int {
+	fs := flag.NewFlagSet("errand list", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	fs.Parse(args)
+
+	h, _, err := loadErrandFile(*dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	if len(h.Items) == 0 {
+		fmt.Println("No errands.")
+		return 0
+	}
+
+	for _, item := range h.Items {
+		phase := ""
+		if item.Phase != "" {
+			phase = fmt.Sprintf(" [%s]", item.Phase)
+		}
+		deps := ""
+		if len(item.DependsOn) > 0 {
+			deps = fmt.Sprintf(" (depends: %s)", strings.Join(item.DependsOn, ", "))
+		}
+		fmt.Printf("%-6s %-8s %s%s%s\n", item.ID, item.Status, item.Description, phase, deps)
+	}
+
+	done, total := errand.Progress(h)
+	fmt.Printf("\nProgress: %d/%d done\n", done, total)
+	return 0
+}
+
+func runErrandAdd(args []string) int {
+	fs := flag.NewFlagSet("errand add", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	phase := fs.String("phase", "", "Quest phase")
+	fs.Parse(args)
+
+	desc := strings.Join(fs.Args(), " ")
+	if desc == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship errand add --dir <path> \"description\"")
+		return 1
+	}
+
+	h, errandPath, err := loadErrandFile(*dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	id := errand.AddErrand(h, desc, *phase)
+	if err := errand.Save(errandPath, h); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Added %s: %s\n", id, desc)
+	return 0
+}
+
+func runErrandUpdate(args []string) int {
+	fs := flag.NewFlagSet("errand update", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	fs.Parse(args)
+
+	remaining := fs.Args()
+	if len(remaining) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: fellowship errand update --dir <path> <id> <status>")
+		return 1
+	}
+
+	id := remaining[0]
+	statusStr := remaining[1]
+
+	ws, ok := errand.ValidStatus(statusStr)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "fellowship: invalid status %q (use: pending, active, done, blocked)\n", statusStr)
+		return 1
+	}
+
+	h, errandPath, err := loadErrandFile(*dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	if err := errand.UpdateStatus(h, id, ws); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	if err := errand.Save(errandPath, h); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Updated %s → %s\n", id, statusStr)
+	return 0
+}
+
+func runErrandShow(args []string) int {
+	fs := flag.NewFlagSet("errand show", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	fs.Parse(args)
+
+	h, _, err := loadErrandFile(*dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	data, _ := json.MarshalIndent(h, "", "  ")
+	fmt.Println(string(data))
+	return 0
+}
+
+func loadErrandFile(dir string) (*errand.QuestErrandList, string, error) {
+	root := dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+	errandPath := filepath.Join(root, "tmp", "quest-errands.json")
+	h, err := errand.Load(errandPath)
+	if err != nil {
+		return nil, "", err
+	}
+	return h, errandPath, nil
 }
 
 func gitRootOrCwd() string {
