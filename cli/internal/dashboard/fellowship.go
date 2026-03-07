@@ -12,21 +12,26 @@ import (
 )
 
 type FellowshipState struct {
+	Version   int          `json:"version"`
 	Name      string       `json:"name"`
 	CreatedAt string       `json:"created_at"`
+	MainRepo  string       `json:"main_repo"`
 	Quests    []QuestEntry `json:"quests"`
 	Scouts    []ScoutEntry `json:"scouts"`
 }
 
 type QuestEntry struct {
-	Name     string `json:"name"`
-	Worktree string `json:"worktree"`
-	TaskID   string `json:"task_id"`
+	Name            string `json:"name"`
+	TaskDescription string `json:"task_description"`
+	Worktree        string `json:"worktree"`
+	Branch          string `json:"branch"`
+	TaskID          string `json:"task_id"`
 }
 
 type ScoutEntry struct {
-	Name   string `json:"name"`
-	TaskID string `json:"task_id"`
+	Name     string `json:"name"`
+	Question string `json:"question"`
+	TaskID   string `json:"task_id"`
 }
 
 type QuestStatus struct {
