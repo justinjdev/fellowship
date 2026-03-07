@@ -47,10 +47,28 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
 }
 
+func (s *Server) validWorktreeDir(dir string) bool {
+	status, err := DiscoverQuests(s.gitRoot)
+	if err != nil {
+		return false
+	}
+	for _, q := range status.Quests {
+		if q.Worktree == dir {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 	var req gateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if !s.validWorktreeDir(req.Dir) {
+		http.Error(w, "invalid worktree directory", http.StatusBadRequest)
 		return
 	}
 
@@ -99,6 +117,11 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 	var req gateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if !s.validWorktreeDir(req.Dir) {
+		http.Error(w, "invalid worktree directory", http.StatusBadRequest)
 		return
 	}
 

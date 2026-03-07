@@ -79,25 +79,51 @@
     }
     progressHTML += "</div>";
 
-    let gateHTML = "";
-    if (quest.gate_pending) {
-      gateHTML =
-        '<div class="gate-actions">' +
-          '<button class="btn btn-approve" onclick="window.__approve(\'' + escapeAttr(quest.worktree) + '\')">Approve</button>' +
-          '<button class="btn btn-reject" onclick="window.__showReject(this)">Reject</button>' +
-        "</div>" +
-        '<div class="reject-confirm" id="reject-' + escapeAttr(quest.worktree) + '">' +
-          '<span>Are you sure?</span>' +
-          '<button class="btn btn-confirm-reject" onclick="window.__reject(\'' + escapeAttr(quest.worktree) + '\')">Confirm Reject</button>' +
-          '<button class="btn btn-cancel" onclick="window.__hideReject(this)">Cancel</button>' +
-        "</div>";
-    }
-
     card.innerHTML =
       "<h3>" + escapeHTML(quest.name || quest.worktree) + "</h3>" +
       '<div class="quest-phase">' + escapeHTML(quest.phase || "Unknown") + "</div>" +
-      progressHTML +
-      gateHTML;
+      progressHTML;
+
+    if (quest.gate_pending) {
+      var actions = document.createElement("div");
+      actions.className = "gate-actions";
+
+      var approveBtn = document.createElement("button");
+      approveBtn.className = "btn btn-approve";
+      approveBtn.textContent = "Approve";
+      approveBtn.addEventListener("click", function () { window.__approve(quest.worktree); });
+
+      var rejectBtn = document.createElement("button");
+      rejectBtn.className = "btn btn-reject";
+      rejectBtn.textContent = "Reject";
+
+      actions.appendChild(approveBtn);
+      actions.appendChild(rejectBtn);
+      card.appendChild(actions);
+
+      var confirmDiv = document.createElement("div");
+      confirmDiv.className = "reject-confirm";
+
+      var span = document.createElement("span");
+      span.textContent = "Are you sure?";
+      confirmDiv.appendChild(span);
+
+      var confirmBtn = document.createElement("button");
+      confirmBtn.className = "btn btn-confirm-reject";
+      confirmBtn.textContent = "Confirm Reject";
+      confirmBtn.addEventListener("click", function () { window.__reject(quest.worktree); });
+      confirmDiv.appendChild(confirmBtn);
+
+      var cancelBtn = document.createElement("button");
+      cancelBtn.className = "btn btn-cancel";
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.addEventListener("click", function () { confirmDiv.classList.remove("visible"); });
+      confirmDiv.appendChild(cancelBtn);
+
+      rejectBtn.addEventListener("click", function () { confirmDiv.classList.add("visible"); });
+
+      card.appendChild(confirmDiv);
+    }
 
     return card;
   }
@@ -126,15 +152,6 @@
     } catch (err) {
       addActivity("Approve failed: " + err.message);
     }
-  };
-
-  window.__showReject = function (btn) {
-    const confirm = btn.parentElement.nextElementSibling;
-    if (confirm) confirm.classList.add("visible");
-  };
-
-  window.__hideReject = function (btn) {
-    btn.closest(".reject-confirm").classList.remove("visible");
   };
 
   window.__reject = async function (dir) {
@@ -196,10 +213,6 @@
     var div = document.createElement("div");
     div.textContent = str;
     return div.innerHTML;
-  }
-
-  function escapeAttr(str) {
-    return str.replace(/&/g, "&amp;").replace(/'/g, "&#39;").replace(/"/g, "&quot;");
   }
 
   // ── Start ──────────────────────────────────────
