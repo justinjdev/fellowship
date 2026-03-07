@@ -10,8 +10,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
+	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -47,6 +49,8 @@ func main() {
 		os.Exit(runInit())
 	case "status":
 		os.Exit(runStatus(os.Args[2:]))
+	case "errand":
+		os.Exit(runErrand(os.Args[2:]))
 	case "dashboard":
 		os.Exit(runDashboard(os.Args[2:]))
 	case "version":
@@ -77,6 +81,23 @@ Setup commands:
   install                Merge gate hooks into .claude/settings.json
   uninstall              Remove gate hooks from .claude/settings.json
   init                   Create tmp/quest-state.json with defaults
+
+Errands (persistent work items):
+  errand init            Create initial quest-errands.json
+    --dir PATH           Worktree directory
+    --quest NAME         Quest name
+    --task "DESC"        Task description
+  errand list            Show all errands with status
+    --dir PATH           Worktree directory
+  errand add             Add a new errand
+    --dir PATH           Worktree directory
+    --phase PHASE        Quest phase (optional)
+    "description"        Errand description (positional arg)
+  errand update          Update an errand's status
+    --dir PATH           Worktree directory
+    <id> <status>        Item ID and new status (positional args)
+  errand show            Show full errand file as JSON
+    --dir PATH           Worktree directory
 
 Dashboard:
   dashboard              Start live web dashboard
@@ -358,6 +379,195 @@ func runDashboard(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+func runErrand(args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: fellowship errand <init|list|add|update|show>")
+		return 1
+	}
+
+	switch args[0] {
+	case "init":
+		return runErrandInit(args[1:])
+	case "list":
+		return runErrandList(args[1:])
+	case "add":
+		return runErrandAdd(args[1:])
+	case "update":
+		return runErrandUpdate(args[1:])
+	case "show":
+		return runErrandShow(args[1:])
+	default:
+		fmt.Fprintf(os.Stderr, "unknown errand command: %s\n", args[0])
+		return 1
+	}
+}
+
+func runErrandInit(args []string) int {
+	fs := flag.NewFlagSet("errand init", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	quest := fs.String("quest", "", "Quest name")
+	task := fs.String("task", "", "Task description")
+	fs.Parse(args)
+
+	root := *dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+
+	errandDir := filepath.Join(root, "tmp")
+	os.MkdirAll(errandDir, 0755)
+	errandPath := filepath.Join(errandDir, "quest-errands.json")
+
+	if _, err := os.Stat(errandPath); err == nil {
+		fmt.Fprintln(os.Stderr, "fellowship: quest-errands.json already exists")
+		return 1
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	h := &errand.QuestErrandList{
+		Version:   1,
+		QuestName: *quest,
+		Task:      *task,
+		Items:     []errand.Errand{},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := errand.Save(errandPath, h); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Errand file created at %s\n", errandPath)
+	return 0
+}
+
+func runErrandList(args []string) int {
+	fs := flag.NewFlagSet("errand list", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	fs.Parse(args)
+
+	h, _, err := loadErrandFile(*dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	if len(h.Items) == 0 {
+		fmt.Println("No errands.")
+		return 0
+	}
+
+	for _, item := range h.Items {
+		phase := ""
+		if item.Phase != "" {
+			phase = fmt.Sprintf(" [%s]", item.Phase)
+		}
+		deps := ""
+		if len(item.DependsOn) > 0 {
+			deps = fmt.Sprintf(" (depends: %s)", strings.Join(item.DependsOn, ", "))
+		}
+		fmt.Printf("%-6s %-8s %s%s%s\n", item.ID, item.Status, item.Description, phase, deps)
+	}
+
+	done, total := errand.Progress(h)
+	fmt.Printf("\nProgress: %d/%d done\n", done, total)
+	return 0
+}
+
+func runErrandAdd(args []string) int {
+	fs := flag.NewFlagSet("errand add", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	phase := fs.String("phase", "", "Quest phase")
+	fs.Parse(args)
+
+	desc := strings.Join(fs.Args(), " ")
+	if desc == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship errand add --dir <path> \"description\"")
+		return 1
+	}
+
+	h, errandPath, err := loadErrandFile(*dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	id := errand.AddErrand(h, desc, *phase)
+	if err := errand.Save(errandPath, h); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Added %s: %s\n", id, desc)
+	return 0
+}
+
+func runErrandUpdate(args []string) int {
+	fs := flag.NewFlagSet("errand update", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	fs.Parse(args)
+
+	remaining := fs.Args()
+	if len(remaining) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: fellowship errand update --dir <path> <id> <status>")
+		return 1
+	}
+
+	id := remaining[0]
+	statusStr := remaining[1]
+
+	ws, ok := errand.ValidStatus(statusStr)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "fellowship: invalid status %q (use: pending, active, done, blocked)\n", statusStr)
+		return 1
+	}
+
+	h, errandPath, err := loadErrandFile(*dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	if err := errand.UpdateStatus(h, id, ws); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	if err := errand.Save(errandPath, h); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Updated %s → %s\n", id, statusStr)
+	return 0
+}
+
+func runErrandShow(args []string) int {
+	fs := flag.NewFlagSet("errand show", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory")
+	fs.Parse(args)
+
+	h, _, err := loadErrandFile(*dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	data, _ := json.MarshalIndent(h, "", "  ")
+	fmt.Println(string(data))
+	return 0
+}
+
+func loadErrandFile(dir string) (*errand.QuestErrandList, string, error) {
+	root := dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+	errandPath := filepath.Join(root, "tmp", "quest-errands.json")
+	h, err := errand.Load(errandPath)
+	if err != nil {
+		return nil, "", err
+	}
+	return h, errandPath, nil
 }
 
 func gitRootOrCwd() string {
