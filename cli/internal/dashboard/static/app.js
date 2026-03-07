@@ -5,14 +5,14 @@
 
   let prevStatus = null;
   let pollTimer = null;
-  let patrolData = null;
+  let eaglesData = null;
 
   // ── Bootstrap ──────────────────────────────────
 
   async function init() {
     try {
       const data = await fetchStatus();
-      patrolData = await fetchPatrol();
+      eaglesData = await fetchEagles();
       render(data);
       const interval = (data.poll_interval || 5) * 1000;
       pollTimer = setInterval(poll, interval);
@@ -27,9 +27,9 @@
     return res.json();
   }
 
-  async function fetchPatrol() {
+  async function fetchEagles() {
     try {
-      const res = await fetch("/api/patrol");
+      const res = await fetch("/api/eagles");
       if (!res.ok) return null;
       return res.json();
     } catch (err) {
@@ -44,7 +44,7 @@
     dot.classList.add("active");
     try {
       const data = await fetchStatus();
-      patrolData = await fetchPatrol();
+      eaglesData = await fetchEagles();
       detectChanges(data);
       render(data);
     } catch (err) {
@@ -92,8 +92,8 @@
     }
     progressHTML += "</div>";
 
-    var patrolHealth = getQuestHealth(quest.worktree);
-    var badgeHTML = patrolHealth ? " " + renderHealthBadge(patrolHealth.health) : "";
+    var eaglesHealth = getQuestHealth(quest.worktree);
+    var badgeHTML = eaglesHealth ? " " + renderHealthBadge(eaglesHealth.health) : "";
 
     card.innerHTML =
       "<h3>" + escapeHTML(quest.name || quest.worktree) + badgeHTML + "</h3>" +
@@ -223,7 +223,7 @@
     });
   }
 
-  // ── Patrol Helpers ─────────────────────────────
+  // ── Eagles Helpers ─────────────────────────────
 
   var HEALTH_COLORS = {
     working: "#5a8a5a",
@@ -242,10 +242,10 @@
   };
 
   function getQuestHealth(worktree) {
-    if (!patrolData || !patrolData.quests) return null;
-    for (var i = 0; i < patrolData.quests.length; i++) {
-      if (patrolData.quests[i].worktree === worktree) {
-        return patrolData.quests[i];
+    if (!eaglesData || !eaglesData.quests) return null;
+    for (var i = 0; i < eaglesData.quests.length; i++) {
+      if (eaglesData.quests[i].worktree === worktree) {
+        return eaglesData.quests[i];
       }
     }
     return null;

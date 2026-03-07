@@ -1,4 +1,4 @@
-package patrol
+package eagles
 
 import (
 	"encoding/json"
@@ -36,14 +36,14 @@ type QuestHealth struct {
 	Action         string      `json:"action"`        // recommended action: "none", "nudge", "respawn"
 }
 
-// PatrolReport holds the full patrol scan result.
-type PatrolReport struct {
+// EaglesReport holds the full eagles scan result.
+type EaglesReport struct {
 	Timestamp string        `json:"timestamp"`
 	Quests    []QuestHealth `json:"quests"`
 	Problems  int           `json:"problems"` // count of non-working/non-complete
 }
 
-// Options configures the patrol scan.
+// Options configures the eagles scan.
 type Options struct {
 	GateThreshold  time.Duration // how long a gate can be pending before "stalled"
 	ZombieTimeout  time.Duration // how long since last file change before "zombie"
@@ -59,8 +59,8 @@ func DefaultOptions() Options {
 	}
 }
 
-// Patrol scans all quest worktrees and classifies their health.
-func Patrol(gitRoot string, opts Options) (*PatrolReport, error) {
+// Sweep scans all quest worktrees and classifies their health.
+func Sweep(gitRoot string, opts Options) (*EaglesReport, error) {
 	if opts.Now.IsZero() {
 		opts.Now = time.Now()
 	}
@@ -70,7 +70,7 @@ func Patrol(gitRoot string, opts Options) (*PatrolReport, error) {
 		return nil, fmt.Errorf("listing worktrees: %w", err)
 	}
 
-	report := &PatrolReport{
+	report := &EaglesReport{
 		Timestamp: opts.Now.UTC().Format(time.RFC3339),
 		Quests:    []QuestHealth{},
 	}
@@ -193,8 +193,8 @@ func latestModTime(worktree string) time.Time {
 	return latest
 }
 
-// WriteReport writes the patrol report to tmp/patrol-report.json in the git root.
-func WriteReport(gitRoot string, report *PatrolReport) error {
+// WriteReport writes the eagles report to tmp/eagles-report.json in the git root.
+func WriteReport(gitRoot string, report *EaglesReport) error {
 	dir := filepath.Join(gitRoot, "tmp")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("creating tmp dir: %w", err)
@@ -204,7 +204,7 @@ func WriteReport(gitRoot string, report *PatrolReport) error {
 		return fmt.Errorf("marshaling report: %w", err)
 	}
 	data = append(data, '\n')
-	path := filepath.Join(dir, "patrol-report.json")
+	path := filepath.Join(dir, "eagles-report.json")
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0644); err != nil {
 		return fmt.Errorf("writing report: %w", err)
@@ -216,10 +216,10 @@ func WriteReport(gitRoot string, report *PatrolReport) error {
 	return nil
 }
 
-// FormatTable returns a human-readable table of the patrol report.
-func FormatTable(report *PatrolReport) string {
+// FormatTable returns a human-readable table of the eagles report.
+func FormatTable(report *EaglesReport) string {
 	var sb strings.Builder
-	sb.WriteString("Fellowship Patrol Report\n")
+	sb.WriteString("Fellowship Eagles Report\n")
 	sb.WriteString(strings.Repeat("\u2501", 80) + "\n")
 	sb.WriteString(fmt.Sprintf("%-20s \u2502 %-10s \u2502 %-8s \u2502 %-8s \u2502 %s\n",
 		"Quest", "Phase", "Health", "Action", "Last Activity"))

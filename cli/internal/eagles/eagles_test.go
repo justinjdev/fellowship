@@ -1,4 +1,4 @@
-package patrol
+package eagles
 
 import (
 	"encoding/json"
@@ -317,7 +317,7 @@ func TestGateAge(t *testing.T) {
 
 func TestWriteReport(t *testing.T) {
 	root := t.TempDir()
-	report := &PatrolReport{
+	report := &EaglesReport{
 		Timestamp: "2025-01-15T10:30:00Z",
 		Quests: []QuestHealth{
 			{
@@ -347,13 +347,13 @@ func TestWriteReport(t *testing.T) {
 		t.Fatalf("WriteReport: %v", err)
 	}
 
-	path := filepath.Join(root, "tmp", "patrol-report.json")
+	path := filepath.Join(root, "tmp", "eagles-report.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("reading report: %v", err)
 	}
 
-	var loaded PatrolReport
+	var loaded EaglesReport
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		t.Fatalf("unmarshaling report: %v", err)
 	}
@@ -376,7 +376,7 @@ func TestWriteReport(t *testing.T) {
 }
 
 func TestFormatTable(t *testing.T) {
-	report := &PatrolReport{
+	report := &EaglesReport{
 		Timestamp: "2025-01-15T10:30:00Z",
 		Quests: []QuestHealth{
 			{
@@ -397,7 +397,7 @@ func TestFormatTable(t *testing.T) {
 	}
 
 	// Check it contains key elements
-	for _, want := range []string{"Fellowship Patrol Report", "quest-api", "Implement", "working", "none", "Problems: 0"} {
+	for _, want := range []string{"Fellowship Eagles Report", "quest-api", "Implement", "working", "none", "Problems: 0"} {
 		if !contains(output, want) {
 			t.Errorf("output missing %q", want)
 		}
@@ -406,7 +406,7 @@ func TestFormatTable(t *testing.T) {
 
 func TestProblemCount(t *testing.T) {
 	// Manually build a report to verify problem counting
-	report := &PatrolReport{
+	report := &EaglesReport{
 		Timestamp: "2025-01-15T10:30:00Z",
 		Quests:    []QuestHealth{},
 	}

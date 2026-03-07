@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/justinjdev/fellowship/cli/internal/patrol"
+	"github.com/justinjdev/fellowship/cli/internal/eagles"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -27,7 +27,7 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 		pollInterval: pollInterval,
 	}
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
-	s.mux.HandleFunc("GET /api/patrol", s.handlePatrol)
+	s.mux.HandleFunc("GET /api/eagles", s.handleEagles)
 	s.mux.HandleFunc("POST /api/gate/approve", s.handleGateApprove)
 	s.mux.HandleFunc("POST /api/gate/reject", s.handleGateReject)
 
@@ -159,9 +159,9 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handlePatrol(w http.ResponseWriter, r *http.Request) {
-	opts := patrol.DefaultOptions()
-	report, err := patrol.Patrol(s.gitRoot, opts)
+func (s *Server) handleEagles(w http.ResponseWriter, r *http.Request) {
+	opts := eagles.DefaultOptions()
+	report, err := eagles.Sweep(s.gitRoot, opts)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
