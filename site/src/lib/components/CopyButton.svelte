@@ -9,7 +9,7 @@
 	}
 </script>
 
-<button onclick={copy} class="copy-btn" aria-label="Copy to clipboard" title="Copy">
+<button onclick={copy} class="copy-btn" aria-label={copied ? 'Copied!' : 'Copy to clipboard'} title="Copy">
 	{#if copied}
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
 			<polyline points="20 6 9 17 4 12"/>

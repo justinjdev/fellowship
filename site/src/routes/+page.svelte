@@ -64,8 +64,8 @@
 	<div class="container">
 		<h2 class="section-title">Why Fellowship</h2>
 		<div class="features-grid">
-			{#each features as feature (feature.title)}
-				<div class="feature-card">
+			{#each features as feature, i (feature.title)}
+				<div class="feature-card animate-in" style="animation-delay: {i * 100}ms">
 					<h3>{feature.title}</h3>
 					<p>{feature.description}</p>
 				</div>
@@ -83,8 +83,8 @@
 	<div class="container">
 		<h2 class="section-title">The Quest Lifecycle</h2>
 		<div class="timeline">
-			{#each phases as phase (phase.number)}
-				<div class="timeline-step">
+			{#each phases as phase, i (phase.number)}
+				<div class="timeline-step animate-in" style="animation-delay: {i * 100}ms">
 					<div class="timeline-marker">
 						<span class="marker-number">{phase.number}</span>
 					</div>
@@ -201,11 +201,13 @@
 		border: 1px solid var(--color-border);
 		padding: var(--space-lg);
 		border-radius: 8px;
-		transition: border-color var(--transition-normal);
+		transition: border-color var(--transition-normal), transform var(--transition-normal), box-shadow var(--transition-normal);
 	}
 
 	.feature-card:hover {
 		border-color: var(--color-accent);
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 	}
 
 	.feature-card h3 {

@@ -24,9 +24,10 @@
 
 <section class="agents">
 	<div class="container">
+		<h2 class="sr-only">The Fellowship's Agents</h2>
 		<div class="agents-grid">
 			<!-- Palantir -->
-			<div class="agent-card">
+			<div class="agent-card animate-in" style="animation-delay: 0ms">
 				<div class="agent-header">
 					<div class="agent-icon palantir-icon">
 						<svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -58,7 +59,7 @@
 			</div>
 
 			<!-- Quest Runner -->
-			<div class="agent-card">
+			<div class="agent-card animate-in" style="animation-delay: 100ms">
 				<div class="agent-header">
 					<div class="agent-icon runner-icon">
 						<svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -85,7 +86,7 @@
 			</div>
 
 			<!-- Scout -->
-			<div class="agent-card">
+			<div class="agent-card animate-in" style="animation-delay: 200ms">
 				<div class="agent-header">
 					<div class="agent-icon scout-icon">
 						<svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -233,11 +234,13 @@
 		border: 1px solid var(--color-border);
 		padding: var(--space-lg);
 		border-radius: 8px;
-		transition: border-color var(--transition-normal);
+		transition: border-color var(--transition-normal), transform var(--transition-normal), box-shadow var(--transition-normal);
 	}
 
 	.agent-card:hover {
 		border-color: var(--color-accent);
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 	}
 
 	.agent-header {

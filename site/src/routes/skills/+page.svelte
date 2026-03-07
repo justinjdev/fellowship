@@ -70,8 +70,8 @@
 	<div class="divider"><span class="divider-ring"></span></div>
 
 	<div class="skills-list">
-		{#each skills as skill (skill.name)}
-			<details class="skill-card">
+		{#each skills as skill, i (skill.name)}
+			<details class="skill-card animate-in" style="animation-delay: {i * 100}ms">
 				<summary>
 					<span class="chevron" aria-hidden="true"></span>
 					<code class="skill-name">{skill.name}</code>
@@ -111,11 +111,13 @@
 		border: 1px solid var(--color-border);
 		border-radius: 8px;
 		padding: var(--space-lg);
-		transition: border-color 0.2s ease;
+		transition: border-color var(--transition-normal), transform var(--transition-normal), box-shadow var(--transition-normal);
 	}
 
 	.skill-card:hover {
 		border-color: var(--color-accent);
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 	}
 
 	.skill-card summary {

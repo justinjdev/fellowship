@@ -4,15 +4,18 @@
 	--color-bg-card: #1e321e;
 	--color-text: #e8dcc8;
 	--color-text-secondary: #b8c4d0;
-	--color-heading: #c9a84c;
-	--color-accent: #c9a84c;
-	--color-accent-hover: #dbb85c;
+	--color-heading: #e8c84a;
+	--color-accent: #e8c84a;
+	--color-accent-hover: #f0d86a;
 	--color-border: #3a5a3a;
 	--color-code-bg: #162016;
 	--color-error: #8b2500;
-	--color-link: #c9a84c;
-	--color-link-hover: #dbb85c;
-	--color-focus: #c9a84c;
+	--color-error-bg: rgba(139, 37, 0, 0.1);
+	--color-link: #e8c84a;
+	--color-link-hover: #f0d86a;
+	--color-focus: #e8c84a;
+	--color-scout: #6ba3be;
+	--color-monitor: #9b8ec4;
 	--color-surface: #1e321e;
 	--font-heading: 'Cinzel', serif;
 	--font-body: 'Crimson Pro', serif;
@@ -44,6 +47,9 @@
 	--color-link-hover: #8b6914;
 	--color-focus: #8b6914;
 	--color-surface: #fff8e7;
+	--color-error-bg: rgba(139, 37, 0, 0.08);
+	--color-scout: #4a8a9e;
+	--color-monitor: #7b6ea4;
 }
 
 @media (prefers-reduced-motion: reduce) {

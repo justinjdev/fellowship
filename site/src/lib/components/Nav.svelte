@@ -26,6 +26,8 @@
 	}
 </script>
 
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && mobileOpen) closeMobile(); }} />
+
 <nav class="nav" aria-label="Main navigation">
 	<div class="nav-inner container">
 		<a href="{base}/" class="nav-logo" aria-label="Fellowship home">

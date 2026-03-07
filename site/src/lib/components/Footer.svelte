@@ -40,6 +40,5 @@
 	.footer-note {
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
-		opacity: 0.7;
 	}
 </style>

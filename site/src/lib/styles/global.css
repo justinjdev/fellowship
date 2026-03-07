@@ -21,6 +21,19 @@ body {
 	-moz-osx-font-smoothing: grayscale;
 }
 
+body::before {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	opacity: 0.035;
+	background-image:
+		repeating-radial-gradient(circle at 25% 25%, transparent 0, transparent 45px, var(--color-accent) 45px, var(--color-accent) 46px, transparent 46px, transparent 90px),
+		repeating-radial-gradient(circle at 75% 75%, transparent 0, transparent 60px, var(--color-accent) 60px, var(--color-accent) 61px, transparent 61px, transparent 120px),
+		repeating-radial-gradient(circle at 50% 10%, transparent 0, transparent 80px, var(--color-accent) 80px, var(--color-accent) 81px, transparent 81px, transparent 160px);
+	pointer-events: none;
+}
+
 h1, h2, h3, h4, h5, h6 {
 	font-family: var(--font-heading);
 	color: var(--color-heading);
@@ -108,6 +121,44 @@ pre code { background: none; padding: 0; }
 	border: 2px solid var(--color-accent);
 	border-radius: 50%;
 	flex-shrink: 0;
+}
+
+[id] {
+	scroll-margin-top: calc(var(--nav-height) + var(--space-md));
+}
+
+.container > p,
+.container > ul,
+.container > ol,
+section > p {
+	max-width: 42rem;
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border-width: 0;
+}
+
+@keyframes fadeInUp {
+	from {
+		opacity: 0;
+		transform: translateY(1rem);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.animate-in {
+	animation: fadeInUp 0.5s ease-out both;
 }
 
 @media (max-width: 768px) {

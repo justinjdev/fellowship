@@ -253,13 +253,13 @@
 	}
 
 	.breaking {
-		border-left-color: #c0392b !important;
-		background: rgba(192, 57, 43, 0.06);
+		border-left-color: var(--color-error) !important;
+		background: var(--color-error-bg);
 		border-radius: 0 6px 6px 0;
 	}
 
 	.breaking-inline {
-		color: #c0392b;
+		color: var(--color-error);
 		font-weight: 700;
 	}
 </style>

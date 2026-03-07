@@ -513,11 +513,11 @@
 	}
 
 	.scout-branch .branch-line {
-		background: #6ba3be;
+		background: var(--color-scout);
 	}
 
 	.monitor-branch .branch-line {
-		background: #9b8ec4;
+		background: var(--color-monitor);
 	}
 
 	.branch-tag {
