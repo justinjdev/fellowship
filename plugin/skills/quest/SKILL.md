@@ -77,6 +77,24 @@ When running as a fellowship teammate, a state file at `tmp/quest-state.json` en
 
 ### Phase 0: Onboard
 
+#### Resume Mode
+
+If the spawn prompt contains a `RESUME CONTEXT:` block, this is a recovered quest:
+
+1. **Skip worktree creation** — your worktree already exists and you're already in it
+2. **Re-install hooks:** Run `fellowship install` to restore gate enforcement in the worktree
+3. **Reset state file:** Run `fellowship init` to clear `gate_pending` while preserving the current phase
+4. **Update task metadata:** `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})` with the new task ID from the recovery spawn
+5. **Load checkpoint:** If `tmp/checkpoint.md` exists, read it as your initial context — this replaces `/council` orientation
+6. **Skip `/council`** — the checkpoint provides equivalent context from the previous session
+7. **Jump to current phase:** Begin executing from the phase recorded in the state file (e.g., if phase is "Implement", skip Research and Plan, go directly to Implement)
+
+If no checkpoint exists (stale classification), restart the current phase from scratch — run `/council` for orientation, then begin the phase normally.
+
+After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, update metadata, send [GATE] message).
+
+#### Standard Onboard
+
 1. **Config:** Read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. Merge with defaults (see fellowship skill for the full schema). If the file does not exist, all defaults apply.
 2. **Isolate:** Detect whether you're resuming an existing worktree: check if task metadata contains `worktree_path` (via `TaskGet`) and the path exists on disk. If so, you're already isolated — skip worktree creation. Otherwise, if `config.worktree.enabled` is true (default), create an isolated worktree:
    - **Resolve branch name:** Determine the branch name using config:
