@@ -1,5 +1,5 @@
 ---
-description: Use when joining a new codebase or starting to use AI tooling on an existing project. Interactively walks through the codebase to extract conventions, identify reference files, and generate a project-specific CLAUDE.md conventions section. Run this once per codebase, then maintain with PR feedback capture.
+description: One-time codebase onboarding — interactively extracts your team's conventions, identifies reference files, and generates CLAUDE.md sections so Claude codes the way your team does. Run once per project.
 ---
 
 # Chronicle — Bootstrap Conventions From Your Codebase

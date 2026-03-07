@@ -1,5 +1,5 @@
 ---
-description: Create a project-specific quest template by analyzing codebase conventions, team patterns, and domain rules. Use when you want to encode institutional knowledge into quest guidance.
+description: Create a reusable quest template for a specific type of task (e.g., "API endpoint", "migration"). Encodes project-specific rules and conventions into phase guidance that loads automatically during quests.
 ---
 
 # Forge Template — Create Quest Templates
