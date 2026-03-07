@@ -241,7 +241,7 @@
 
   async function loadErrandItems(worktree, container) {
     try {
-      var encoded = btoa(worktree);
+      var encoded = btoa(worktree).replace(/\+/g, '-').replace(/\//g, '_');
       var res = await fetch("/api/errand/" + encoded);
       if (!res.ok) {
         container.innerHTML = "<p>No errands available.</p>";
