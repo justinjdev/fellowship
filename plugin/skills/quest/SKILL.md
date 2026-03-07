@@ -177,6 +177,8 @@ Goal: Outline explicit steps with file:line references and a test strategy.
 
 Goal: Execute the plan with small, verifiable changes and tight feedback loops. Default to TDD.
 
+**Errand tracking:** If `tmp/quest-errands.json` exists, use it as your errand checklist. The errand file is the source of truth for remaining work, not just the original prompt. Update errand status as you complete each one: `fellowship errand update --dir . <id> done`. Mark errands as `active` when you start them and `done` when finished. Check `fellowship errand list --dir .` to see what remains.
+
 **Execution mode — choose based on plan structure:**
 
 **Single-stream (default):** Tasks are sequential or tightly coupled.

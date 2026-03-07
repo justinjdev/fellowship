@@ -5,12 +5,14 @@
 
   let prevStatus = null;
   let pollTimer = null;
+  let eaglesData = null;
 
   // ── Bootstrap ──────────────────────────────────
 
   async function init() {
     try {
       const data = await fetchStatus();
+      eaglesData = await fetchEagles();
       render(data);
       const interval = (data.poll_interval || 5) * 1000;
       pollTimer = setInterval(poll, interval);
@@ -25,6 +27,16 @@
     return res.json();
   }
 
+  async function fetchEagles() {
+    try {
+      const res = await fetch("/api/eagles");
+      if (!res.ok) return null;
+      return res.json();
+    } catch (err) {
+      return null;
+    }
+  }
+
   // ── Polling ────────────────────────────────────
 
   async function poll() {
@@ -32,6 +44,7 @@
     dot.classList.add("active");
     try {
       const data = await fetchStatus();
+      eaglesData = await fetchEagles();
       detectChanges(data);
       render(data);
     } catch (err) {
@@ -79,10 +92,40 @@
     }
     progressHTML += "</div>";
 
+    var eaglesHealth = getQuestHealth(quest.worktree);
+    var badgeHTML = eaglesHealth ? " " + renderHealthBadge(eaglesHealth.health) : "";
+
+    var errandProgressHTML = "";
+    if (quest.errands_total > 0) {
+      errandProgressHTML = '<div class="errand-progress">' +
+        quest.errands_done + "/" + quest.errands_total + " errands done" +
+        "</div>";
+    }
+
     card.innerHTML =
-      "<h3>" + escapeHTML(quest.name || quest.worktree) + "</h3>" +
+      "<h3>" + escapeHTML(quest.name || quest.worktree) + badgeHTML + "</h3>" +
       '<div class="quest-phase">' + escapeHTML(quest.phase || "Unknown") + "</div>" +
-      progressHTML;
+      progressHTML +
+      errandProgressHTML;
+
+    if (quest.errands_total > 0) {
+      var errandDetails = document.createElement("div");
+      errandDetails.className = "errand-details";
+      errandDetails.style.display = "none";
+      card.appendChild(errandDetails);
+
+      card.style.cursor = "pointer";
+      card.addEventListener("click", function (e) {
+        if (e.target.tagName === "BUTTON") return;
+        var details = card.querySelector(".errand-details");
+        if (details.style.display === "none") {
+          details.style.display = "block";
+          loadErrandItems(quest.worktree, details);
+        } else {
+          details.style.display = "none";
+        }
+      });
+    }
 
     if (quest.gate_pending) {
       var actions = document.createElement("div");
@@ -204,7 +247,77 @@
       if (old.gate_pending && !q.gate_pending) {
         addActivity((q.name || q.worktree) + ": gate resolved");
       }
+      if (q.errands_total > 0 && old.errands_done !== q.errands_done) {
+        addActivity((q.name || q.worktree) + ": errand progress " + q.errands_done + "/" + q.errands_total);
+      }
     });
+  }
+
+  // ── Eagles Helpers ─────────────────────────────
+
+  var HEALTH_COLORS = {
+    working: "#5a8a5a",
+    stalled: "#c8a84e",
+    zombie: "#8a4a4a",
+    idle: "#6a6a6a",
+    complete: "#5a8a5a"
+  };
+
+  var HEALTH_BG = {
+    working: "rgba(90, 138, 90, 0.2)",
+    stalled: "rgba(200, 168, 78, 0.2)",
+    zombie: "rgba(138, 74, 74, 0.2)",
+    idle: "rgba(106, 106, 106, 0.2)",
+    complete: "rgba(90, 138, 90, 0.15)"
+  };
+
+  function getQuestHealth(worktree) {
+    if (!eaglesData || !eaglesData.quests) return null;
+    for (var i = 0; i < eaglesData.quests.length; i++) {
+      if (eaglesData.quests[i].worktree === worktree) {
+        return eaglesData.quests[i];
+      }
+    }
+    return null;
+  }
+
+  function renderHealthBadge(health) {
+    if (!health) return "";
+    var color = HEALTH_COLORS[health] || "#6a6a6a";
+    var bg = HEALTH_BG[health] || "rgba(106, 106, 106, 0.2)";
+    return '<span class="health-badge" style="' +
+      "display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8rem;" +
+      "border:1px solid " + color + ";background:" + bg + ";color:" + color + ";" +
+      '">' + escapeHTML(health) + "</span>";
+  }
+
+  // ── Errands ──────────────────────────────────
+
+  async function loadErrandItems(worktree, container) {
+    try {
+      var encoded = btoa(worktree).replace(/\+/g, '-').replace(/\//g, '_');
+      var res = await fetch("/api/errand/" + encoded);
+      if (!res.ok) {
+        container.innerHTML = "<p>No errands available.</p>";
+        return;
+      }
+      var data = await res.json();
+      var items = data.items || [];
+      if (items.length === 0) {
+        container.innerHTML = "<p>No errands.</p>";
+        return;
+      }
+      var html = '<ul class="errand-item-list">';
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        var badge = '<span class="status-badge status-' + escapeHTML(item.status) + '">' + escapeHTML(item.status) + "</span>";
+        html += "<li>" + badge + " <strong>" + escapeHTML(item.id) + "</strong> " + escapeHTML(item.description) + "</li>";
+      }
+      html += "</ul>";
+      container.innerHTML = html;
+    } catch (err) {
+      container.innerHTML = "<p>Failed to load errands.</p>";
+    }
   }
 
   // ── Helpers ────────────────────────────────────
