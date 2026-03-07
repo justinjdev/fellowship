@@ -14,6 +14,9 @@ const config = {
 		}),
 		paths: {
 			base: '/fellowship'
+		},
+		prerender: {
+			handleHttpError: 'warn'
 		}
 	}
 };
