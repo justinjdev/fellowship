@@ -56,13 +56,12 @@ If the user asks to set up or modify their config, invoke `/settings`.
 
 ### Discover Templates
 
-At startup (or when spawning a quest), Gandalf discovers available templates from three directories, highest priority first:
+At startup (or when spawning a quest), Gandalf discovers available templates from two directories, highest priority first:
 
 1. **Project** — `.claude/fellowship-templates/` in the repo root
 2. **User** — `~/.claude/fellowship-templates/`
-3. **Built-in** — `plugin/templates/` (ships with fellowship)
 
-Read all `.md` files from each directory. If the same filename exists in multiple tiers, the highest-priority tier wins. Parse YAML frontmatter to extract `name`, `description`, and `keywords`.
+No built-in templates ship with fellowship — templates are project-specific by design. Use `/scribe` to create templates that encode your team's actual conventions. Read all `.md` files from each directory. If the same filename exists in both tiers, project wins. Parse YAML frontmatter to extract `name`, `description`, and `keywords`.
 
 ### Select Template for Quest
 

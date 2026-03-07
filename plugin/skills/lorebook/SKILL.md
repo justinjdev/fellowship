@@ -13,10 +13,9 @@ Invoke at the start of each quest phase when your spawn prompt includes a `TEMPL
 
 ## Process
 
-1. **Resolve the template file** from three directories (highest priority first):
+1. **Resolve the template file** from two directories (highest priority first):
    - Project: `.claude/fellowship-templates/{name}.md`
    - User: `~/.claude/fellowship-templates/{name}.md`
-   - Built-in: `plugin/templates/{name}.md`
 
    Use the first match found. If no file exists, skip silently.
 
