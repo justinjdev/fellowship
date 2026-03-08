@@ -43,7 +43,7 @@ List all skills in `plugin/skills/*/SKILL.md` and all commands in `plugin/comman
 
 Read `site/src/routes/agents/+page.svelte`. If the file does not exist, flag it as missing and continue to Step 5.
 
-List all agents in `plugin/agents/*.md`. Cross-reference against what's documented on the agents page. Flag any that are present in the plugin but missing from the page.
+List all registered agents from `.claude-plugin/plugin.json`. If reading from `plugin/agents/*.md` instead, ignore helper docs such as underscore-prefixed files (e.g., `_protocol.md`). Cross-reference against what's documented on the agents page. Flag any registered agents that are missing from the page.
 
 ### Step 5: Report
 

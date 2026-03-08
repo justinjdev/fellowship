@@ -35,6 +35,8 @@ Invoke the `validate-docs` skill using the Skill tool. Review any flagged issues
 
 If fixing: make the updates before continuing. Renaming an "Unreleased" changelog section to the new version is handled in Step 3 below — skip that specific fix here.
 
+If proceeding with known issues: record which checks had findings. These will be surfaced as warnings in the Step 6 summary instead of checkmarks.
+
 ## Step 3: Bump Version
 
 Update the version string in `.claude-plugin/plugin.json`.
@@ -74,14 +76,14 @@ If the marketplace repo doesn't exist at that path or the push fails, report the
 
 ## Step 6: Confirm
 
-Report the release summary:
+Report the release summary. Use `✓` for items that passed cleanly and `⚠ (known issues: <summary>)` for any docs checks that had findings the user chose to proceed past:
 
 ```
 Released v{version}
 
   plugin.json    ✓ bumped
   site changelog ✓ updated
-  README         ✓ current
+  README         ✓ current  (or ⚠ known issues: <summary>)
   tag            ✓ v{version} pushed
   marketplace    ✓ bumped to v{version}
 

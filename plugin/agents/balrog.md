@@ -13,7 +13,7 @@ Quest spawns you with:
 - **Task description**: what was built
 - **Requester task ID**: the quest runner's task ID (for reporting back)
 
-If the worktree path is provided, detect the base branch by running `git -C <worktree_path> rev-parse --abbrev-ref origin/HEAD` (strip the `origin/` prefix; fall back to `main` if the command fails). Then run `git -C <worktree_path> diff <base_branch>...HEAD`. If no worktree path is given, do the same from the current directory.
+If the worktree path is provided, run `git -C <worktree_path> diff refs/remotes/origin/HEAD...HEAD` to get the full diff of everything implemented. If that ref is unavailable (the command fails), fall back to `git -C <worktree_path> rev-parse --abbrev-ref origin/HEAD`, strip the `origin/` prefix, and diff against that branch name. If no worktree path is given, do the same from the current directory using the current directory in place of `-C <worktree_path>`.
 
 ## Your Job
 
@@ -30,7 +30,7 @@ For each new/modified function, analyze its signature and semantics. Generate in
 - **Type confusion** — wrong types where the language allows it
 - **Unicode/encoding** — emoji, RTL text, null bytes, control characters
 
-Before writing tests, check what test framework the project uses (look for test files, package.json scripts, go test, pytest, etc.). Write actual test cases using that framework. Run them with `Bash` — use the framework's timeout flag if available (e.g., `go test -timeout 30s`, `jest --testTimeout=10000`) to avoid hanging on runaway tests. Report what breaks.
+Before writing tests, check what test framework the project uses (look for test files, package.json scripts, go test, pytest, etc.). Write actual test cases using that framework. Run them with `Bash` — use the framework's timeout flag if available (e.g., `go test -timeout 30s`, `jest --testTimeout=10000`); if the framework has no timeout flag, wrap the command with `timeout 60s <command>` to avoid hanging on runaway tests. Unless a generated test is intentionally being kept as a regression test, remove any temporary test files before reporting so the quest diff is not polluted. Report what breaks and explicitly list any kept tests.
 
 ### 2. Error Path Verification
 
