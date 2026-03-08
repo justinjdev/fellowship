@@ -561,7 +561,10 @@ func runInit() int {
 
 	root := gitRootOrCwd()
 	dir := filepath.Join(root, datadir.Name())
-	os.MkdirAll(dir, 0755)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: creating data directory: %v\n", err)
+		return 1
+	}
 	path := filepath.Join(dir, "quest-state.json")
 
 	if _, err := os.Stat(path); err == nil {
@@ -994,7 +997,10 @@ func runErrandInit(args []string) int {
 	}
 
 	errandDir := filepath.Join(root, datadir.Name())
-	os.MkdirAll(errandDir, 0755)
+	if err := os.MkdirAll(errandDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: creating data directory: %v\n", err)
+		return 1
+	}
 	errandPath := filepath.Join(errandDir, "quest-errands.json")
 
 	if _, err := os.Stat(errandPath); err == nil {
@@ -1171,7 +1177,10 @@ func runStateInit(args []string) int {
 	}
 
 	dataDirPath := filepath.Join(root, datadir.Name())
-	os.MkdirAll(dataDirPath, 0755)
+	if err := os.MkdirAll(dataDirPath, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: creating data directory: %v\n", err)
+		return 1
+	}
 	statePath := filepath.Join(dataDirPath, "fellowship-state.json")
 
 	if _, err := os.Stat(statePath); err == nil {
