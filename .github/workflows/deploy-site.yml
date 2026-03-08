@@ -2,8 +2,7 @@ name: Deploy Site
 
 on:
   push:
-    branches: [main]
-    paths: ['site/**']
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
