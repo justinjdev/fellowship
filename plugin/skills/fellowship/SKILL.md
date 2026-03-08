@@ -144,7 +144,7 @@ Each quest runs the full `/quest` lifecycle (6 phases with gates). Gates are enf
 
 ## Conflict Resolution
 
-When Palantir raises a file conflict alert, Gandalf follows the conflict resolution protocol: Pause (hold) → Assess (real vs incidental) → Resolve (sequence/partition/merge) → Resume (unhold).
+When Palantir raises a file conflict alert, Gandalf follows the conflict resolution protocol: Pause (`fellowship hold --dir <worktree> [--reason "..."]`) → Assess (real vs incidental) → Resolve (sequence/partition/merge) → Resume (`fellowship unhold --dir <worktree>`).
 
 See [resources/conflict-resolution.md](resources/conflict-resolution.md) for the full protocol.
 

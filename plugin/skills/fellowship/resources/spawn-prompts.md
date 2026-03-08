@@ -34,10 +34,16 @@ INSTRUCTIONS:
    NEVER send two gates in one message.
    NEVER approve your own gates — only the lead can approve.
    NEVER write "approved" or "proceeding" — that is the lead's language.
-4. When /quest reaches Phase 5 (Complete), create a PR and message
+4. The lead may place your quest on hold at any time (e.g., to resolve
+   file conflicts with another quest). When held, your Edit/Write/Bash/
+   Agent/Skill/NotebookEdit tools are structurally blocked — the same
+   mechanism as gate blocking. Wait for the lead to unhold you. The
+   lead will send you a message with updated instructions when you
+   are resumed.
+5. When /quest reaches Phase 5 (Complete), create a PR and message
    the lead with the PR URL
-5. If you get stuck or need a decision, message the lead
-6. If you receive a shutdown request, respond immediately using
+6. If you get stuck or need a decision, message the lead
+7. If you receive a shutdown request, respond immediately using
    SendMessage with type "shutdown_response", approve: true, and
    the request_id from the message. Do not just acknowledge in text.
 

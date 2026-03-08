@@ -104,7 +104,7 @@ Agent/lead commands:
   gate status            Show current phase, prereqs, pending/held state
   gate approve           Approve a pending gate (advances to next phase)
   gate reject            Reject a pending gate (clears pending, keeps phase)
-  hold                   Hold (pause) a quest — blocks all tools
+  hold                   Hold (pause) a quest — blocks Edit/Write/Bash/Agent/Skill/NotebookEdit
     --dir DIR            Worktree directory (required)
     --reason MSG         Reason for holding
   unhold                 Unhold (resume) a held quest
@@ -203,12 +203,6 @@ func runHook(name string) int {
 		return 0
 	}
 
-	s, err := state.Load(statePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-		return 2
-	}
-
 	input, err := hooks.ParseInput(os.Stdin)
 	if err != nil {
 		switch name {
@@ -221,74 +215,110 @@ func runHook(name string) int {
 	}
 
 	dir := filepath.Dir(filepath.Dir(statePath)) // strip <datadir>/quest-state.json
-	questName := s.QuestName
-	if questName == "" {
-		questName = filepath.Base(dir)
-	}
 
-	var result hooks.HookResult
-	stateChanged := false
-
+	// Read-only hooks: no locking needed, just load and check.
 	switch name {
 	case "gate-guard":
-		result = hooks.GateGuard(s, input)
-	case "gate-submit":
-		prevPhase := s.Phase
-		sr := hooks.GateSubmit(s, input)
-		result = hooks.HookResult{Block: sr.Block, Message: sr.Message}
-		stateChanged = sr.StateChanged
-		if sr.StateChanged && !sr.Block {
-			tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
-			hooks.RecordGateSubmitted(tomePath, prevPhase, s.Phase != prevPhase)
-			herald.Announce(dir, herald.Tiding{
-				Timestamp: time.Now().UTC().Format(time.RFC3339),
-				Quest:     questName,
-				Type:      herald.GateSubmitted,
-				Phase:     s.Phase,
-				Detail:    "Gate submitted for review",
-			})
+		s, err := state.Load(statePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+			return 2
 		}
-	case "gate-prereq":
-		stateChanged = hooks.GatePrereq(s, input)
-		if stateChanged {
-			herald.Announce(dir, herald.Tiding{
-				Timestamp: time.Now().UTC().Format(time.RFC3339),
-				Quest:     questName,
-				Type:      herald.LembasCompleted,
-				Phase:     s.Phase,
-				Detail:    "Lembas skill completed",
-			})
+		result := hooks.GateGuard(s, input)
+		if result.Block {
+			fmt.Fprintln(os.Stderr, result.Message)
+			return 2
 		}
-	case "metadata-track":
-		stateChanged = hooks.MetadataTrack(s, input)
-		if stateChanged {
-			herald.Announce(dir, herald.Tiding{
-				Timestamp: time.Now().UTC().Format(time.RFC3339),
-				Quest:     questName,
-				Type:      herald.MetadataUpdated,
-				Phase:     s.Phase,
-				Detail:    "Task metadata updated",
-			})
-		}
+		return 0
 	case "completion-guard":
-		result = hooks.CompletionGuard(s, input)
+		s, err := state.Load(statePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+			return 2
+		}
+		result := hooks.CompletionGuard(s, input)
 		if !result.Block && input.ToolInput.Status == "completed" {
 			tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
 			hooks.MarkTomeCompleted(tomePath)
 		}
-	case "file-track":
-		tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
-		hooks.FileTrack(s, input, tomePath)
-	default:
-		fmt.Fprintf(os.Stderr, "fellowship: unknown hook %q\n", name)
-		return 2
-	}
-
-	if stateChanged {
-		if err := state.Save(statePath, s); err != nil {
-			fmt.Fprintf(os.Stderr, "fellowship: failed to save state: %v\n", err)
+		if result.Block {
+			fmt.Fprintln(os.Stderr, result.Message)
 			return 2
 		}
+		return 0
+	case "file-track":
+		s, err := state.Load(statePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+			return 2
+		}
+		tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+		hooks.FileTrack(s, input, tomePath)
+		return 0
+	}
+
+	// Mutating hooks: use WithLock for atomic load→mutate→save.
+	var result hooks.HookResult
+	if err := state.WithLock(statePath, func(s *state.State) error {
+		questName := s.QuestName
+		if questName == "" {
+			questName = filepath.Base(dir)
+		}
+
+		switch name {
+		case "gate-submit":
+			prevPhase := s.Phase
+			sr := hooks.GateSubmit(s, input)
+			result = hooks.HookResult{Block: sr.Block, Message: sr.Message}
+			if sr.StateChanged && !sr.Block {
+				tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
+				hooks.RecordGateSubmitted(tomePath, prevPhase, s.Phase != prevPhase)
+				herald.Announce(dir, herald.Tiding{
+					Timestamp: time.Now().UTC().Format(time.RFC3339),
+					Quest:     questName,
+					Type:      herald.GateSubmitted,
+					Phase:     s.Phase,
+					Detail:    "Gate submitted for review",
+				})
+			}
+			if !sr.StateChanged {
+				return state.ErrNoSave
+			}
+		case "gate-prereq":
+			changed := hooks.GatePrereq(s, input)
+			if changed {
+				herald.Announce(dir, herald.Tiding{
+					Timestamp: time.Now().UTC().Format(time.RFC3339),
+					Quest:     questName,
+					Type:      herald.LembasCompleted,
+					Phase:     s.Phase,
+					Detail:    "Lembas skill completed",
+				})
+			} else {
+				return state.ErrNoSave
+			}
+		case "metadata-track":
+			changed := hooks.MetadataTrack(s, input)
+			if changed {
+				herald.Announce(dir, herald.Tiding{
+					Timestamp: time.Now().UTC().Format(time.RFC3339),
+					Quest:     questName,
+					Type:      herald.MetadataUpdated,
+					Phase:     s.Phase,
+					Detail:    "Task metadata updated",
+				})
+			} else {
+				return state.ErrNoSave
+			}
+		default:
+			fmt.Fprintf(os.Stderr, "fellowship: unknown hook %q\n", name)
+			result = hooks.HookResult{Block: true, Message: fmt.Sprintf("unknown hook %q", name)}
+			return state.ErrNoSave
+		}
+		return nil
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 2
 	}
 
 	if result.Block {

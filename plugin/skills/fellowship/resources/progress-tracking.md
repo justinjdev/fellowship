@@ -15,11 +15,13 @@ When the user asks for "status" or Gandalf proactively reports progress:
 | Task | Type | Phase | Progress |
 |------|------|-------|----------|
 | quest-auth-bug | Quest | Implement | ████░░ 3/5 |
-| quest-rate-limit | Quest | Research | █░░░░░ 1/5 |
+| quest-rate-limit | Quest | Research (HELD) | █░░░░░ 1/5 |
 | scout-auth-analysis | Scout | Validating | ██░░ 2/3 |
 
-**Quests:** 2 active | **Scouts:** 1 active | **Completed:** 0
+**Quests:** 2 active (1 held) | **Scouts:** 1 active | **Completed:** 0
 ```
+
+When a quest is held, append `(HELD)` to its phase and include the hold reason if present. Include held count in the summary line.
 
 When companies are defined, group quests by company in the status report:
 

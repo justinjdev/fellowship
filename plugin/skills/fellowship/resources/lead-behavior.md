@@ -79,6 +79,8 @@ This is defense-in-depth — the `completion-guard` hook also mechanically block
 - **"status"** → read task list (including metadata), present structured progress report (see [progress-tracking.md](progress-tracking.md))
 - **"approve" / "reject"** → relay to the relevant teammate
 - **"approve all gates for {company_name}"** → batch-approve all pending gates in the named company using `fellowship company approve <name>`. Report which quests were approved.
+- **"hold quest-N"** → `fellowship hold --dir <worktree> [--reason "..."]`, notify teammate via SendMessage
+- **"unhold quest-N"** → `fellowship unhold --dir <worktree>`, notify teammate via SendMessage with updated instructions
 - **"cancel quest-N"** → send `shutdown_request` to teammate, preserve worktree
 - **"tell quest-N to ..."** → relay message to specific teammate via `SendMessage`
 - **"wrap up" / "disband"** → shutdown all teammates, synthesize summary, `TeamDelete`

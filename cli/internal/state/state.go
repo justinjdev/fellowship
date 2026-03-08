@@ -13,6 +13,10 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 )
 
+// ErrNoSave can be returned from a WithLock callback to skip saving
+// the state file while still releasing the lock without error.
+var ErrNoSave = fmt.Errorf("no save needed")
+
 type State struct {
 	Version          int      `json:"version"`
 	QuestName        string   `json:"quest_name"`
@@ -100,6 +104,9 @@ func WithLock(path string, fn func(s *State) error) error {
 	}
 
 	if err := fn(s); err != nil {
+		if err == ErrNoSave {
+			return nil
+		}
 		return err
 	}
 
