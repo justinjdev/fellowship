@@ -59,7 +59,7 @@ If the user asks to set up or modify their config, invoke `/settings`.
 
 ### Write Fellowship State
 
-Initialize `tmp/fellowship-state.json` using the CLI. The fellowship name comes from the `TeamCreate` name (e.g., `"fellowship-1709734200"`). This file is the primary recovery artifact — `/rekindle` uses it to reconstruct state after a crash.
+Initialize `.fellowship/fellowship-state.json` using the CLI. The fellowship name comes from the `TeamCreate` name (e.g., `"fellowship-1709734200"`). This file is the primary recovery artifact — `/rekindle` uses it to reconstruct state after a crash.
 
 ```bash
 fellowship state init --dir <repo_root> --name <fellowship_name>
@@ -131,7 +131,7 @@ For each quest, Gandalf:
    - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
    - Do NOT pass `isolation: "worktree"` — the teammate creates its own worktree during quest Phase 0, using the branch naming config. This avoids double-worktree conflicts and ensures config-resolved branch names are used.
 
-**Errand persistence:** After spawning a teammate, Gandalf writes the initial errands to `tmp/quest-errands.json` in the quest's worktree by running `fellowship errand init`. This creates a persistent record of what errands were assigned. To add errands to a running quest: `fellowship errand add --dir <worktree> 'handle edge case X'`. To re-sling unfinished errands from a dead quest: read its errand file (`fellowship errand show --dir <dead-worktree>`), extract pending errands, and add them to a new quest's errand list (`fellowship errand add --dir <new-worktree> "description"`).
+**Errand persistence:** After spawning a teammate, Gandalf writes the initial errands to `.fellowship/quest-errands.json` in the quest's worktree by running `fellowship errand init`. This creates a persistent record of what errands were assigned. To add errands to a running quest: `fellowship errand add --dir <worktree> 'handle edge case X'`. To re-sling unfinished errands from a dead quest: read its errand file (`fellowship errand show --dir <dead-worktree>`), extract pending errands, and add them to a new quest's errand list (`fellowship errand add --dir <new-worktree> "description"`).
 
 **Errand CLI commands:**
 - `fellowship errand init --dir <path> --quest <name> --task "description"` — create initial errand file
@@ -152,7 +152,7 @@ INSTRUCTIONS:
 2. Quest Phase 0 will create your isolated worktree using the branch
    naming config — make changes freely once isolation is set up
 3. Gate handling — gates are enforced by plugin hooks via a state file
-   (tmp/quest-state.json). The hooks structurally block your tools
+   (.fellowship/quest-state.json). The hooks structurally block your tools
    after gate submission. Here is how it works:
 
    Before EACH gate, you MUST:
@@ -548,9 +548,9 @@ Never combine gate approvals. Approve one gate at a time. Each gate response tri
 ## Edge Cases
 
 - **Quest fails:** Report to user with context (which phase, what went wrong). Offer to respawn. Worktree is preserved.
-  - **Respawn procedure:** Spawn a new teammate with the same task description, but add to the spawn prompt: `"You are resuming a failed quest. Your working directory is already set to the existing worktree at {worktree_path}. Skip worktree creation in quest Phase 0 — you're already isolated. Check tmp/checkpoint.md for a checkpoint from the previous attempt."` Set the new teammate's working directory to the failed quest's worktree path.
+  - **Respawn procedure:** Spawn a new teammate with the same task description, but add to the spawn prompt: `"You are resuming a failed quest. Your working directory is already set to the existing worktree at {worktree_path}. Skip worktree creation in quest Phase 0 — you're already isolated. Check .fellowship/checkpoint.md for a checkpoint from the previous attempt."` Set the new teammate's working directory to the failed quest's worktree path.
 - **Direct teammate access:** Through Gandalf ("tell quest-2 to skip the logger refactor") or direct via Shift+Down to message the teammate.
-- **Session death:** Worktrees survive but coordination is lost. Teammates are orphaned. To resume: start a new fellowship, and for each incomplete quest use the respawn procedure above pointing at the preserved worktree. Each worktree's `tmp/checkpoint.md` has the last known state. If a teammate was stuck in `gate_pending: true` when the session died, the respawn procedure resets this automatically. For manual recovery without respawn, reject the pending gate: `fellowship gate reject --dir <worktree>`
+- **Session death:** Worktrees survive but coordination is lost. Teammates are orphaned. To resume: start a new fellowship, and for each incomplete quest use the respawn procedure above pointing at the preserved worktree. Each worktree's `.fellowship/checkpoint.md` has the last known state. If a teammate was stuck in `gate_pending: true` when the session died, the respawn procedure resets this automatically. For manual recovery without respawn, reject the pending gate: `fellowship gate reject --dir <worktree>`
 
 ## Key Principles
 

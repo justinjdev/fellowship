@@ -51,7 +51,7 @@ Each quest gets its own git worktree — a separate working directory on its own
 
 ### Lembas (Context Compression)
 
-Between each phase, the quest runner compresses its conversation context into a structured checkpoint (`tmp/checkpoint.md`). This keeps the context window in the "smart zone" and provides crash recovery — if a session dies, the checkpoint survives on disk.
+Between each phase, the quest runner compresses its conversation context into a structured checkpoint (`.fellowship/checkpoint.md`). This keeps the context window in the "smart zone" and provides crash recovery — if a session dies, the checkpoint survives on disk.
 
 ### Scouts
 

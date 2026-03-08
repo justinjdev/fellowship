@@ -20,7 +20,7 @@ Output shows: current phase, whether a gate is pending, prereq completion.
 ```bash
 fellowship init
 ```
-Creates `tmp/quest-state.json`. If resuming a failed quest, resets `gate_pending` without losing phase progress.
+Creates `.fellowship/quest-state.json`. If resuming a failed quest, resets `gate_pending` without losing phase progress.
 
 ## Quest Lifecycle
 
@@ -29,7 +29,7 @@ Run `/quest` to execute the full lifecycle. The fellowship CLI and hooks handle 
 ### What you need to know:
 1. **Before each gate:** run `/lembas`, then `TaskUpdate` with your phase metadata, then send a `[GATE]` message
 2. **After sending a gate:** your tools are blocked until the lead approves — this is automatic, don't fight it
-3. **During Onboard/Research/Plan:** you cannot edit files outside `tmp/` — use this time for reading, exploring, planning
+3. **During Onboard/Research/Plan:** you cannot edit files outside `.fellowship/` — use this time for reading, exploring, planning
 4. **During Implement/Review:** full file access
 5. **Check status** with `fellowship gate status` if you're unsure where you are
 

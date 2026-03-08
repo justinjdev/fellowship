@@ -63,7 +63,7 @@ Add this hook to `.claude/settings.local.json` in repos where you use fellowship
 }
 ```
 
-Also add `tmp/` to your `.gitignore` — checkpoints are local ephemeral state.
+Also add `.fellowship/` to your `.gitignore` — checkpoints are local ephemeral state.
 
 ### Configuration (Optional)
 
@@ -71,6 +71,7 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 
 ```json
 {
+  "dataDir": ".fellowship",
   "branch": {
     "pattern": null,
     "author": null,
@@ -96,6 +97,7 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+| `dataDir` | `".fellowship"` | Directory name for fellowship working files (state, checkpoints, errands, tome). Created inside each worktree and the main repo root. |
 | `branch.pattern` | `null` | Branch name template with placeholders: `{slug}` (task description), `{ticket}` (extracted from description), `{author}` (from config). When `null`, defaults to `"fellowship/{slug}"`. |
 | `branch.author` | `null` | Static value for the `{author}` placeholder. If not set and pattern uses `{author}`, you'll be prompted. |
 | `branch.ticketPattern` | `"[A-Z]+-\\d+"` | Regex to extract ticket IDs from quest descriptions. Default matches Jira-style IDs (e.g., `PROJ-123`). |

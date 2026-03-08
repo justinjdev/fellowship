@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f tmp/checkpoint.md ]; then echo '--- CHECKPOINT DETECTED ---'; cat tmp/checkpoint.md; echo '--- END CHECKPOINT ---'; echo 'A checkpoint from a previous session was found. Use /council to resume or start fresh.'; fi"
+            "command": "if [ -f .fellowship/checkpoint.md ]; then echo '--- CHECKPOINT DETECTED ---'; cat .fellowship/checkpoint.md; echo '--- END CHECKPOINT ---'; echo 'A checkpoint from a previous session was found. Use /council to resume or start fresh.'; fi"
           }
         ]
       }
@@ -137,7 +137,7 @@
 			<CopyButton text={hookConfig} />
 		</div>
 
-		<p>Also add <code>tmp/</code> to your <code>.gitignore</code> so checkpoint files are not committed.</p>
+		<p>Also add <code>.fellowship/</code> to your <code>.gitignore</code> so checkpoint files are not committed.</p>
 	</section>
 
 	<div class="divider"><span class="divider-ring"></span></div>
