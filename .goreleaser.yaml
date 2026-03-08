@@ -2,8 +2,8 @@ version: 2
 project_name: fellowship
 before:
   hooks:
-    - cd cli && go mod tidy
-    - cd cli && go test ./...
+    - sh -c "cd cli && go mod tidy"
+    - sh -c "cd cli && go test ./..."
 builds:
   - id: fellowship
     dir: cli

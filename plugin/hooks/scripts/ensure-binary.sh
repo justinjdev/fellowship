@@ -8,9 +8,9 @@ INSTALL_DIR="$HOME/.claude/fellowship/bin"
 BINARY="$INSTALL_DIR/fellowship"
 REPO="justinjdev/fellowship"
 
-if [ -x "$BINARY" ]; then
-  exit 0
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+VERSION=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$PLUGIN_ROOT/.claude-plugin/plugin.json" | head -1 | grep -o '"[^"]*"$' | tr -d '"')
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
@@ -20,9 +20,10 @@ case "$ARCH" in
   *) echo "fellowship: unsupported architecture $ARCH" >&2; exit 2 ;;
 esac
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-VERSION=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$PLUGIN_ROOT/.claude-plugin/plugin.json" | head -1 | grep -o '"[^"]*"$' | tr -d '"')
+VERSION_FILE="$INSTALL_DIR/.version"
+if [ -x "$BINARY" ] && [ -f "$VERSION_FILE" ] && [ "$(cat "$VERSION_FILE")" = "$VERSION" ]; then
+  exit 0
+fi
 
 if [ -z "$VERSION" ]; then
   echo "fellowship: could not determine version from plugin.json" >&2
@@ -45,4 +46,5 @@ else
 fi
 
 chmod +x "$BINARY"
+echo "$VERSION" > "$VERSION_FILE"
 echo "fellowship: installed $VERSION ($OS/$ARCH)" >&2
