@@ -100,7 +100,7 @@ After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, upda
 
 1. **Config:** Read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. Merge with defaults (see fellowship skill for the full schema). If the file does not exist, all defaults apply.
 2. **Isolate:** Detect whether you're resuming an existing worktree: check if task metadata contains `worktree_path` (via `TaskGet`) and the path exists on disk. If so, you're already isolated — skip worktree creation. Otherwise, if `config.worktree.enabled` is true (default), create an isolated worktree:
-   - **Resolve branch name:** Determine the branch name using config:
+   - **Resolve branch name:** If the spawn prompt includes issue context from `/missive` with a suggested branch name, use that name directly (it already incorporates the issue number and title). Otherwise, determine the branch name using config:
      1. If `branch.pattern` is set: substitute `{slug}`, `{ticket}`, `{author}` placeholders (see below).
      2. Else: use `fellowship/{slug}`.
    - **Placeholder resolution:**
@@ -285,6 +285,7 @@ Goal: Integrate the work — squash/merge, PR creation, worktree cleanup. The qu
 2. This skill handles: squash vs merge decision, PR creation, branch cleanup
 3. If working in a worktree (from Phase 0), clean up the worktree after merge
 4. **PR config:** If `config.pr.draft` is true, create the PR as a draft. If `config.pr.template` is set (a string), use it as the PR body template — the template can contain `{task}`, `{summary}`, and `{changes}` placeholders that get filled in with the actual values.
+5. **Issue closing keywords:** If the spawn prompt includes issue context from `/missive` with PR keywords (e.g., `Closes #42`), include these in the PR body so the issue is automatically closed on merge.
 
 **Gate:** Phase 4 verification must have passed. Do not complete without a green verification step.
 
