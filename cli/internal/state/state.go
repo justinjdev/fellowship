@@ -3,6 +3,7 @@ package state
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -78,10 +79,8 @@ func FindStateFile(fromDir string) (string, error) {
 		root = fromDir
 	}
 	path := filepath.Join(root, "tmp", "quest-state.json")
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	if _, err := os.Stat(path); err != nil {
 		return "", nil
-	} else if err != nil {
-		return "", err
 	}
 	return path, nil
 }
@@ -89,6 +88,7 @@ func FindStateFile(fromDir string) (string, error) {
 func gitRoot(fromDir string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
 	cmd.Dir = fromDir
+	cmd.Stderr = io.Discard
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err
