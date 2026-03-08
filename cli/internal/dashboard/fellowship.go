@@ -7,9 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
+	"github.com/justinjdev/fellowship/cli/internal/filelock"
 	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
@@ -200,10 +200,10 @@ func WithStateLock(path string, fn func(s *FellowshipState) error) error {
 	}
 	defer lockFile.Close()
 
-	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX); err != nil {
+	if err := filelock.Lock(lockFile.Fd()); err != nil {
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
-	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+	defer filelock.Unlock(lockFile.Fd())
 
 	s, err := LoadFellowshipState(path)
 	if err != nil {

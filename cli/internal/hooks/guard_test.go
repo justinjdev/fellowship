@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -82,5 +83,39 @@ func TestGateGuard_PendingBlocksEvenDuringLatePhase(t *testing.T) {
 	result := GateGuard(s, input)
 	if !result.Block {
 		t.Error("gate_pending should block even during Implement")
+	}
+}
+
+func TestGateGuard_BlocksWhenHeld(t *testing.T) {
+	s := &state.State{Phase: "Implement", Held: true}
+	input := &HookInput{ToolInput: ToolInput{Command: "ls"}}
+	result := GateGuard(s, input)
+	if !result.Block {
+		t.Error("should block when quest is held")
+	}
+}
+
+func TestGateGuard_BlocksWhenHeldWithReason(t *testing.T) {
+	reason := "file conflict with quest-auth"
+	s := &state.State{Phase: "Implement", Held: true, HeldReason: &reason}
+	input := &HookInput{ToolInput: ToolInput{Command: "ls"}}
+	result := GateGuard(s, input)
+	if !result.Block {
+		t.Error("should block when quest is held")
+	}
+	if !strings.Contains(result.Message, reason) {
+		t.Errorf("message should include held reason, got: %s", result.Message)
+	}
+}
+
+func TestGateGuard_HeldTakesPriorityOverGatePending(t *testing.T) {
+	s := &state.State{Phase: "Implement", Held: true, GatePending: true}
+	input := &HookInput{ToolInput: ToolInput{Command: "ls"}}
+	result := GateGuard(s, input)
+	if !result.Block {
+		t.Error("should block")
+	}
+	if !strings.Contains(result.Message, "held") {
+		t.Errorf("held should take priority over gate_pending, got: %s", result.Message)
 	}
 }

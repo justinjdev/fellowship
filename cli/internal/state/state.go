@@ -10,7 +10,12 @@ import (
 	"strings"
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
+	"github.com/justinjdev/fellowship/cli/internal/filelock"
 )
+
+// ErrNoSave can be returned from a WithLock callback to skip saving
+// the state file while still releasing the lock without error.
+var ErrNoSave = fmt.Errorf("no save needed")
 
 type State struct {
 	Version          int      `json:"version"`
@@ -23,6 +28,8 @@ type State struct {
 	LembasCompleted  bool     `json:"lembas_completed"`
 	MetadataUpdated  bool     `json:"metadata_updated"`
 	AutoApproveGates []string `json:"auto_approve_gates"`
+	Held             bool     `json:"held"`
+	HeldReason       *string  `json:"held_reason"`
 }
 
 var phaseOrder = []string{"Onboard", "Research", "Plan", "Implement", "Review", "Complete"}
@@ -73,6 +80,37 @@ func Save(path string, s *State) error {
 		return fmt.Errorf("renaming temp file: %w", err)
 	}
 	return nil
+}
+
+// WithLock acquires an exclusive file lock, loads the state, calls fn to
+// mutate it, and saves the result. The entire load→mutate→save is atomic with
+// respect to other processes using the same lock.
+func WithLock(path string, fn func(s *State) error) error {
+	lockPath := path + ".lock"
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return fmt.Errorf("opening lock file: %w", err)
+	}
+	defer lockFile.Close()
+
+	if err := filelock.Lock(lockFile.Fd()); err != nil {
+		return fmt.Errorf("acquiring lock: %w", err)
+	}
+	defer filelock.Unlock(lockFile.Fd())
+
+	s, err := Load(path)
+	if err != nil {
+		return err
+	}
+
+	if err := fn(s); err != nil {
+		if err == ErrNoSave {
+			return nil
+		}
+		return err
+	}
+
+	return Save(path, s)
 }
 
 func FindStateFile(fromDir string) (string, error) {
