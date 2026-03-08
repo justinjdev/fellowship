@@ -81,6 +81,11 @@
 			name: '/rekindle',
 			summary: 'Recover a fellowship after a session crash.',
 			details: 'Scans worktrees and state files to reconstruct fellowship state from on-disk artifacts. Presents a recovery dashboard showing which quests are resumable (have checkpoints), stale (no checkpoint), or already complete (branch merged). On confirmation, re-spawns Gandalf and quest runners with recovered context.'
+		},
+		{
+			name: '/validate-docs',
+			summary: 'Validate that site and README documentation is current — flags undocumented skills, agents, and stale changelogs.',
+			details: 'Audits documentation coverage by comparing skills, agents, and changelog entries against what is actually present in the codebase. Flags missing entries, stale descriptions, and undocumented features so the site and README stay in sync with the plugin.'
 		}
 	];
 </script>
