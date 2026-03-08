@@ -265,7 +265,7 @@ Goal: Find failure modes before conventions and code quality review. Spawn balro
    - The worktree path (from Session Context / task metadata)
    - The task description
    - Your task ID (so balrog can report back via SendMessage)
-2. Wait for balrog's SendMessage report
+2. Wait for balrog's SendMessage report. If balrog does not respond within a reasonable time (or if you receive an error from the Agent tool), proceed to Phase 4 and note in your gate message that adversarial review was skipped due to agent failure.
 3. Evaluate findings by severity:
    - **Critical/High** — must address before Review gate opens. Fix, re-run relevant tests, then confirm fixes with balrog's reproduction steps.
    - **Medium** — present to user for decision. Document outcome either way.

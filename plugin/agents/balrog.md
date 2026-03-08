@@ -30,7 +30,7 @@ For each new/modified function, analyze its signature and semantics. Generate in
 - **Type confusion** — wrong types where the language allows it
 - **Unicode/encoding** — emoji, RTL text, null bytes, control characters
 
-Write actual test cases using whatever test framework the project already uses. Run them with `Bash`. Report what breaks.
+Before writing tests, check what test framework the project uses (look for test files, package.json scripts, go test, pytest, etc.). Write actual test cases using that framework. Run them with `Bash` — use the framework's timeout flag if available (e.g., `go test -timeout 30s`, `jest --testTimeout=10000`) to avoid hanging on runaway tests. Report what breaks.
 
 ### 2. Error Path Verification
 
