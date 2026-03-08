@@ -139,6 +139,19 @@ If the user has already described their task, pass the description directly. Oth
 
 **Gate:** Isolation set up (worktree created or skipped per config) AND Session Context block must exist before proceeding.
 
+#### Plan-Driven Mode
+
+If the spawn prompt contains `PRE-EXISTING PLAN:` with a plan file path:
+
+1. **Create worktree** as normal (steps 1-2 from Standard Onboard)
+2. **Copy plan file:** Read the plan file from the specified path and write it to `.fellowship/plan.md` in the worktree
+3. **Initialize state at Implement:** Run `fellowship init --phase Implement --plan-skip --quest <quest_name>` — this creates the state file starting at Implement and records Onboard/Research/Plan as skipped in the tome
+4. **Initialize errands:** Run `fellowship errand init` and parse the plan to create errands for each task
+5. **Skip /council** — the plan provides sufficient context
+6. **Proceed directly to Phase 3 (Implement)** — skip the Onboard gate, Research, and Plan entirely
+
+The plan file at `.fellowship/plan.md` is your implementation blueprint for Phase 3. Use it exactly as you would use a plan created during Phase 2.
+
 ### Phase 1: Research
 
 Goal: Understand the system well enough to plan changes. Stay objective — gather information, don't propose solutions yet.
