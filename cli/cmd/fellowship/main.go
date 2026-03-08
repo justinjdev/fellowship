@@ -1039,28 +1039,22 @@ func runStateAddQuest(args []string) int {
 	}
 
 	statePath := fellowshipStatePath(*dir)
-	s, err := dashboard.LoadFellowshipState(statePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-		return 1
-	}
-
-	for _, q := range s.Quests {
-		if q.Name == *name {
-			fmt.Fprintf(os.Stderr, "fellowship: quest %q already exists\n", *name)
-			return 1
+	questName := *name
+	if err := dashboard.WithStateLock(statePath, func(s *dashboard.FellowshipState) error {
+		for _, q := range s.Quests {
+			if q.Name == questName {
+				return fmt.Errorf("quest %q already exists", questName)
+			}
 		}
-	}
-
-	s.Quests = append(s.Quests, dashboard.QuestEntry{
-		Name:            *name,
-		TaskDescription: *task,
-		Worktree:        *worktree,
-		Branch:          *branch,
-		TaskID:          *taskID,
-	})
-
-	if err := dashboard.SaveFellowshipState(statePath, s); err != nil {
+		s.Quests = append(s.Quests, dashboard.QuestEntry{
+			Name:            *name,
+			TaskDescription: *task,
+			Worktree:        *worktree,
+			Branch:          *branch,
+			TaskID:          *taskID,
+		})
+		return nil
+	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
@@ -1082,26 +1076,20 @@ func runStateAddScout(args []string) int {
 	}
 
 	statePath := fellowshipStatePath(*dir)
-	s, err := dashboard.LoadFellowshipState(statePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-		return 1
-	}
-
-	for _, sc := range s.Scouts {
-		if sc.Name == *name {
-			fmt.Fprintf(os.Stderr, "fellowship: scout %q already exists\n", *name)
-			return 1
+	scoutName := *name
+	if err := dashboard.WithStateLock(statePath, func(s *dashboard.FellowshipState) error {
+		for _, sc := range s.Scouts {
+			if sc.Name == scoutName {
+				return fmt.Errorf("scout %q already exists", scoutName)
+			}
 		}
-	}
-
-	s.Scouts = append(s.Scouts, dashboard.ScoutEntry{
-		Name:     *name,
-		Question: *question,
-		TaskID:   *taskID,
-	})
-
-	if err := dashboard.SaveFellowshipState(statePath, s); err != nil {
+		s.Scouts = append(s.Scouts, dashboard.ScoutEntry{
+			Name:     *name,
+			Question: *question,
+			TaskID:   *taskID,
+		})
+		return nil
+	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
@@ -1123,34 +1111,27 @@ func runStateAddCompany(args []string) int {
 	}
 
 	statePath := fellowshipStatePath(*dir)
-	s, err := dashboard.LoadFellowshipState(statePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-		return 1
-	}
-
-	for _, c := range s.Companies {
-		if c.Name == *name {
-			fmt.Fprintf(os.Stderr, "fellowship: company %q already exists\n", *name)
-			return 1
+	companyName := *name
+	if err := dashboard.WithStateLock(statePath, func(s *dashboard.FellowshipState) error {
+		for _, c := range s.Companies {
+			if c.Name == companyName {
+				return fmt.Errorf("company %q already exists", companyName)
+			}
 		}
-	}
-
-	entry := dashboard.CompanyEntry{Name: *name}
-	if *quests != "" {
-		entry.Quests = strings.Split(*quests, ",")
-	} else {
-		entry.Quests = []string{}
-	}
-	if *scouts != "" {
-		entry.Scouts = strings.Split(*scouts, ",")
-	} else {
-		entry.Scouts = []string{}
-	}
-
-	s.Companies = append(s.Companies, entry)
-
-	if err := dashboard.SaveFellowshipState(statePath, s); err != nil {
+		entry := dashboard.CompanyEntry{Name: *name}
+		if *quests != "" {
+			entry.Quests = strings.Split(*quests, ",")
+		} else {
+			entry.Quests = []string{}
+		}
+		if *scouts != "" {
+			entry.Scouts = strings.Split(*scouts, ",")
+		} else {
+			entry.Scouts = []string{}
+		}
+		s.Companies = append(s.Companies, entry)
+		return nil
+	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
@@ -1173,35 +1154,24 @@ func runStateUpdateQuest(args []string) int {
 	}
 
 	statePath := fellowshipStatePath(*dir)
-	s, err := dashboard.LoadFellowshipState(statePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-		return 1
-	}
-
-	found := false
-	for i := range s.Quests {
-		if s.Quests[i].Name == *name {
-			if *worktree != "" {
-				s.Quests[i].Worktree = *worktree
+	questName := *name
+	if err := dashboard.WithStateLock(statePath, func(s *dashboard.FellowshipState) error {
+		for i := range s.Quests {
+			if s.Quests[i].Name == questName {
+				if *worktree != "" {
+					s.Quests[i].Worktree = *worktree
+				}
+				if *branch != "" {
+					s.Quests[i].Branch = *branch
+				}
+				if *taskID != "" {
+					s.Quests[i].TaskID = *taskID
+				}
+				return nil
 			}
-			if *branch != "" {
-				s.Quests[i].Branch = *branch
-			}
-			if *taskID != "" {
-				s.Quests[i].TaskID = *taskID
-			}
-			found = true
-			break
 		}
-	}
-
-	if !found {
-		fmt.Fprintf(os.Stderr, "fellowship: quest %q not found\n", *name)
-		return 1
-	}
-
-	if err := dashboard.SaveFellowshipState(statePath, s); err != nil {
+		return fmt.Errorf("quest %q not found", questName)
+	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
