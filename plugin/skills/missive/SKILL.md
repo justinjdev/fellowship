@@ -34,7 +34,7 @@ Extract all issue numbers from the args using the pattern `#?\d+`. Strip any `#`
 ### Step 2: Load Configuration
 
 Read `~/.claude/fellowship.json` if it exists. Extract:
-- `branch.pattern` — branch name pattern with placeholders (default: `fellowship/{ticket}-{slug}`)
+- `branch.pattern` — branch name pattern with placeholders (default: `null`, effective: `fellowship/{slug}`)
 - `branch.ticketPattern` — regex for ticket extraction (default: `[A-Z]+-\d+`)
 - `issues.autoClose` — whether PRs should auto-close issues (default: `true`)
 
@@ -77,11 +77,10 @@ For each successfully fetched issue, produce a structured block:
 #### Branch Suggestion
 
 Resolve the branch name:
-1. If `branch.pattern` is configured: substitute placeholders:
-   - `{ticket}` → the issue number (e.g., `42`)
-   - `{slug}` → slugified issue title (lowercase, hyphens for spaces, strip non-alphanumeric, max 50 chars)
-   - `{author}` → `branch.author` from config if set, otherwise omit this placeholder
-2. If no pattern configured: use `fellowship/<number>-<slugified-title>`
+1. If `branch.pattern` is configured: substitute placeholders per the quest skill's rules, but override `{slug}` with a slug derived from the issue title (not the task description). The `{ticket}` placeholder retains its existing semantics (matches `branch.ticketPattern` against the task description — typically Jira-style IDs). If `{author}` is in the pattern but `branch.author` is not set, replace with empty string and collapse any resulting double-separator (e.g., `//` → `/`, `--` → `-`).
+2. If no pattern configured (default): use `fellowship/<number>-<slugified-title>` — incorporating the issue number for traceability (e.g., `fellowship/42-fix-auth-bug`).
+
+Slug generation: lowercase the issue title, replace spaces with hyphens, strip non-alphanumeric characters (except hyphens), collapse consecutive hyphens, max 50 characters.
 
 #### PR Keywords
 
