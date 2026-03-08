@@ -203,6 +203,37 @@ func TestFindTome_NotExists(t *testing.T) {
 	}
 }
 
+func TestRecordSkippedPhases(t *testing.T) {
+	c := &QuestTome{
+		GateHistory:     []GateEvent{},
+		PhasesCompleted: []PhaseRecord{},
+	}
+
+	RecordSkippedPhases(c, []string{"Onboard", "Research", "Plan"}, "pre-existing plan")
+
+	if len(c.GateHistory) != 3 {
+		t.Fatalf("GateHistory len = %d, want 3", len(c.GateHistory))
+	}
+	if len(c.PhasesCompleted) != 3 {
+		t.Fatalf("PhasesCompleted len = %d, want 3", len(c.PhasesCompleted))
+	}
+
+	for i, phase := range []string{"Onboard", "Research", "Plan"} {
+		if c.GateHistory[i].Phase != phase {
+			t.Errorf("GateHistory[%d].Phase = %q, want %q", i, c.GateHistory[i].Phase, phase)
+		}
+		if c.GateHistory[i].Action != "skipped" {
+			t.Errorf("GateHistory[%d].Action = %q, want skipped", i, c.GateHistory[i].Action)
+		}
+		if c.GateHistory[i].Reason != "pre-existing plan" {
+			t.Errorf("GateHistory[%d].Reason = %q, want 'pre-existing plan'", i, c.GateHistory[i].Reason)
+		}
+		if c.PhasesCompleted[i].Phase != phase {
+			t.Errorf("PhasesCompleted[%d].Phase = %q, want %q", i, c.PhasesCompleted[i].Phase, phase)
+		}
+	}
+}
+
 func TestLoadOrCreate_NewTome(t *testing.T) {
 	c := LoadOrCreate("/nonexistent/quest-tome.json")
 	if c.Version != 1 {

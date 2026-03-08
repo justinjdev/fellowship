@@ -86,6 +86,22 @@ func RecordGate(c *QuestTome, phase, action string) {
 	})
 }
 
+func RecordSkippedPhases(c *QuestTome, phases []string, reason string) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, phase := range phases {
+		c.GateHistory = append(c.GateHistory, GateEvent{
+			Phase:     phase,
+			Action:    "skipped",
+			Timestamp: now,
+			Reason:    reason,
+		})
+		c.PhasesCompleted = append(c.PhasesCompleted, PhaseRecord{
+			Phase:       phase,
+			CompletedAt: now,
+		})
+	}
+}
+
 func RecordFiles(c *QuestTome, files []string) {
 	seen := make(map[string]bool, len(c.FilesTouched))
 	for _, f := range c.FilesTouched {
