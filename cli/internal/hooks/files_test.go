@@ -58,7 +58,8 @@ func TestFileTrack_NotebookPath(t *testing.T) {
 	}
 }
 
-func TestFileTrack_TmpPathExclusion(t *testing.T) {
+func TestFileTrack_DataDirPathExclusion(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // ensure default datadir (.fellowship)
 	dir := t.TempDir()
 	tomePath := filepath.Join(dir, "quest-tome.json")
 	s := &state.State{Phase: "Implement"}
@@ -67,8 +68,8 @@ func TestFileTrack_TmpPathExclusion(t *testing.T) {
 		name string
 		path string
 	}{
-		{"absolute tmp", "/home/user/project/tmp/checkpoint.md"},
-		{"relative tmp", "tmp/quest-state.json"},
+		{"absolute data dir", "/home/user/project/.fellowship/checkpoint.md"},
+		{"relative data dir", ".fellowship/quest-state.json"},
 	}
 
 	for _, tt := range tests {
@@ -78,7 +79,7 @@ func TestFileTrack_TmpPathExclusion(t *testing.T) {
 			}
 			modified := FileTrack(s, input, tomePath)
 			if modified {
-				t.Errorf("FileTrack should return false for tmp path %q", tt.path)
+				t.Errorf("FileTrack should return false for data dir path %q", tt.path)
 			}
 		})
 	}

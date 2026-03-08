@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
@@ -75,7 +76,7 @@ func BatchApprove(company dashboard.CompanyEntry, fellowshipState *dashboard.Fel
 			continue
 		}
 
-		statePath := filepath.Join(wt, "tmp", "quest-state.json")
+		statePath := filepath.Join(wt, datadir.Name(), "quest-state.json")
 		st, err := state.Load(statePath)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("loading state for %s: %w", qName, err))
@@ -174,7 +175,7 @@ func Show(statePath string, name string) error {
 				continue
 			}
 
-			statePath := filepath.Join(wt, "tmp", "quest-state.json")
+			statePath := filepath.Join(wt, datadir.Name(), "quest-state.json")
 			st, err := state.Load(statePath)
 			if err != nil {
 				fmt.Printf("  %-25s (state unavailable)\n", qName)
@@ -282,7 +283,7 @@ func LoadAndMarshalProgress(statePath string, name string) ([]byte, error) {
 		if !ok || wt == "" {
 			continue
 		}
-		sp := filepath.Join(wt, "tmp", "quest-state.json")
+		sp := filepath.Join(wt, datadir.Name(), "quest-state.json")
 		st, err := state.Load(sp)
 		if err != nil {
 			continue

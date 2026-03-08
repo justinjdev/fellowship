@@ -90,15 +90,15 @@ func TestBatchApprove_MultipleWorktrees(t *testing.T) {
 	// Create two worktrees with pending gates
 	wt1 := filepath.Join(tmpDir, "wt1")
 	wt2 := filepath.Join(tmpDir, "wt2")
-	os.MkdirAll(filepath.Join(wt1, "tmp"), 0755)
-	os.MkdirAll(filepath.Join(wt2, "tmp"), 0755)
+	os.MkdirAll(filepath.Join(wt1, ".fellowship"), 0755)
+	os.MkdirAll(filepath.Join(wt2, ".fellowship"), 0755)
 
-	writeState(t, filepath.Join(wt1, "tmp", "quest-state.json"), &state.State{
+	writeState(t, filepath.Join(wt1, ".fellowship", "quest-state.json"), &state.State{
 		Version:     1,
 		Phase:       "Research",
 		GatePending: true,
 	})
-	writeState(t, filepath.Join(wt2, "tmp", "quest-state.json"), &state.State{
+	writeState(t, filepath.Join(wt2, ".fellowship", "quest-state.json"), &state.State{
 		Version:     1,
 		Phase:       "Plan",
 		GatePending: true,
@@ -125,7 +125,7 @@ func TestBatchApprove_MultipleWorktrees(t *testing.T) {
 	}
 
 	// Verify phases were advanced
-	s1, _ := state.Load(filepath.Join(wt1, "tmp", "quest-state.json"))
+	s1, _ := state.Load(filepath.Join(wt1, ".fellowship", "quest-state.json"))
 	if s1.Phase != "Plan" {
 		t.Errorf("expected q1 phase 'Plan', got %q", s1.Phase)
 	}
@@ -133,7 +133,7 @@ func TestBatchApprove_MultipleWorktrees(t *testing.T) {
 		t.Error("expected q1 gate_pending to be false")
 	}
 
-	s2, _ := state.Load(filepath.Join(wt2, "tmp", "quest-state.json"))
+	s2, _ := state.Load(filepath.Join(wt2, ".fellowship", "quest-state.json"))
 	if s2.Phase != "Implement" {
 		t.Errorf("expected q2 phase 'Implement', got %q", s2.Phase)
 	}
@@ -142,9 +142,9 @@ func TestBatchApprove_MultipleWorktrees(t *testing.T) {
 func TestBatchApprove_NoPendingGates(t *testing.T) {
 	tmpDir := t.TempDir()
 	wt := filepath.Join(tmpDir, "wt")
-	os.MkdirAll(filepath.Join(wt, "tmp"), 0755)
+	os.MkdirAll(filepath.Join(wt, ".fellowship"), 0755)
 
-	writeState(t, filepath.Join(wt, "tmp", "quest-state.json"), &state.State{
+	writeState(t, filepath.Join(wt, ".fellowship", "quest-state.json"), &state.State{
 		Version:     1,
 		Phase:       "Implement",
 		GatePending: false,

@@ -270,7 +270,7 @@ func TestNextIDSequence(t *testing.T) {
 func TestFindErrandsNoFile(t *testing.T) {
 	dir := t.TempDir()
 	// Create a tmp dir but no errand file
-	os.MkdirAll(filepath.Join(dir, "tmp"), 0755)
+	os.MkdirAll(filepath.Join(dir, ".fellowship"), 0755)
 
 	path, err := FindErrands(dir)
 	if err != nil {

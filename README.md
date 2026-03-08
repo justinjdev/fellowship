@@ -54,7 +54,7 @@ Add this hook to `.claude/settings.local.json` in repos where you use fellowship
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f tmp/checkpoint.md ]; then echo '--- CHECKPOINT DETECTED ---'; cat tmp/checkpoint.md; echo '--- END CHECKPOINT ---'; echo 'A checkpoint from a previous session was found. Use /council to resume or start fresh.'; fi"
+            "command": "if [ -f .fellowship/checkpoint.md ]; then echo '--- CHECKPOINT DETECTED ---'; cat .fellowship/checkpoint.md; echo '--- END CHECKPOINT ---'; echo 'A checkpoint from a previous session was found. Use /council to resume or start fresh.'; fi"
           }
         ]
       }

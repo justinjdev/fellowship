@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/eagles"
 	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
@@ -83,7 +84,7 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statePath := filepath.Join(req.Dir, "tmp", "quest-state.json")
+	statePath := filepath.Join(req.Dir, datadir.Name(), "quest-state.json")
 	st, err := state.Load(statePath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -136,7 +137,7 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statePath := filepath.Join(req.Dir, "tmp", "quest-state.json")
+	statePath := filepath.Join(req.Dir, datadir.Name(), "quest-state.json")
 	st, err := state.Load(statePath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -178,7 +179,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 	}
 	name := parts[0]
 
-	statePath := filepath.Join(s.gitRoot, "tmp", "fellowship-state.json")
+	statePath := filepath.Join(s.gitRoot, datadir.Name(), "fellowship-state.json")
 	fs, err := LoadFellowshipState(statePath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -229,7 +230,7 @@ func batchApproveCompany(c CompanyEntry, fs *FellowshipState) (approved []string
 			continue
 		}
 
-		statePath := filepath.Join(wt, "tmp", "quest-state.json")
+		statePath := filepath.Join(wt, datadir.Name(), "quest-state.json")
 		st, err := state.Load(statePath)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("loading state for %s: %w", qName, err))
@@ -294,7 +295,7 @@ func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	errandPath := filepath.Join(dir, "tmp", "quest-errands.json")
+	errandPath := filepath.Join(dir, datadir.Name(), "quest-errands.json")
 	h, err := errand.Load(errandPath)
 	if err != nil {
 		http.Error(w, "no errand file found", http.StatusNotFound)

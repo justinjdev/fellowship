@@ -9,7 +9,7 @@ import (
 func tmpState(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
-	stateDir := filepath.Join(dir, "tmp")
+	stateDir := filepath.Join(dir, ".fellowship")
 	os.MkdirAll(stateDir, 0755)
 	path := filepath.Join(stateDir, "quest-state.json")
 	os.WriteFile(path, []byte(content), 0644)

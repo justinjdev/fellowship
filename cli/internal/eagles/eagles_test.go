@@ -11,12 +11,12 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
 )
 
-// writeQuestState creates a quest-state.json in worktree/tmp.
+// writeQuestState creates a quest-state.json in worktree/.fellowship.
 func writeQuestState(t *testing.T, worktree string, phase string, gatePending bool, gateID *string, questName string) {
 	t.Helper()
-	dir := filepath.Join(worktree, "tmp")
+	dir := filepath.Join(worktree, ".fellowship")
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatalf("creating tmp dir: %v", err)
+		t.Fatalf("creating data dir: %v", err)
 	}
 
 	s := map[string]interface{}{
@@ -158,7 +158,7 @@ func TestClassifyZombie(t *testing.T) {
 	// Last file change was 30 minutes ago
 	touchFile(t, filepath.Join(worktree, "src", "old.go"), now.Add(-30*time.Minute))
 	// Set the quest-state.json mod time to be old too
-	os.Chtimes(filepath.Join(worktree, "tmp", "quest-state.json"), now.Add(-30*time.Minute), now.Add(-30*time.Minute))
+	os.Chtimes(filepath.Join(worktree, ".fellowship", "quest-state.json"), now.Add(-30*time.Minute), now.Add(-30*time.Minute))
 
 	opts := Options{
 		GateThreshold: 10 * time.Minute,
@@ -187,10 +187,10 @@ func TestClassifyZombieWithCheckpoint(t *testing.T) {
 
 	// Last file change was 30 minutes ago
 	touchFile(t, filepath.Join(worktree, "src", "old.go"), now.Add(-30*time.Minute))
-	os.Chtimes(filepath.Join(worktree, "tmp", "quest-state.json"), now.Add(-30*time.Minute), now.Add(-30*time.Minute))
+	os.Chtimes(filepath.Join(worktree, ".fellowship", "quest-state.json"), now.Add(-30*time.Minute), now.Add(-30*time.Minute))
 
 	// Create checkpoint
-	touchFile(t, filepath.Join(worktree, "tmp", "checkpoint.md"), now.Add(-30*time.Minute))
+	touchFile(t, filepath.Join(worktree, ".fellowship", "checkpoint.md"), now.Add(-30*time.Minute))
 
 	opts := Options{
 		GateThreshold: 10 * time.Minute,
@@ -220,7 +220,7 @@ func TestClassifyComplete(t *testing.T) {
 
 	writeQuestState(t, worktree, "Complete", false, nil, "quest-done")
 	touchFile(t, filepath.Join(worktree, "src", "done.go"), now.Add(-60*time.Minute))
-	os.Chtimes(filepath.Join(worktree, "tmp", "quest-state.json"), now.Add(-60*time.Minute), now.Add(-60*time.Minute))
+	os.Chtimes(filepath.Join(worktree, ".fellowship", "quest-state.json"), now.Add(-60*time.Minute), now.Add(-60*time.Minute))
 
 	opts := Options{
 		GateThreshold: 10 * time.Minute,
@@ -349,7 +349,7 @@ func TestWriteReport(t *testing.T) {
 		t.Fatalf("WriteReport: %v", err)
 	}
 
-	path := filepath.Join(root, "tmp", "eagles-report.json")
+	path := filepath.Join(root, ".fellowship", "eagles-report.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("reading report: %v", err)

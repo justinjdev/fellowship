@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
@@ -90,13 +91,13 @@ func Sweep(gitRoot string, opts Options) (*EaglesReport, error) {
 
 // classifyQuest examines a single worktree and returns its health.
 func classifyQuest(worktree string, opts Options) (*QuestHealth, error) {
-	questStatePath := filepath.Join(worktree, "tmp", "quest-state.json")
+	questStatePath := filepath.Join(worktree, datadir.Name(), "quest-state.json")
 	s, err := state.Load(questStatePath)
 	if err != nil {
 		return nil, err
 	}
 
-	hasCheckpoint := gitutil.FileExists(filepath.Join(worktree, "tmp", "checkpoint.md"))
+	hasCheckpoint := gitutil.FileExists(filepath.Join(worktree, datadir.Name(), "checkpoint.md"))
 	lastActivity := latestModTime(worktree)
 
 	qh := &QuestHealth{
@@ -150,7 +151,7 @@ func classifyQuest(worktree string, opts Options) (*QuestHealth, error) {
 }
 
 
-// latestModTime walks the worktree (excluding .git, tmp, and node_modules) to find the most
+// latestModTime walks the worktree (excluding .git, data dir, and node_modules) to find the most
 // recently modified file.
 func latestModTime(worktree string) time.Time {
 	var latest time.Time
@@ -158,9 +159,9 @@ func latestModTime(worktree string) time.Time {
 		if err != nil {
 			return nil
 		}
-		// Skip .git, tmp (internal state), and node_modules directories
+		// Skip .git, fellowship data dir (internal state), and node_modules directories
 		name := info.Name()
-		if info.IsDir() && (name == ".git" || name == "tmp" || name == "node_modules") {
+		if info.IsDir() && (name == ".git" || name == datadir.Name() || name == "node_modules") {
 			return filepath.SkipDir
 		}
 		if !info.IsDir() && info.ModTime().After(latest) {
@@ -171,9 +172,9 @@ func latestModTime(worktree string) time.Time {
 	return latest
 }
 
-// WriteReport writes the eagles report to tmp/eagles-report.json in the git root.
+// WriteReport writes the eagles report to the data directory in the git root.
 func WriteReport(gitRoot string, report *EaglesReport) error {
-	dir := filepath.Join(gitRoot, "tmp")
+	dir := filepath.Join(gitRoot, datadir.Name())
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("creating tmp dir: %w", err)
 	}

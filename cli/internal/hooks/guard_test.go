@@ -35,13 +35,14 @@ func TestGateGuard_BlocksEditDuringEarlyPhase(t *testing.T) {
 	}
 }
 
-func TestGateGuard_AllowsTmpWriteDuringEarlyPhase(t *testing.T) {
+func TestGateGuard_AllowsDataDirWriteDuringEarlyPhase(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // ensure default datadir (.fellowship)
 	s := &state.State{Phase: "Research"}
-	for _, path := range []string{"/repo/tmp/notes.md", "tmp/checkpoint.md"} {
+	for _, path := range []string{"/repo/.fellowship/notes.md", ".fellowship/checkpoint.md"} {
 		input := &HookInput{ToolInput: ToolInput{FilePath: path}}
 		result := GateGuard(s, input)
 		if result.Block {
-			t.Errorf("should allow tmp/ write during Research: %s", path)
+			t.Errorf("should allow .fellowship/ write during Research: %s", path)
 		}
 	}
 }

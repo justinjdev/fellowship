@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 )
 
 const heraldFile = "quest-herald.jsonl"
@@ -33,11 +35,11 @@ type Tiding struct {
 
 // Announce appends a tiding to the herald log file.
 func Announce(dir string, t Tiding) error {
-	tmpDir := filepath.Join(dir, "tmp")
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+	dataDirPath := filepath.Join(dir, datadir.Name())
+	if err := os.MkdirAll(dataDirPath, 0755); err != nil {
 		return err
 	}
-	path := filepath.Join(tmpDir, heraldFile)
+	path := filepath.Join(dataDirPath, heraldFile)
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
@@ -49,7 +51,7 @@ func Announce(dir string, t Tiding) error {
 // Read returns tidings from a single worktree's herald log.
 // If n > 0, returns at most the last n tidings.
 func Read(dir string, n int) ([]Tiding, error) {
-	path := filepath.Join(dir, "tmp", heraldFile)
+	path := filepath.Join(dir, datadir.Name(), heraldFile)
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
