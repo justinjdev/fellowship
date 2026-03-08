@@ -54,7 +54,7 @@ Add this hook to `.claude/settings.local.json` in repos where you use fellowship
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f tmp/checkpoint.md ]; then echo '--- CHECKPOINT DETECTED ---'; cat tmp/checkpoint.md; echo '--- END CHECKPOINT ---'; echo 'A checkpoint from a previous session was found. Use /council to resume or start fresh.'; fi"
+            "command": "if [ -f .fellowship/checkpoint.md ]; then echo '--- CHECKPOINT DETECTED ---'; cat .fellowship/checkpoint.md; echo '--- END CHECKPOINT ---'; echo 'A checkpoint from a previous session was found. Use /council to resume or start fresh.'; fi"
           }
         ]
       }
@@ -63,7 +63,7 @@ Add this hook to `.claude/settings.local.json` in repos where you use fellowship
 }
 ```
 
-Also add `tmp/` to your `.gitignore` — checkpoints are local ephemeral state.
+Also add `.fellowship/` to your `.gitignore` — checkpoints are local ephemeral state. If you have configured a custom `dataDir` in `~/.claude/fellowship.json`, use that directory name instead.
 
 ### Configuration (Optional)
 
@@ -71,6 +71,7 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 
 ```json
 {
+  "dataDir": ".fellowship",
   "branch": {
     "pattern": null,
     "author": null,
@@ -96,6 +97,7 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+| `dataDir` | `".fellowship"` | Directory name for fellowship working files (state, checkpoints, errands, tome). Created inside each worktree and the main repo root. |
 | `branch.pattern` | `null` | Branch name template with placeholders: `{slug}` (task description), `{ticket}` (extracted from description), `{author}` (from config). When `null`, defaults to `"fellowship/{slug}"`. |
 | `branch.author` | `null` | Static value for the `{author}` placeholder. If not set and pattern uses `{author}`, you'll be prompted. |
 | `branch.ticketPattern` | `"[A-Z]+-\\d+"` | Regex to extract ticket IDs from quest descriptions. Default matches Jira-style IDs (e.g., `PROJ-123`). |

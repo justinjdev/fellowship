@@ -82,10 +82,10 @@ Output in this exact format:
 
 ### Step 4: Persist Checkpoint
 
-Write the Compacted Context block to `tmp/checkpoint.md` (repo root) so it survives session crashes and context exhaustion:
+Write the Compacted Context block to `.fellowship/checkpoint.md` (repo root) so it survives session crashes and context exhaustion. (`.fellowship/` is the default data directory; users can override it via `dataDir` in `~/.claude/fellowship.json`.)
 
-1. Create `tmp/` directory in repo root if it doesn't exist
-2. Write the Compacted Context block to `tmp/checkpoint.md` with a timestamp header:
+1. Create `.fellowship/` directory in repo root if it doesn't exist
+2. Write the Compacted Context block to `.fellowship/checkpoint.md` with a timestamp header:
 
 ```
 <!-- Checkpoint: YYYY-MM-DD HH:MM -->
@@ -95,13 +95,13 @@ Write the Compacted Context block to `tmp/checkpoint.md` (repo root) so it survi
 [Compacted Context block from Step 3]
 ```
 
-The `tmp/` directory is gitignored — checkpoints are developer-local ephemeral state, not shared via git. They only need to survive a session crash, not persist across machines.
+The `.fellowship/` directory is gitignored — checkpoints are developer-local ephemeral state, not shared via git. They only need to survive a session crash, not persist across machines.
 
 ### Step 5: Trigger Built-in Compaction
 
 After persisting the checkpoint, instruct:
 
-> "Checkpoint saved to `tmp/checkpoint.md`. Now run `/compact` to compress the conversation window. The Compacted Context block above will be preserved as the key context. If this session dies, the next session will find the checkpoint and offer to resume."
+> "Checkpoint saved to `.fellowship/checkpoint.md`. Now run `/compact` to compress the conversation window. The Compacted Context block above will be preserved as the key context. If this session dies, the next session will find the checkpoint and offer to resume."
 
 ## Key Principles
 
@@ -109,4 +109,4 @@ After persisting the checkpoint, instruct:
 - **Structured format.** The template ensures nothing critical is lost while everything noisy is dropped.
 - **Phase awareness.** What you keep depends on what's coming next, not what just happened.
 - **Frequency over perfection.** Compact often with a good-enough summary rather than rarely with a perfect one.
-- **Persist to survive.** Always write the checkpoint to `tmp/`. Sessions are ephemeral; the filesystem outlasts them. If context fills up or a session crashes, the checkpoint is the lifeline.
+- **Persist to survive.** Always write the checkpoint to `.fellowship/`. Sessions are ephemeral; the filesystem outlasts them. If context fills up or a session crashes, the checkpoint is the lifeline.

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
@@ -65,7 +66,7 @@ type DashboardStatus struct {
 
 // DiscoverQuests tries fellowship-state.json first, falls back to git worktree list.
 func DiscoverQuests(gitRoot string) (*DashboardStatus, error) {
-	statePath := filepath.Join(gitRoot, "tmp", "fellowship-state.json")
+	statePath := filepath.Join(gitRoot, datadir.Name(), "fellowship-state.json")
 	fs, err := LoadFellowshipState(statePath)
 	if err == nil {
 		return discoverFromFellowshipState(fs)
@@ -120,7 +121,7 @@ func discoverFromWorktrees(gitRoot string) (*DashboardStatus, error) {
 			continue
 		}
 		wtPath := strings.TrimPrefix(line, "worktree ")
-		questStatePath := filepath.Join(wtPath, "tmp", "quest-state.json")
+		questStatePath := filepath.Join(wtPath, datadir.Name(), "quest-state.json")
 		if _, err := os.Stat(questStatePath); err != nil {
 			continue
 		}
@@ -137,7 +138,7 @@ func discoverFromWorktrees(gitRoot string) (*DashboardStatus, error) {
 
 // loadQuestStatus loads a single quest's state from its worktree.
 func loadQuestStatus(name, worktree string) (*QuestStatus, error) {
-	questStatePath := filepath.Join(worktree, "tmp", "quest-state.json")
+	questStatePath := filepath.Join(worktree, datadir.Name(), "quest-state.json")
 	s, err := state.Load(questStatePath)
 	if err != nil {
 		return nil, err
@@ -158,7 +159,7 @@ func loadQuestStatus(name, worktree string) (*QuestStatus, error) {
 
 // LoadErrandProgress loads the hook file from a worktree and returns progress counts.
 func LoadErrandProgress(worktree string) (done, total int) {
-	errandPath := filepath.Join(worktree, "tmp", "quest-errands.json")
+	errandPath := filepath.Join(worktree, datadir.Name(), "quest-errands.json")
 	h, err := errand.Load(errandPath)
 	if err != nil {
 		return 0, 0

@@ -11,8 +11,11 @@ import (
 
 func writeQuestState(t *testing.T, dir string, phase string, gatePending bool, gateID *string) {
 	t.Helper()
-	tmpDir := filepath.Join(dir, "tmp")
-	os.MkdirAll(tmpDir, 0755)
+	t.Setenv("HOME", t.TempDir())
+	dataDir := filepath.Join(dir, ".fellowship")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("creating data dir: %v", err)
+	}
 
 	state := map[string]interface{}{
 		"version":            1,
@@ -25,7 +28,7 @@ func writeQuestState(t *testing.T, dir string, phase string, gatePending bool, g
 		"auto_approve_gates": []string{},
 	}
 	data, _ := json.MarshalIndent(state, "", "  ")
-	if err := os.WriteFile(filepath.Join(tmpDir, "quest-state.json"), data, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dataDir, "quest-state.json"), data, 0644); err != nil {
 		t.Fatalf("writing quest-state.json: %v", err)
 	}
 }

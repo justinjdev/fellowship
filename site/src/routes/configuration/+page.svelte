@@ -2,6 +2,7 @@
 	import CopyButton from '$lib/components/CopyButton.svelte';
 
 	const fullExample = `{
+  "dataDir": ".fellowship",
   "branch": {
     "pattern": null,
     "author": null,
@@ -57,6 +58,11 @@
 }`;
 
 	const settings = [
+		{
+			key: 'dataDir',
+			default_val: '".fellowship"',
+			desc: 'Directory name for fellowship working files (state, checkpoints, errands, tome). Created inside each worktree and the main repo root.'
+		},
 		{
 			key: 'branch.pattern',
 			default_val: 'null',

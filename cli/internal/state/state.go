@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 )
 
 type State struct {
@@ -78,7 +80,7 @@ func FindStateFile(fromDir string) (string, error) {
 	if err != nil {
 		root = fromDir
 	}
-	path := filepath.Join(root, "tmp", "quest-state.json")
+	path := filepath.Join(root, datadir.Name(), "quest-state.json")
 	if _, err := os.Stat(path); err != nil {
 		return "", nil
 	}

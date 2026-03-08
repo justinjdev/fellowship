@@ -13,6 +13,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/company"
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/eagles"
@@ -109,7 +110,7 @@ Agent/lead commands:
 Setup commands:
   install                Merge gate hooks into .claude/settings.json
   uninstall              Remove gate hooks from .claude/settings.json
-  init                   Create tmp/quest-state.json with defaults
+  init                   Create quest-state.json in data directory
 
 Company commands:
   company list            List all companies and their quest/scout counts
@@ -120,7 +121,7 @@ Company commands:
     --dir PATH            Git repo root (default: auto-detect)
 
 Fellowship state:
-  state init              Create tmp/fellowship-state.json
+  state init              Create fellowship-state.json in data directory
     --dir PATH            Git repo root (default: auto-detect)
     --name NAME           Fellowship name (required)
   state add-quest         Add a quest entry to fellowship state
@@ -209,7 +210,7 @@ func runHook(name string) int {
 		}
 	}
 
-	dir := filepath.Dir(filepath.Dir(statePath)) // strip tmp/quest-state.json
+	dir := filepath.Dir(filepath.Dir(statePath)) // strip <datadir>/quest-state.json
 	questName := s.QuestName
 	if questName == "" {
 		questName = filepath.Base(dir)
@@ -410,7 +411,7 @@ func runUninstall() int {
 
 func runInit() int {
 	root := gitRootOrCwd()
-	dir := filepath.Join(root, "tmp")
+	dir := filepath.Join(root, datadir.Name())
 	os.MkdirAll(dir, 0755)
 	path := filepath.Join(dir, "quest-state.json")
 
@@ -439,7 +440,7 @@ func runInit() int {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
-	fmt.Println("State file created at tmp/quest-state.json")
+	fmt.Printf("State file created at %s/quest-state.json\n", datadir.Name())
 	return 0
 }
 
@@ -524,7 +525,7 @@ func runEagles(args []string) int {
 		return 1
 	}
 
-	// Write report to tmp/eagles-report.json
+	// Write report to data directory
 	if err := eagles.WriteReport(root, report); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: warning: %v\n", err)
 	}
@@ -650,7 +651,7 @@ func runCompany(args []string) int {
 		if root == "" {
 			root = gitRootOrCwd()
 		}
-		statePath := filepath.Join(root, "tmp", "fellowship-state.json")
+		statePath := filepath.Join(root, datadir.Name(), "fellowship-state.json")
 		if err := company.List(statePath); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
@@ -672,7 +673,7 @@ func runCompany(args []string) int {
 		if root == "" {
 			root = gitRootOrCwd()
 		}
-		statePath := filepath.Join(root, "tmp", "fellowship-state.json")
+		statePath := filepath.Join(root, datadir.Name(), "fellowship-state.json")
 		if err := company.Show(statePath, name); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
@@ -694,7 +695,7 @@ func runCompany(args []string) int {
 		if root == "" {
 			root = gitRootOrCwd()
 		}
-		statePath := filepath.Join(root, "tmp", "fellowship-state.json")
+		statePath := filepath.Join(root, datadir.Name(), "fellowship-state.json")
 		if err := company.Approve(statePath, name); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
@@ -820,7 +821,7 @@ func runErrandInit(args []string) int {
 		root = gitRootOrCwd()
 	}
 
-	errandDir := filepath.Join(root, "tmp")
+	errandDir := filepath.Join(root, datadir.Name())
 	os.MkdirAll(errandDir, 0755)
 	errandPath := filepath.Join(errandDir, "quest-errands.json")
 
@@ -997,9 +998,9 @@ func runStateInit(args []string) int {
 		root = gitRootOrCwd()
 	}
 
-	tmpDir := filepath.Join(root, "tmp")
-	os.MkdirAll(tmpDir, 0755)
-	statePath := filepath.Join(tmpDir, "fellowship-state.json")
+	dataDirPath := filepath.Join(root, datadir.Name())
+	os.MkdirAll(dataDirPath, 0755)
+	statePath := filepath.Join(dataDirPath, "fellowship-state.json")
 
 	if _, err := os.Stat(statePath); err == nil {
 		fmt.Fprintln(os.Stderr, "fellowship: fellowship-state.json already exists")
@@ -1201,7 +1202,7 @@ func fellowshipStatePath(dir string) string {
 	if root == "" {
 		root = gitRootOrCwd()
 	}
-	return filepath.Join(root, "tmp", "fellowship-state.json")
+	return filepath.Join(root, datadir.Name(), "fellowship-state.json")
 }
 
 func loadErrandFile(dir string) (*errand.QuestErrandList, string, error) {
@@ -1209,7 +1210,7 @@ func loadErrandFile(dir string) (*errand.QuestErrandList, string, error) {
 	if root == "" {
 		root = gitRootOrCwd()
 	}
-	errandPath := filepath.Join(root, "tmp", "quest-errands.json")
+	errandPath := filepath.Join(root, datadir.Name(), "quest-errands.json")
 	h, err := errand.Load(errandPath)
 	if err != nil {
 		return nil, "", err

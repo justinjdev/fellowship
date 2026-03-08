@@ -19,7 +19,7 @@ Loads focused, task-relevant context at the start of any non-trivial work sessio
 
 ### Step 0: Check for Existing Checkpoint
 
-Before doing anything else, check if `tmp/checkpoint.md` exists (in repo root).
+Before doing anything else, check if `.fellowship/checkpoint.md` exists (in repo root). (`.fellowship/` is the default data directory; users can override it via `dataDir` in `~/.claude/fellowship.json`.)
 
 If it does:
 1. Read the checkpoint file

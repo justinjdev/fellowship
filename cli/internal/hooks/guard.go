@@ -2,8 +2,8 @@ package hooks
 
 import (
 	"fmt"
-	"strings"
 
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -25,10 +25,10 @@ func GateGuard(s *state.State, input *HookInput) HookResult {
 		if filePath == "" {
 			filePath = input.ToolInput.NotebookPath
 		}
-		if filePath != "" && !isTmpPath(filePath) {
+		if filePath != "" && !datadir.IsDataDirPath(filePath) {
 			return HookResult{
 				Block:   true,
-				Message: fmt.Sprintf("Phase '%s' does not allow file modifications outside tmp/. Advance to Implement by submitting gates for each phase.", s.Phase),
+				Message: fmt.Sprintf("Phase '%s' does not allow file modifications outside %s/. Advance to Implement by submitting gates for each phase.", s.Phase, datadir.Name()),
 			}
 		}
 	}
@@ -36,6 +36,3 @@ func GateGuard(s *state.State, input *HookInput) HookResult {
 	return HookResult{}
 }
 
-func isTmpPath(path string) bool {
-	return strings.Contains(path, "/tmp/") || strings.HasPrefix(path, "tmp/")
-}

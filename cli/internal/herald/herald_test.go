@@ -21,7 +21,7 @@ func TestAnnounceCreatesFileAndAppends(t *testing.T) {
 	}
 
 	// Verify file was created
-	path := filepath.Join(dir, "tmp", heraldFile)
+	path := filepath.Join(dir, ".fellowship", heraldFile)
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("herald file not created: %v", err)
 	}

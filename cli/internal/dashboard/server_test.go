@@ -13,11 +13,12 @@ import (
 
 func setupTestRoot(t *testing.T) string {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir()) // Pin HOME so datadir.Name() returns default
 	root := t.TempDir()
 
-	// Create a fake worktree directory with tmp/quest-state.json
+	// Create a fake worktree directory with .fellowship/quest-state.json
 	worktreeDir := filepath.Join(root, "worktrees", "quest-login")
-	if err := os.MkdirAll(filepath.Join(worktreeDir, "tmp"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(worktreeDir, ".fellowship"), 0755); err != nil {
 		t.Fatalf("creating worktree dir: %v", err)
 	}
 
@@ -33,13 +34,13 @@ func setupTestRoot(t *testing.T) string {
   "metadata_updated": false,
   "auto_approve_gates": []
 }`
-	if err := os.WriteFile(filepath.Join(worktreeDir, "tmp", "quest-state.json"), []byte(questState), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(worktreeDir, ".fellowship", "quest-state.json"), []byte(questState), 0644); err != nil {
 		t.Fatalf("writing quest-state.json: %v", err)
 	}
 
 	// Create fellowship-state.json pointing to that worktree
-	if err := os.MkdirAll(filepath.Join(root, "tmp"), 0755); err != nil {
-		t.Fatalf("creating tmp dir: %v", err)
+	if err := os.MkdirAll(filepath.Join(root, ".fellowship"), 0755); err != nil {
+		t.Fatalf("creating data dir: %v", err)
 	}
 	fellowshipState := fmt.Sprintf(`{
   "name": "test-fellowship",
@@ -53,7 +54,7 @@ func setupTestRoot(t *testing.T) string {
   ],
   "scouts": []
 }`, worktreeDir)
-	if err := os.WriteFile(filepath.Join(root, "tmp", "fellowship-state.json"), []byte(fellowshipState), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".fellowship", "fellowship-state.json"), []byte(fellowshipState), 0644); err != nil {
 		t.Fatalf("writing fellowship-state.json: %v", err)
 	}
 
@@ -185,7 +186,7 @@ func TestAPIGateApprove_NoPending(t *testing.T) {
   "metadata_updated": false,
   "auto_approve_gates": []
 }`
-	if err := os.WriteFile(filepath.Join(worktreeDir, "tmp", "quest-state.json"), []byte(questState), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(worktreeDir, ".fellowship", "quest-state.json"), []byte(questState), 0644); err != nil {
 		t.Fatalf("writing quest-state.json: %v", err)
 	}
 

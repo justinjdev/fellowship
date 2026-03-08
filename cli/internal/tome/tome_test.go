@@ -174,10 +174,11 @@ func TestRecordFiles_Empty(t *testing.T) {
 }
 
 func TestFindTome_Exists(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
-	tmpDir := filepath.Join(dir, "tmp")
-	os.MkdirAll(tmpDir, 0755)
-	tomePath := filepath.Join(tmpDir, "quest-tome.json")
+	dataDir := filepath.Join(dir, ".fellowship")
+	os.MkdirAll(dataDir, 0755)
+	tomePath := filepath.Join(dataDir, "quest-tome.json")
 	os.WriteFile(tomePath, []byte(`{}`), 0644)
 
 	// FindTome uses git root; test with direct dir since no git repo

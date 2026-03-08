@@ -16,6 +16,8 @@ Reconstructs fellowship state from on-disk artifacts after a session crash and t
 
 ## Process
 
+> **Note:** `.fellowship/` is the default data directory. Users can override it via `dataDir` in `~/.claude/fellowship.json`. All `fellowship` CLI commands and paths below use the configured data directory automatically.
+
 ### Step 1: Scan
 
 Run the CLI to discover fellowship artifacts:
@@ -24,7 +26,7 @@ Run the CLI to discover fellowship artifacts:
 fellowship status --json
 ```
 
-This scans all git worktrees for `tmp/quest-state.json` files, checks for checkpoints (`tmp/checkpoint.md`), detects merged branches, and reads `tmp/fellowship-state.json` from the main repo.
+This scans all git worktrees for `.fellowship/quest-state.json` files, checks for checkpoints (`.fellowship/checkpoint.md`), detects merged branches, and reads `.fellowship/fellowship-state.json` from the main repo.
 
 If no quests are found, report: "There is nothing to rekindle. The ashes have gone cold." and stop.
 
@@ -35,7 +37,7 @@ Each quest gets one classification:
 | Classification | Condition | Action |
 |---|---|---|
 | **Complete** | Branch merged into main | Skip — already shipped |
-| **Resumable** | Has `tmp/checkpoint.md` | Continue from current phase with checkpoint context |
+| **Resumable** | Has `.fellowship/checkpoint.md` | Continue from current phase with checkpoint context |
 | **Stale** | No checkpoint | Restart current phase from scratch |
 
 ### Step 3: Present Recovery Dashboard
@@ -64,7 +66,7 @@ On user confirmation, transition into Gandalf coordinator mode:
 
 1. **Load config:** Read `~/.claude/fellowship.json` if it exists (same as `/fellowship`)
 2. **Create team:** `TeamCreate` with name `fellowship-{timestamp}`
-3. **Write fellowship state:** Write `tmp/fellowship-state.json` with recovered quest list (same as `/fellowship` startup)
+3. **Write fellowship state:** Write `.fellowship/fellowship-state.json` with recovered quest list (same as `/fellowship` startup)
 4. **Install hooks:** Run `fellowship install` to set up gate enforcement
 5. **For each non-complete quest:**
    a. `TaskCreate` with the original task description (from `fellowship-state.json` or inferred from quest name)
@@ -83,7 +85,7 @@ RESUME CONTEXT:
 - Your worktree already exists at {worktree_path}
 - Your current phase: {phase}
 - Classification: {classification}
-- Checkpoint: {if resumable: "Load tmp/checkpoint.md for recovered context" | if stale: "No checkpoint — restart current phase from scratch"}
+- Checkpoint: {if resumable: "Load .fellowship/checkpoint.md for recovered context" | if stale: "No checkpoint — restart current phase from scratch"}
 
 INSTRUCTIONS:
 1. Run /quest to resume this task
@@ -92,11 +94,11 @@ INSTRUCTIONS:
    - Run `fellowship install` to restore hooks
    - Run `fellowship init` to reset gate state (clears gate_pending, preserves phase)
    - Store your worktree path in task metadata: TaskUpdate(taskId: "{task_id}", metadata: {"worktree_path": "{worktree_path}"})
-   - If checkpoint exists, load tmp/checkpoint.md as your initial context
+   - If checkpoint exists, load .fellowship/checkpoint.md as your initial context
    - Skip /council — checkpoint replaces orientation
    - Proceed to your current phase: {phase}
 3. Gate handling — gates are enforced by plugin hooks via a state file
-   (tmp/quest-state.json). The hooks structurally block your tools
+   (.fellowship/quest-state.json). The hooks structurally block your tools
    after gate submission. Here is how it works:
 
    Before EACH gate, you MUST:
@@ -166,7 +168,7 @@ CONTEXT:
 ## Key Principles
 
 1. **User confirms before recovery.** Never auto-resume without showing what was found.
-2. **Checkpoint is king.** `tmp/checkpoint.md` is the primary per-quest recovery artifact.
+2. **Checkpoint is king.** `.fellowship/checkpoint.md` is the primary per-quest recovery artifact.
 3. **New team, new tasks.** Old task IDs are stale. Recovery creates fresh coordination state.
 4. **Same Gandalf behavior.** After recovery, the coordinator loop is identical to `/fellowship`.
 5. **Graceful degradation.** No fellowship-state.json? Fall back to worktree scanning. No checkpoint? Restart the phase.

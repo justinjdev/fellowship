@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 )
 
 type ErrandStatus string
@@ -75,7 +77,7 @@ func FindErrands(fromDir string) (string, error) {
 	if err != nil {
 		root = fromDir
 	}
-	path := filepath.Join(root, "tmp", "quest-errands.json")
+	path := filepath.Join(root, datadir.Name(), "quest-errands.json")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return "", nil
 	} else if err != nil {

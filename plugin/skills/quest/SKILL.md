@@ -63,17 +63,19 @@ Both steps 1 and 2 must complete before step 3 — the hooks will block gate sub
 
 ### Gate State Machine
 
-When running as a fellowship teammate, a state file at `tmp/quest-state.json` enforces gate discipline via plugin hooks. The hooks structurally prevent you from working after submitting a gate, skipping lembas, or skipping metadata updates. You do not need to manage this file — the hooks handle it automatically.
+> **Note:** `.fellowship/` is the default data directory. Users can override it via `dataDir` in `~/.claude/fellowship.json`. All `fellowship` CLI commands resolve the correct directory automatically. When this document references `.fellowship/`, it means the configured data directory.
+
+When running as a fellowship teammate, a state file at `.fellowship/quest-state.json` enforces gate discipline via plugin hooks. The hooks structurally prevent you from working after submitting a gate, skipping lembas, or skipping metadata updates. You do not need to manage this file — the hooks handle it automatically.
 
 **What the hooks enforce:**
-- **Phase-aware file guard:** During Onboard, Research, and Plan phases, Edit/Write to files outside `tmp/` are blocked. You cannot modify production code until you reach the Implement phase by submitting gates. Bash, Agent, Skill, and reads are allowed in all phases.
+- **Phase-aware file guard:** During Onboard, Research, and Plan phases, Edit/Write to files outside `.fellowship/` are blocked. You cannot modify production code until you reach the Implement phase by submitting gates. Bash, Agent, Skill, and reads are allowed in all phases.
 - Gate messages must start with `[GATE]` to be detected (e.g., `[GATE] Research complete\n- [x] ...`)
 - After you send a gate message, your Edit/Write/Bash/Agent/Skill tools are blocked until the lead approves
 - Before you can send a gate message, you must have run `/lembas` and updated task metadata with your current phase
 - You cannot send a second gate while one is pending
 - You cannot mark your task as completed unless your phase is `Complete`
 
-**State file initialization** happens at Phase 0 (see below). If you are resuming a failed quest and `tmp/quest-state.json` already exists, the file is preserved with `gate_pending` reset to `false`.
+**State file initialization** happens at Phase 0 (see below). If you are resuming a failed quest and `.fellowship/quest-state.json` already exists, the file is preserved with `gate_pending` reset to `false`.
 
 ### Phase 0: Onboard
 
@@ -85,11 +87,11 @@ If the spawn prompt contains a `RESUME CONTEXT:` block, this is a recovered ques
 2. **Re-install hooks:** Run `fellowship install` to restore gate enforcement in the worktree
 3. **Reset state file:** Run `fellowship init` to clear `gate_pending` while preserving the current phase
 4. **Update task metadata:** `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})` with the new task ID from the recovery spawn
-5. **Load checkpoint:** If `tmp/checkpoint.md` exists, read it as your initial context — this replaces `/council` orientation
+5. **Load checkpoint:** If `.fellowship/checkpoint.md` exists, read it as your initial context — this replaces `/council` orientation
 6. **Skip `/council`** — the checkpoint provides equivalent context from the previous session
 7. **Jump to current phase:** Begin executing from the phase recorded in the state file (e.g., if phase is "Implement", skip Research and Plan, go directly to Implement)
 
-On respawn, your tome at `tmp/quest-tome.json` contains your full history — phases completed, gates passed/rejected, files touched. Use this to orient faster than the checkpoint alone.
+On respawn, your tome at `.fellowship/quest-tome.json` contains your full history — phases completed, gates passed/rejected, files touched. Use this to orient faster than the checkpoint alone.
 
 If no checkpoint exists (stale classification), restart the current phase from scratch — run `/council` for orientation, then begin the phase normally.
 
@@ -112,8 +114,8 @@ After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, upda
      3. **Immediately** after entering the worktree — before ANY other action — run `git reset --hard <sha>` using the exact SHA from step 1. `EnterWorktree` bases off the default branch, not the current branch. This reset is what makes the worktree start from the correct point. Skip this and the worktree will be wrong.
    - **Install hooks in worktree (fellowship only):** After entering the worktree, project-level hooks must be re-created so gate enforcement continues. Run: `fellowship install`. This must happen before the state file creation below.
 3. **State file (fellowship only):** This MUST happen before any other tool calls (Skill, Bash, etc.) so that hooks can enforce gates from the start. If running as a fellowship teammate:
-   - If `tmp/quest-state.json` already exists (respawn), reset `gate_pending` to `false` and preserve the existing `phase`.
-   - Otherwise, create `tmp/quest-state.json`:
+   - If `.fellowship/quest-state.json` already exists (respawn), reset `gate_pending` to `false` and preserve the existing `phase`.
+   - Otherwise, create `.fellowship/quest-state.json`:
      ```json
      {
        "version": 1,
@@ -130,7 +132,7 @@ After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, upda
      ```
      Populate `auto_approve_gates` from `config.gates.autoApprove` if set.
    - Store the worktree path in task metadata: `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})`
-   - The quest tome at `tmp/quest-tome.json` is automatically maintained by hooks — it records phases completed, gate events, and files touched. You do not need to manage it manually.
+   - The quest tome at `.fellowship/quest-tome.json` is automatically maintained by hooks — it records phases completed, gate events, and files touched. You do not need to manage it manually.
 4. **Orient:** Invoke `/council` to load task-relevant context.
 
 If the user has already described their task, pass the description directly. Otherwise, council will ask.
@@ -177,7 +179,7 @@ Goal: Outline explicit steps with file:line references and a test strategy.
 
 Goal: Execute the plan with small, verifiable changes and tight feedback loops. Default to TDD.
 
-**Errand tracking:** If `tmp/quest-errands.json` exists, use it as your errand checklist. The errand file is the source of truth for remaining work, not just the original prompt. Update errand status as you complete each one: `fellowship errand update --dir . <id> done`. Mark errands as `active` when you start them and `done` when finished. Check `fellowship errand list --dir .` to see what remains.
+**Errand tracking:** If `.fellowship/quest-errands.json` exists, use it as your errand checklist. The errand file is the source of truth for remaining work, not just the original prompt. Update errand status as you complete each one: `fellowship errand update --dir . <id> done`. Mark errands as `active` when you start them and `done` when finished. Check `fellowship errand list --dir .` to see what remains.
 
 **Execution mode — choose based on plan structure:**
 

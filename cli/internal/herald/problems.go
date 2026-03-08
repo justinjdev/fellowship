@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 )
 
 // Severity represents the severity level of a detected problem.
@@ -38,7 +40,7 @@ func DetectProblems(dirs []string) []Problem {
 	var problems []Problem
 
 	for _, dir := range dirs {
-		statePath := filepath.Join(dir, "tmp", "quest-state.json")
+		statePath := filepath.Join(dir, datadir.Name(), "quest-state.json")
 		data, err := os.ReadFile(statePath)
 		if err != nil {
 			continue

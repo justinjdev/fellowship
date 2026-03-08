@@ -1,8 +1,9 @@
 package hooks
 
 import (
-	"github.com/justinjdev/fellowship/cli/internal/tome"
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/state"
+	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
 // FileTrack records file paths from Edit/Write tool inputs into the quest tome.
@@ -12,7 +13,7 @@ func FileTrack(s *state.State, input *HookInput, tomePath string) bool {
 	if filePath == "" {
 		filePath = input.ToolInput.NotebookPath
 	}
-	if filePath == "" || isTmpPath(filePath) {
+	if filePath == "" || datadir.IsDataDirPath(filePath) {
 		return false
 	}
 

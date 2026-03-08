@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 )
 
 type QuestTome struct {
@@ -102,7 +104,7 @@ func FindTome(fromDir string) (string, error) {
 	if err != nil {
 		root = fromDir
 	}
-	path := filepath.Join(root, "tmp", "quest-tome.json")
+	path := filepath.Join(root, datadir.Name(), "quest-tome.json")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return "", nil
 	} else if err != nil {
