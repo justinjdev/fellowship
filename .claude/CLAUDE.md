@@ -3,6 +3,7 @@
 ## Preferences
 
 - Do not commit docs/ files (design docs, plans). They are local working artifacts, not part of the repo.
+- Each issue gets its own separate git branch unless explicitly specified otherwise. Do not re-use branches across issues.
 
 ## Site
 
