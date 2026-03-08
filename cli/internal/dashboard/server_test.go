@@ -13,6 +13,7 @@ import (
 
 func setupTestRoot(t *testing.T) string {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir()) // Pin HOME so datadir.Name() returns default
 	root := t.TempDir()
 
 	// Create a fake worktree directory with .fellowship/quest-state.json
@@ -39,7 +40,7 @@ func setupTestRoot(t *testing.T) string {
 
 	// Create fellowship-state.json pointing to that worktree
 	if err := os.MkdirAll(filepath.Join(root, ".fellowship"), 0755); err != nil {
-		t.Fatalf("creating tmp dir: %v", err)
+		t.Fatalf("creating data dir: %v", err)
 	}
 	fellowshipState := fmt.Sprintf(`{
   "name": "test-fellowship",

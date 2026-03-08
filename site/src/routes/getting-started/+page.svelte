@@ -137,7 +137,7 @@
 			<CopyButton text={hookConfig} />
 		</div>
 
-		<p>Also add <code>.fellowship/</code> to your <code>.gitignore</code> so checkpoint files are not committed.</p>
+		<p>Also add <code>.fellowship/</code> to your <code>.gitignore</code> so checkpoint files are not committed. If you have configured a custom <code>dataDir</code> in <code>~/.claude/fellowship.json</code>, use that directory name instead.</p>
 	</section>
 
 	<div class="divider"><span class="divider-ring"></span></div>

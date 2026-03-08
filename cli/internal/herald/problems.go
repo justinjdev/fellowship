@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 )
 
 // Severity represents the severity level of a detected problem.

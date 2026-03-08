@@ -63,7 +63,7 @@ Add this hook to `.claude/settings.local.json` in repos where you use fellowship
 }
 ```
 
-Also add `.fellowship/` to your `.gitignore` — checkpoints are local ephemeral state.
+Also add `.fellowship/` to your `.gitignore` — checkpoints are local ephemeral state. If you have configured a custom `dataDir` in `~/.claude/fellowship.json`, use that directory name instead.
 
 ### Configuration (Optional)
 

@@ -12,8 +12,10 @@ import (
 )
 
 // writeQuestState creates a quest-state.json in worktree/.fellowship.
+// Pins HOME to a temp dir so datadir.Name() returns the default ".fellowship".
 func writeQuestState(t *testing.T, worktree string, phase string, gatePending bool, gateID *string, questName string) {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
 	dir := filepath.Join(worktree, ".fellowship")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatalf("creating data dir: %v", err)
@@ -318,6 +320,7 @@ func TestGateAge(t *testing.T) {
 }
 
 func TestWriteReport(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	root := t.TempDir()
 	report := &EaglesReport{
 		Timestamp: "2025-01-15T10:30:00Z",

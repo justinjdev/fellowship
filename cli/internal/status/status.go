@@ -71,8 +71,10 @@ func Scan(gitRoot string) (*StatusResult, error) {
 		MergedBranches: []string{},
 	}
 
+	dataDir := datadir.Name()
+
 	// Load fellowship state (optional — may not exist).
-	statePath := filepath.Join(gitRoot, datadir.Name(), "fellowship-state.json")
+	statePath := filepath.Join(gitRoot, dataDir, "fellowship-state.json")
 	fs, err := dashboard.LoadFellowshipState(statePath)
 	if err == nil {
 		result.Fellowship = &FellowshipInfo{
@@ -106,7 +108,7 @@ func Scan(gitRoot string) (*StatusResult, error) {
 	}
 
 	for _, wt := range worktrees {
-		questStatePath := filepath.Join(wt, datadir.Name(), "quest-state.json")
+		questStatePath := filepath.Join(wt, dataDir, "quest-state.json")
 		if !gitutil.FileExists(questStatePath) {
 			continue
 		}
@@ -117,7 +119,7 @@ func Scan(gitRoot string) (*StatusResult, error) {
 		}
 
 		branch := gitutil.BranchForWorktree(wt)
-		hasCheckpoint := gitutil.FileExists(filepath.Join(wt, datadir.Name(), "checkpoint.md"))
+		hasCheckpoint := gitutil.FileExists(filepath.Join(wt, dataDir, "checkpoint.md"))
 		hasUncommitted := gitutil.CheckUncommitted(wt)
 
 		qi := QuestInfo{

@@ -59,7 +59,9 @@ If the user asks to set up or modify their config, invoke `/settings`.
 
 ### Write Fellowship State
 
-Initialize `.fellowship/fellowship-state.json` using the CLI. The fellowship name comes from the `TeamCreate` name (e.g., `"fellowship-1709734200"`). This file is the primary recovery artifact — `/rekindle` uses it to reconstruct state after a crash.
+> **Note:** `.fellowship/` is the default data directory. Users can override it via `dataDir` in `~/.claude/fellowship.json`. All `fellowship` CLI commands resolve the correct directory automatically. When this document references `.fellowship/`, it means the configured data directory.
+
+Initialize the fellowship state file using the CLI. The fellowship name comes from the `TeamCreate` name (e.g., `"fellowship-1709734200"`). This file is the primary recovery artifact — `/rekindle` uses it to reconstruct state after a crash.
 
 ```bash
 fellowship state init --dir <repo_root> --name <fellowship_name>

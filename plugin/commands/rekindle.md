@@ -16,6 +16,8 @@ Reconstructs fellowship state from on-disk artifacts after a session crash and t
 
 ## Process
 
+> **Note:** `.fellowship/` is the default data directory. Users can override it via `dataDir` in `~/.claude/fellowship.json`. All `fellowship` CLI commands and paths below use the configured data directory automatically.
+
 ### Step 1: Scan
 
 Run the CLI to discover fellowship artifacts:

@@ -268,8 +268,9 @@ func TestNextIDSequence(t *testing.T) {
 }
 
 func TestFindErrandsNoFile(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
-	// Create a tmp dir but no errand file
+	// Create data dir but no errand file
 	os.MkdirAll(filepath.Join(dir, ".fellowship"), 0755)
 
 	path, err := FindErrands(dir)

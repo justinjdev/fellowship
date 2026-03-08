@@ -8,6 +8,7 @@ import (
 
 func tmpState(t *testing.T, content string) string {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	stateDir := filepath.Join(dir, ".fellowship")
 	os.MkdirAll(stateDir, 0755)
@@ -127,6 +128,7 @@ func TestIsEarlyPhase(t *testing.T) {
 }
 
 func TestFindStateFile_NoFile(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	path, err := FindStateFile(dir)
 	if err != nil {

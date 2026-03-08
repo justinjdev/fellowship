@@ -77,6 +77,7 @@ func TestLoadFellowshipState(t *testing.T) {
 
 func TestDiscoverQuests_FromFellowshipState(t *testing.T) {
 	root := t.TempDir()
+	t.Setenv("HOME", t.TempDir()) // Pin HOME so datadir.Name() returns default
 
 	// Create a fake worktree directory with .fellowship/quest-state.json
 	worktreeDir := filepath.Join(root, "worktrees", "quest-auth")
@@ -152,6 +153,7 @@ func TestDiscoverQuests_FromFellowshipState(t *testing.T) {
 
 func TestDiscoverQuests_SkipsMissingWorktree(t *testing.T) {
 	root := t.TempDir()
+	t.Setenv("HOME", t.TempDir()) // Pin HOME so datadir.Name() returns default
 
 	// Create fellowship-state.json pointing to a non-existent worktree
 	if err := os.MkdirAll(filepath.Join(root, ".fellowship"), 0755); err != nil {

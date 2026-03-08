@@ -176,7 +176,7 @@ func latestModTime(worktree string) time.Time {
 func WriteReport(gitRoot string, report *EaglesReport) error {
 	dir := filepath.Join(gitRoot, datadir.Name())
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("creating tmp dir: %w", err)
+		return fmt.Errorf("creating data dir %s: %w", dir, err)
 	}
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {

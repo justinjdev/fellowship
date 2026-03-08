@@ -27,11 +27,17 @@ func Name() string {
 	if json.Unmarshal(data, &cfg) != nil || cfg.DataDir == "" {
 		return DefaultName
 	}
+	// Reject values with path separators or traversal to prevent writing outside the repo.
+	if strings.ContainsAny(cfg.DataDir, "/\\") || strings.Contains(cfg.DataDir, "..") {
+		return DefaultName
+	}
 	return cfg.DataDir
 }
 
 // IsDataDirPath reports whether the given path is inside the fellowship data directory.
 func IsDataDirPath(path string) bool {
 	name := Name()
-	return strings.Contains(path, "/"+name+"/") || strings.HasPrefix(path, name+"/")
+	// Normalize to forward slashes for consistent matching across platforms.
+	p := filepath.ToSlash(filepath.Clean(path))
+	return strings.Contains(p, "/"+name+"/") || strings.HasPrefix(p, name+"/")
 }

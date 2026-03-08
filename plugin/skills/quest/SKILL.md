@@ -63,6 +63,8 @@ Both steps 1 and 2 must complete before step 3 — the hooks will block gate sub
 
 ### Gate State Machine
 
+> **Note:** `.fellowship/` is the default data directory. Users can override it via `dataDir` in `~/.claude/fellowship.json`. All `fellowship` CLI commands resolve the correct directory automatically. When this document references `.fellowship/`, it means the configured data directory.
+
 When running as a fellowship teammate, a state file at `.fellowship/quest-state.json` enforces gate discipline via plugin hooks. The hooks structurally prevent you from working after submitting a gate, skipping lembas, or skipping metadata updates. You do not need to manage this file — the hooks handle it automatically.
 
 **What the hooks enforce:**

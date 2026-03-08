@@ -82,7 +82,7 @@ Output in this exact format:
 
 ### Step 4: Persist Checkpoint
 
-Write the Compacted Context block to `.fellowship/checkpoint.md` (repo root) so it survives session crashes and context exhaustion:
+Write the Compacted Context block to `.fellowship/checkpoint.md` (repo root) so it survives session crashes and context exhaustion. (`.fellowship/` is the default data directory; users can override it via `dataDir` in `~/.claude/fellowship.json`.)
 
 1. Create `.fellowship/` directory in repo root if it doesn't exist
 2. Write the Compacted Context block to `.fellowship/checkpoint.md` with a timestamp header:

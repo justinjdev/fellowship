@@ -28,15 +28,52 @@ func TestName_ConfigWithDataDir(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	claudeDir := filepath.Join(home, ".claude")
-	os.MkdirAll(claudeDir, 0755)
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		t.Fatalf("creating claude dir: %v", err)
+	}
 
 	cfg := map[string]string{"dataDir": ".my-custom-dir"}
 	data, _ := json.Marshal(cfg)
-	os.WriteFile(filepath.Join(claudeDir, "fellowship.json"), data, 0644)
+	if err := os.WriteFile(filepath.Join(claudeDir, "fellowship.json"), data, 0644); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
 
 	got := Name()
 	if got != ".my-custom-dir" {
 		t.Errorf("Name() = %q, want %q", got, ".my-custom-dir")
+	}
+}
+
+func TestName_RejectsPathTraversal(t *testing.T) {
+	tests := []struct {
+		name    string
+		dataDir string
+	}{
+		{"slash", "foo/bar"},
+		{"backslash", "foo\\bar"},
+		{"dot-dot", ".."},
+		{"dot-dot-slash", "../etc"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+
+			claudeDir := filepath.Join(home, ".claude")
+			if err := os.MkdirAll(claudeDir, 0755); err != nil {
+				t.Fatalf("creating claude dir: %v", err)
+			}
+			cfg := map[string]string{"dataDir": tt.dataDir}
+			data, _ := json.Marshal(cfg)
+			if err := os.WriteFile(filepath.Join(claudeDir, "fellowship.json"), data, 0644); err != nil {
+				t.Fatalf("writing config: %v", err)
+			}
+
+			got := Name()
+			if got != DefaultName {
+				t.Errorf("Name() = %q, want %q (should reject path traversal)", got, DefaultName)
+			}
+		})
 	}
 }
 

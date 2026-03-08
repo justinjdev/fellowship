@@ -174,6 +174,7 @@ func TestRecordFiles_Empty(t *testing.T) {
 }
 
 func TestFindTome_Exists(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	dataDir := filepath.Join(dir, ".fellowship")
 	os.MkdirAll(dataDir, 0755)

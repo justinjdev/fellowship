@@ -11,8 +11,11 @@ import (
 
 func writeQuestState(t *testing.T, dir string, phase string, gatePending bool, gateID *string) {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
 	dataDir := filepath.Join(dir, ".fellowship")
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("creating data dir: %v", err)
+	}
 
 	state := map[string]interface{}{
 		"version":            1,
