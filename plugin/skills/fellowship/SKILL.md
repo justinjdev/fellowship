@@ -50,12 +50,14 @@ At startup, read `~/.claude/fellowship.json` (the user's personal Claude directo
 
 At startup, run `git branch --show-current` to detect the current branch.
 
-- **Detached HEAD** (empty output): fall back to `main` silently.
+- **Detached HEAD** (empty output): probe the repo's default branch by running `git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null | sed 's|origin/||'`. If that returns a branch name, use it. Otherwise fall back to `main` if `git rev-parse --verify main` succeeds, else `master`.
 - **On `main` or `master`**: use it as the base branch, no confirmation needed.
 - **On any other branch**: use `AskUserQuestion` to confirm:
   - Question: `"Quest worktrees will be based off '<branch>'. Is that correct?"`
   - Options: `["Yes, use <branch>", "No, use main instead", "Use a different branch"]`
   - If the user chooses a different branch, prompt for the branch name.
+
+**Check for uncommitted changes:** After determining the base branch, run `git status --porcelain`. If there are uncommitted changes, warn the user: `"Warning: you have uncommitted changes in your working tree. Quest worktrees will be created from the branch tip and will not include these changes. Continue anyway?"` Offer options `["Continue", "Abort"]`. If they abort, stop.
 
 Store the confirmed branch as `base_branch`. This is passed to all quest spawn prompts so worktrees start from the right commit.
 

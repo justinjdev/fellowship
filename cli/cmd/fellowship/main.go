@@ -1165,7 +1165,7 @@ func runStateInit(args []string) int {
 	fs := flag.NewFlagSet("state init", flag.ExitOnError)
 	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
 	name := fs.String("name", "", "Fellowship name (required)")
-	baseBranch := fs.String("base-branch", "", "Base branch for quest worktrees (default: main)")
+	baseBranch := fs.String("base-branch", "", "Base branch for quest worktrees (Gandalf detects automatically; use this to override)")
 	fs.Parse(args)
 
 	if *name == "" {
