@@ -22,6 +22,8 @@ const (
 	PhaseTransition TidingType = "phase_transition"
 	LembasCompleted TidingType = "lembas_completed"
 	MetadataUpdated TidingType = "metadata_updated"
+	QuestHeld       TidingType = "quest_held"
+	QuestUnheld     TidingType = "quest_unheld"
 )
 
 // Tiding represents a single quest event.

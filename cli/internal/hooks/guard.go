@@ -13,6 +13,18 @@ type HookResult struct {
 }
 
 func GateGuard(s *state.State, input *HookInput) HookResult {
+	if s.Held {
+		msg := "Quest is held — paused by the lead."
+		if s.HeldReason != nil {
+			msg += " Reason: " + *s.HeldReason
+		}
+		msg += " Wait for the lead to unhold before taking any action."
+		return HookResult{
+			Block:   true,
+			Message: msg,
+		}
+	}
+
 	if s.GatePending {
 		return HookResult{
 			Block:   true,

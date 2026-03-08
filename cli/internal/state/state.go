@@ -23,6 +23,8 @@ type State struct {
 	LembasCompleted  bool     `json:"lembas_completed"`
 	MetadataUpdated  bool     `json:"metadata_updated"`
 	AutoApproveGates []string `json:"auto_approve_gates"`
+	Held             bool     `json:"held"`
+	HeldReason       *string  `json:"held_reason"`
 }
 
 var phaseOrder = []string{"Onboard", "Research", "Plan", "Implement", "Review", "Complete"}

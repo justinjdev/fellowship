@@ -125,7 +125,9 @@ After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, upda
        "gate_id": null,
        "lembas_completed": false,
        "metadata_updated": false,
-       "auto_approve_gates": []
+       "auto_approve_gates": [],
+       "held": false,
+       "held_reason": null
      }
      ```
      Populate `auto_approve_gates` from `config.gates.autoApprove` if set.

@@ -73,6 +73,10 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(runState(os.Args[2:]))
+	case "hold":
+		os.Exit(runHold(os.Args[2:]))
+	case "unhold":
+		os.Exit(runUnhold(os.Args[2:]))
 	case "herald":
 		os.Exit(runHerald(os.Args[2:]))
 	case "dashboard":
@@ -97,9 +101,14 @@ Hook commands (called by Claude Code hooks, read stdin):
   hook file-track        Record file touches in quest tome
 
 Agent/lead commands:
-  gate status            Show current phase, prereqs, pending state
+  gate status            Show current phase, prereqs, pending/held state
   gate approve           Approve a pending gate (advances to next phase)
   gate reject            Reject a pending gate (clears pending, keeps phase)
+  hold                   Hold (pause) a quest — blocks all tools
+    --dir DIR            Worktree directory (required)
+    --reason MSG         Reason for holding
+  unhold                 Unhold (resume) a held quest
+    --dir DIR            Worktree directory (required)
   tome show [--json]     Show quest tome (phases, gates, files touched)
   status [--json]        Scan worktrees and show fellowship recovery status
   eagles                 Scan quest health and write eagles report
@@ -306,6 +315,10 @@ func runGate(args []string) int {
 	case "status":
 		fmt.Printf("Phase:    %s\n", s.Phase)
 		fmt.Printf("Pending:  %v\n", s.GatePending)
+		fmt.Printf("Held:     %v\n", s.Held)
+		if s.HeldReason != nil {
+			fmt.Printf("Reason:   %s\n", *s.HeldReason)
+		}
 		fmt.Printf("Lembas:   %v\n", s.LembasCompleted)
 		fmt.Printf("Metadata: %v\n", s.MetadataUpdated)
 		if s.GateID != nil {
@@ -389,6 +402,108 @@ func runGate(args []string) int {
 	}
 }
 
+
+func runHold(args []string) int {
+	fs := flag.NewFlagSet("hold", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory (required)")
+	reason := fs.String("reason", "", "Reason for holding the quest")
+	fs.Parse(args)
+
+	if *dir == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship hold --dir <worktree> [--reason \"message\"]")
+		return 1
+	}
+
+	statePath := filepath.Join(*dir, datadir.Name(), "quest-state.json")
+	s, err := state.Load(statePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	if s.Held {
+		fmt.Fprintln(os.Stderr, "Quest is already held")
+		return 1
+	}
+
+	s.Held = true
+	if *reason != "" {
+		s.HeldReason = reason
+	}
+	if err := state.Save(statePath, s); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	questName := s.QuestName
+	if questName == "" {
+		questName = filepath.Base(*dir)
+	}
+	detail := "Quest held"
+	if *reason != "" {
+		detail += ": " + *reason
+	}
+	herald.Announce(*dir, herald.Tiding{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Quest:     questName,
+		Type:      herald.QuestHeld,
+		Phase:     s.Phase,
+		Detail:    detail,
+	})
+
+	fmt.Printf("Quest held.%s\n", func() string {
+		if *reason != "" {
+			return " Reason: " + *reason
+		}
+		return ""
+	}())
+	return 0
+}
+
+func runUnhold(args []string) int {
+	fs := flag.NewFlagSet("unhold", flag.ExitOnError)
+	dir := fs.String("dir", "", "Worktree directory (required)")
+	fs.Parse(args)
+
+	if *dir == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship unhold --dir <worktree>")
+		return 1
+	}
+
+	statePath := filepath.Join(*dir, datadir.Name(), "quest-state.json")
+	s, err := state.Load(statePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	if !s.Held {
+		fmt.Fprintln(os.Stderr, "Quest is not held")
+		return 1
+	}
+
+	s.Held = false
+	s.HeldReason = nil
+	if err := state.Save(statePath, s); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	questName := s.QuestName
+	if questName == "" {
+		questName = filepath.Base(*dir)
+	}
+	herald.Announce(*dir, herald.Tiding{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Quest:     questName,
+		Type:      herald.QuestUnheld,
+		Phase:     s.Phase,
+		Detail:    "Quest unheld — resumed",
+	})
+
+	fmt.Println("Quest unheld.")
+	return 0
+}
 
 func runInit() int {
 	root := gitRootOrCwd()
