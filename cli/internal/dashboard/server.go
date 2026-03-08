@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/eagles"
@@ -96,6 +97,8 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	prevPhase := st.Phase
+
 	nextPhase, err := state.NextPhase(st.Phase)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -112,6 +115,16 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	herald.Announce(req.Dir, herald.Tiding{
+		Timestamp: now, Quest: st.QuestName, Type: herald.GateApproved,
+		Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
+	})
+	herald.Announce(req.Dir, herald.Tiding{
+		Timestamp: now, Quest: st.QuestName, Type: herald.PhaseTransition,
+		Phase: st.Phase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, st.Phase),
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(QuestStatus{
@@ -156,6 +169,12 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	herald.Announce(req.Dir, herald.Tiding{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Quest: st.QuestName, Type: herald.GateRejected,
+		Phase: st.Phase, Detail: fmt.Sprintf("Gate rejected for %s", st.Phase),
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(QuestStatus{
@@ -241,6 +260,8 @@ func batchApproveCompany(c CompanyEntry, fs *FellowshipState) (approved []string
 			continue
 		}
 
+		prevPhase := st.Phase
+
 		nextPhase, err := state.NextPhase(st.Phase)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("advancing phase for %s: %w", qName, err))
@@ -257,6 +278,16 @@ func batchApproveCompany(c CompanyEntry, fs *FellowshipState) (approved []string
 			errs = append(errs, fmt.Errorf("saving state for %s: %w", qName, err))
 			continue
 		}
+
+		now := time.Now().UTC().Format(time.RFC3339)
+		herald.Announce(wt, herald.Tiding{
+			Timestamp: now, Quest: qName, Type: herald.GateApproved,
+			Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
+		})
+		herald.Announce(wt, herald.Tiding{
+			Timestamp: now, Quest: qName, Type: herald.PhaseTransition,
+			Phase: nextPhase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, nextPhase),
+		})
 
 		approved = append(approved, qName)
 	}

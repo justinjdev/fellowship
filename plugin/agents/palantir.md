@@ -89,6 +89,20 @@ When you detect an issue, send a message to the lead using `SendMessage`:
 **HEALTH** — worktree issue:
 > "Quest {name} worktree has {issue}: {details}."
 
+### Alert Persistence
+
+After sending each alert via `SendMessage`, persist it to the fellowship-level alert log so it's available for retrospective analysis. Use Bash to append a JSON line to `.fellowship/palantir-alerts.jsonl` in the **main repo root** (not per-worktree).
+
+Use `jq` to safely encode the alert as JSON (avoids broken JSONL from quotes or special characters in the detail text):
+
+```bash
+jq -nc --arg type "<type>" --arg detail "<alert message>" --arg quests "<quest_names>" \
+  '{timestamp: (now | strftime("%Y-%m-%dT%H:%M:%SZ")), type: $type, quests: ($quests | split(",")), detail: $detail}' \
+  >> <git_root>/.fellowship/palantir-alerts.jsonl
+```
+
+Where `<type>` is one of: `stuck`, `drift`, `conflict`, `health`. Apply this logging step after every alert in all four categories.
+
 ### 6. Respond to Shutdown
 
 When you receive a shutdown request from the lead, respond immediately:

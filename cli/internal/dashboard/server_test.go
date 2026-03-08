@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/justinjdev/fellowship/cli/internal/herald"
 )
 
 func setupTestRoot(t *testing.T) string {
@@ -197,6 +199,75 @@ func TestAPIGateApprove_NoPending(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusBadRequest, w.Body.String())
+	}
+}
+
+func TestAPIGateApprove_HeraldLogging(t *testing.T) {
+	root := setupTestRoot(t)
+	srv := NewServer(root, 5)
+
+	worktreeDir := filepath.Join(root, "worktrees", "quest-login")
+	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
+	req := httptest.NewRequest("POST", "/api/gate/approve", body)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	tidings, err := herald.Read(worktreeDir, 0)
+	if err != nil {
+		t.Fatalf("reading herald: %v", err)
+	}
+	if len(tidings) < 2 {
+		t.Fatalf("expected at least 2 tidings (GateApproved + PhaseTransition), got %d", len(tidings))
+	}
+
+	var foundApproved, foundTransition bool
+	for _, td := range tidings {
+		if td.Type == herald.GateApproved && td.Phase == "Plan" {
+			foundApproved = true
+		}
+		if td.Type == herald.PhaseTransition && td.Phase == "Implement" {
+			foundTransition = true
+		}
+	}
+	if !foundApproved {
+		t.Error("expected GateApproved tiding for Plan phase")
+	}
+	if !foundTransition {
+		t.Error("expected PhaseTransition tiding for Implement phase")
+	}
+}
+
+func TestAPIGateReject_HeraldLogging(t *testing.T) {
+	root := setupTestRoot(t)
+	srv := NewServer(root, 5)
+
+	worktreeDir := filepath.Join(root, "worktrees", "quest-login")
+	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
+	req := httptest.NewRequest("POST", "/api/gate/reject", body)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	tidings, err := herald.Read(worktreeDir, 0)
+	if err != nil {
+		t.Fatalf("reading herald: %v", err)
+	}
+
+	var foundRejected bool
+	for _, td := range tidings {
+		if td.Type == herald.GateRejected && td.Phase == "Plan" {
+			foundRejected = true
+		}
+	}
+	if !foundRejected {
+		t.Error("expected GateRejected tiding for Plan phase")
 	}
 }
 

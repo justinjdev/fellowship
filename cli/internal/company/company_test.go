@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
+	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -220,6 +221,61 @@ func TestProgressSummary(t *testing.T) {
 	expected := "2/3 quests in Implement+"
 	if got != expected {
 		t.Errorf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestBatchApprove_HeraldLogging(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	wt1 := filepath.Join(tmpDir, "wt1")
+	os.MkdirAll(filepath.Join(wt1, ".fellowship"), 0755)
+
+	writeState(t, filepath.Join(wt1, ".fellowship", "quest-state.json"), &state.State{
+		Version:     1,
+		QuestName:   "q1",
+		Phase:       "Research",
+		GatePending: true,
+	})
+
+	company := dashboard.CompanyEntry{
+		Name:   "herald-test",
+		Quests: []string{"q1"},
+	}
+	fs := &dashboard.FellowshipState{
+		Quests: []dashboard.QuestEntry{
+			{Name: "q1", Worktree: wt1},
+		},
+	}
+
+	approved, errs := BatchApprove(company, fs)
+
+	if len(errs) != 0 {
+		t.Errorf("expected no errors, got %v", errs)
+	}
+	if len(approved) != 1 {
+		t.Fatalf("expected 1 approved, got %d", len(approved))
+	}
+
+	tidings, err := herald.Read(wt1, 0)
+	if err != nil {
+		t.Fatalf("reading herald: %v", err)
+	}
+
+	var foundApproved, foundTransition bool
+	for _, td := range tidings {
+		if td.Type == herald.GateApproved && td.Phase == "Research" {
+			foundApproved = true
+		}
+		if td.Type == herald.PhaseTransition && td.Phase == "Plan" {
+			foundTransition = true
+		}
+	}
+	if !foundApproved {
+		t.Error("expected GateApproved tiding for Research phase")
+	}
+	if !foundTransition {
+		t.Error("expected PhaseTransition tiding for Plan phase")
 	}
 }
 
