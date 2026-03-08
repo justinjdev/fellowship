@@ -46,14 +46,27 @@ At startup, read `~/.claude/fellowship.json` (the user's personal Claude directo
 
 **IMPORTANT — gate defaults:** When no config file exists, or when `gates.autoApprove` is absent/empty, ALL gates surface to the user. No gates are auto-approved by default. Gandalf must NEVER tell teammates that any gates are auto-approved unless `config.gates.autoApprove` explicitly lists them.
 
+### Detect Base Branch
+
+At startup, run `git branch --show-current` to detect the current branch.
+
+- **Detached HEAD** (empty output): fall back to `main` silently.
+- **On `main` or `master`**: use it as the base branch, no confirmation needed.
+- **On any other branch**: use `AskUserQuestion` to confirm:
+  - Question: `"Quest worktrees will be based off '<branch>'. Is that correct?"`
+  - Options: `["Yes, use <branch>", "No, use main instead", "Use a different branch"]`
+  - If the user chooses a different branch, prompt for the branch name.
+
+Store the confirmed branch as `base_branch`. This is passed to all quest spawn prompts so worktrees start from the right commit.
+
 ### Write Fellowship State
 
 > **Note:** `.fellowship/` is the default data directory. Users can override it via `dataDir` in `~/.claude/fellowship.json`. All `fellowship` CLI commands resolve the correct directory automatically.
 
-Initialize the fellowship state file using the CLI:
+Initialize the fellowship state file using the CLI (pass `--base-branch` if not on main/master):
 
 ```bash
-fellowship state init --dir <repo_root> --name <fellowship_name>
+fellowship state init --dir <repo_root> --name <fellowship_name> [--base-branch <base_branch>]
 ```
 
 After spawning each quest/scout, add it to the state file:

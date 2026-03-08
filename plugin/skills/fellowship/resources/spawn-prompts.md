@@ -66,6 +66,7 @@ CONTEXT:
 - Your task ID: {task_id}
 - Other active quests: {brief_list}
 - PR config: {pr_config_line}
+- Base branch: {base_branch}
 {template_guidance}
 ```
 
@@ -84,6 +85,7 @@ Before sending the spawn prompt, Gandalf substitutes these placeholders with act
 | `{pr_config_line}` | If `config.pr` exists: `"draft=true, template=..."`. If not: `"default (not a draft, no template)"` |
 | `{template_guidance}` | See below |
 | `{issue_context}` | Output from `/missive` if the task references GitHub issues. Empty string if no issues. |
+| `{base_branch}` | The confirmed base branch from startup detection (e.g., `main`, `feat/foo`). |
 
 **`{gate_config_override}` generation (read `config.gates.autoApprove` — default is empty):**
 - **DEFAULT (no config, or `autoApprove` absent/empty):** substitute with `"All gates require lead approval. Do not proceed past any gate without receiving an explicit approval message from the lead."` — do NOT mention auto-approval in any form.
@@ -166,6 +168,7 @@ CONTEXT:
 - Your task ID: {task_id}
 - Other active quests: {brief_list}
 - PR config: {pr_config_line}
+- Base branch: {base_branch}
 {template_guidance}
 ```
 
@@ -253,6 +256,7 @@ CONTEXT:
 - Your task ID: {task_id}
 - Other active quests: {brief_list}
 - PR config: {pr_config_line}
+- Base branch: {base_branch}
 {template_guidance}
 ~~~
 

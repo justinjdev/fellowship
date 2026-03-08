@@ -108,7 +108,7 @@ After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, upda
      - `{ticket}`: match `branch.ticketPattern` (default: `[A-Z]+-\d+`) against the task description. If matched, use the match. If not matched and the pattern contains `{ticket}`, ask the user to provide a ticket ID.
      - `{author}`: use `branch.author` from config. If not set and the pattern contains `{author}`, ask the user to provide their name.
    - **Create worktree (3-step sequence — all steps are REQUIRED):**
-     1. Run `git rev-parse HEAD` and save the full SHA in your response text (not a shell variable — shell state does not persist between tool calls). This is the base commit.
+     1. Determine the base ref: if the spawn prompt includes `Base branch:` in the CONTEXT section, use `git rev-parse <base_branch>` to get the SHA; otherwise run `git rev-parse HEAD`. Save the full SHA in your response text (not a shell variable — shell state does not persist between tool calls).
      2. Call `EnterWorktree` with the resolved branch name. If `config.worktree.directory` is set, create the worktree there instead of the default location.
      3. **Immediately** after entering the worktree — before ANY other action — run `git reset --hard <sha>` using the exact SHA from step 1. `EnterWorktree` bases off the default branch, not the current branch. This reset is what makes the worktree start from the correct point. Skip this and the worktree will be wrong.
 3. **State file (fellowship only):** This MUST happen before any other tool calls (Skill, Bash, etc.) so that hooks can enforce gates from the start. If running as a fellowship teammate:

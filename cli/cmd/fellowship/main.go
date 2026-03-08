@@ -136,6 +136,7 @@ Fellowship state:
   state init              Create fellowship-state.json in data directory
     --dir PATH            Git repo root (default: auto-detect)
     --name NAME           Fellowship name (required)
+    --base-branch BRANCH  Base branch for quest worktrees (default: main)
   state add-quest         Add a quest entry to fellowship state
     --dir PATH            Git repo root (default: auto-detect)
     --name NAME           Quest name (required)
@@ -1164,10 +1165,11 @@ func runStateInit(args []string) int {
 	fs := flag.NewFlagSet("state init", flag.ExitOnError)
 	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
 	name := fs.String("name", "", "Fellowship name (required)")
+	baseBranch := fs.String("base-branch", "", "Base branch for quest worktrees (default: main)")
 	fs.Parse(args)
 
 	if *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship state init --name <name> [--dir PATH]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship state init --name <name> [--dir PATH] [--base-branch BRANCH]")
 		return 1
 	}
 
@@ -1189,13 +1191,14 @@ func runStateInit(args []string) int {
 	}
 
 	s := &dashboard.FellowshipState{
-		Version:   1,
-		Name:      *name,
-		CreatedAt: time.Now().UTC().Format(time.RFC3339),
-		MainRepo:  root,
-		Quests:    []dashboard.QuestEntry{},
-		Scouts:    []dashboard.ScoutEntry{},
-		Companies: []dashboard.CompanyEntry{},
+		Version:    1,
+		Name:       *name,
+		CreatedAt:  time.Now().UTC().Format(time.RFC3339),
+		MainRepo:   root,
+		BaseBranch: *baseBranch,
+		Quests:     []dashboard.QuestEntry{},
+		Scouts:     []dashboard.ScoutEntry{},
+		Companies:  []dashboard.CompanyEntry{},
 	}
 	if err := dashboard.SaveFellowshipState(statePath, s); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
