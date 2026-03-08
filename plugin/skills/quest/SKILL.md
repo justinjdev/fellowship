@@ -273,7 +273,7 @@ Goal: Find failure modes before conventions and code quality review. Spawn balro
 4. If Critical/High findings were fixed, note what changed and confirm the fix is complete.
 
 **Hard gate — Adversarial Review must produce:**
-- [ ] Balrog report received (even if zero findings)
+- [ ] Balrog report received (even if zero findings), or agent failure documented in gate message
 - [ ] All Critical/High findings addressed or explicitly accepted by user
 - [ ] Medium findings presented to user
 
