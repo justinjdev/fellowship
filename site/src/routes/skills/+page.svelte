@@ -5,12 +5,12 @@
 		{
 			name: '/quest',
 			summary: 'Full Research \u2192 Plan \u2192 Implement lifecycle for non-trivial tasks.',
-			details: 'The hub skill that orchestrates everything. Takes a task description, creates an isolated worktree, and walks through six phases: Onboard, Research, Plan, Implement, Review, Complete. Each phase has a hard gate requiring approval before proceeding. Uses /council for context, /gather-lore for conventions, /lembas for context compression between phases, and /warden for pre-PR review.'
+			details: 'The hub skill that orchestrates everything. Takes a task description, creates an isolated worktree, and walks through six phases: Onboard, Research, Plan, Implement, Review, Complete. Each phase has a hard gate requiring approval before proceeding. Uses /council for context, /gather-lore for conventions, /lembas for context compression between phases, and /warden for pre-PR review. Supports plan-driven mode: provide a pre-existing plan file and the quest skips Research and Plan, jumping straight to Implement.'
 		},
 		{
 			name: '/fellowship',
 			summary: 'Multi-task orchestrator. Spawns parallel agent teammates.',
-			details: 'For multiple independent tasks, Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolated worktrees and produce PRs. Scouts research questions and deliver findings. Say \u2018status\u2019 during a fellowship for a progress table. Gates surface to you for approval by default.'
+			details: 'For multiple independent tasks, Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolated worktrees and produce PRs. Scouts research questions and deliver findings. Say \u2018status\u2019 during a fellowship for a progress table. Gates surface to you for approval by default. Supports plan-driven quests: provide a plan file and Gandalf spawns quests that skip to Implement. For large plans, Gandalf can fan out into multiple parallel quests after confirming the split with you.'
 		},
 		{
 			name: '/scout',
