@@ -29,6 +29,8 @@ The user adds tasks dynamically at any time:
 ```
 User: "quest: fix auth bug #42"
 User: "quest: add rate limiting to API"
+User: "quest: implement #42"
+User: "implement issues #42, #51, #67 with fellowship"
 User: "scout: how does the auth middleware chain work?"
 User: "scout: list all API endpoints and their rate limit configs → send to quest-rate-limit"
 User: "company: API work — quest: add endpoint, quest: add tests, scout: review API docs"
@@ -88,6 +90,15 @@ Plugin hooks only fire in Gandalf's session — teammates spawned via the Agent 
 For each quest, Gandalf:
 
 1. `TaskCreate` in the shared task list with the quest description
+
+**Issue detection:** Before spawning, check the task description for GitHub issue references (`#\d+`). If found:
+1. Invoke `/missive` with the detected issue numbers
+2. Use the missive output for `{issue_context}` in the spawn prompt
+3. Use the missive-suggested branch name (override the default slug-based name)
+4. If multiple issues are detected, spawn one quest per issue — each gets its own missive output
+
+If no issue references are found, `{issue_context}` is substituted with an empty string.
+
 2. Spawn a teammate via the `Task` tool with:
    - `team_name`: the fellowship team name
    - `subagent_type: "general-purpose"`

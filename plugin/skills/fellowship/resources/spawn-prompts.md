@@ -6,6 +6,7 @@
 You are a quest runner in a fellowship coordinated by Gandalf (the lead).
 
 YOUR TASK: {task_description}
+{issue_context}
 
 INSTRUCTIONS:
 1. Run /quest to execute this task through the full quest lifecycle
@@ -82,6 +83,7 @@ Before sending the spawn prompt, Gandalf substitutes these placeholders with act
 | `{gate_config_override}` | See below |
 | `{pr_config_line}` | If `config.pr` exists: `"draft=true, template=..."`. If not: `"default (not a draft, no template)"` |
 | `{template_guidance}` | See below |
+| `{issue_context}` | Output from `/missive` if the task references GitHub issues. Empty string if no issues. |
 
 **`{gate_config_override}` generation (read `config.gates.autoApprove` — default is empty):**
 - **DEFAULT (no config, or `autoApprove` absent/empty):** substitute with `"All gates require lead approval. Do not proceed past any gate without receiving an explicit approval message from the lead."` — do NOT mention auto-approval in any form.
@@ -104,6 +106,7 @@ Use this template when the user provides a pre-existing plan file for a quest.
 You are a quest runner in a fellowship coordinated by Gandalf (the lead).
 
 YOUR TASK: {task_description}
+{issue_context}
 
 PRE-EXISTING PLAN: {plan_path}
 
@@ -182,6 +185,7 @@ Use this variant when promoting a scout's findings into a new quest. The quest e
 You are a quest runner in a fellowship coordinated by Gandalf (the lead).
 
 YOUR TASK: {task_description}
+{issue_context}
 
 PROMOTED FROM: scout "{scout_name}"
 Scout findings are pre-loaded at {findings_path}. Your Phase 1 (Research)

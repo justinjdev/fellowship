@@ -53,6 +53,11 @@
 			details: 'Analyzes a completed fellowship\u2019s gate history, palantir alerts, and quest metrics to surface patterns. Identifies which gates added value, which phases caused delays, and interactively recommends configuration changes like auto-approving gates with zero rejection rates.'
 		},
 		{
+			name: '/missive',
+			summary: 'Fetch GitHub issue context for quest spawning.',
+			details: 'Pulls structured context from GitHub issues via gh CLI \u2014 title, body, labels, and recent comments. Returns a package with issue context, a suggested branch name incorporating the issue number, and PR closing keywords (Closes #N). Gandalf invokes it automatically when issue references (#N) are detected in quest descriptions. Also usable standalone: /missive 42 to preview what context a quest would receive.'
+		},
+		{
 			name: '/lorebook',
 			summary: 'Load phase-specific guidance from a quest template.',
 			details: 'Invoked at the start of each quest phase when your spawn prompt includes a TEMPLATE: assignment. Resolves the template file from project (.claude/fellowship-templates/) or user (~/.claude/fellowship-templates/) directories, reads the section matching the current phase, and applies the guidance as advisory context. Created via /scribe.'

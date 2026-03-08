@@ -29,6 +29,7 @@ Fellowship Config (~/.claude/fellowship.json)
   pr.template         null               (default)
   palantir.enabled    true               (default)
   palantir.minQuests  2                  (default)
+  issues.autoClose    true               (default)
 ```
 
 Mark non-default values with `(custom)` instead of `(default)`.
@@ -67,3 +68,4 @@ This is the canonical schema for `~/.claude/fellowship.json`. Other skills refer
 | `pr.template` | string \| null | `null` | Template with `{task}`, `{summary}`, `{changes}` placeholders |
 | `palantir.enabled` | boolean | `true` | `true`, `false` |
 | `palantir.minQuests` | number | `2` | Any positive integer |
+| `issues.autoClose` | boolean | `true` | `true`, `false`. When true, `/missive` includes `Closes #N` in PR keywords. |
