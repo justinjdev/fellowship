@@ -1,5 +1,4 @@
 ---
-name: validate-docs
 description: Validate that site and README documentation is current. Report-only — flags issues without modifying anything.
 ---
 
@@ -70,7 +69,7 @@ Docs validation
 
   Site changelog  ✗ unreleased changes present
   README          ✓
-  Skills page     ✗ missing: validate-docs
+  Skills page     ✗ missing: some-skill
   Agents page     ✓
 
   2 issues found
