@@ -10,6 +10,81 @@
 <div class="container page">
 	<h1>Changelog</h1>
 
+	<!-- unreleased -->
+	<section class="version" id="unreleased">
+		<h2 class="version-heading"><a href="{base}/changelog#unreleased">Unreleased</a></h2>
+		<ul class="changes">
+			<li>
+				<strong>Scout-to-quest promotion</strong> — Say <code>promote scout-X to a quest</code> during a fellowship. Gandalf reads the scout's findings file, spawns a quest pre-loaded with the research, and the quest enters validation mode (verify and supplement findings) instead of researching from scratch.
+			</li>
+			<li>
+				<strong><code>/retro</code> skill</strong> — Post-fellowship retrospective. Analyzes gate history, palantir alerts, and quest metrics. Recommends configuration changes like auto-approving gates with zero rejection rates. Integrated into the fellowship disband flow.
+			</li>
+			<li>
+				<strong>Plan-driven quests</strong> — Provide a pre-existing plan file and quests skip Research and Plan phases, jumping straight to Implement. Gandalf can fan out large plans into multiple parallel quests.
+			</li>
+			<li>
+				<strong>Structured conflict resolution</strong> — Hold mechanism for quests with file conflicts. Gandalf detects overlapping file sets and holds conflicting quests until dependencies complete.
+			</li>
+			<li>
+				<strong>Herald logging</strong> — Dashboard gate handlers and company batch approve now emit herald events for observability.
+			</li>
+			<li>
+				<strong>Palantir alert persistence</strong> — Alerts persisted to JSONL log for post-fellowship analysis by <code>/retro</code>.
+			</li>
+		</ul>
+	</section>
+
+	<div class="divider"><span class="divider-ring"></span></div>
+
+	<!-- v1.7.0 -->
+	<section class="version" id="v1-7-0">
+		<h2 class="version-heading"><a href="{base}/changelog#v1-7-0">v1.7.0</a></h2>
+		<ul class="changes">
+			<li>
+				<strong>Dashboard</strong> — Web dashboard with quest status tracking, gate approve/reject endpoints, and embedded static assets. Served via <code>fellowship dashboard</code>.
+			</li>
+			<li>
+				<strong>Fellowship state CLI</strong> — <code>fellowship state</code> commands for managing fellowship state, companies, and quest metadata.
+			</li>
+			<li>
+				<strong>Data directory change</strong> — Working files moved from <code>tmp/</code> to <code>.fellowship/</code> for cleaner project directories.
+			</li>
+			<li>
+				<strong>File locking</strong> — Cross-platform file locking for state mutations (replaced <code>syscall.Flock</code>).
+			</li>
+			<li>
+				<strong>CI</strong> — Added PR workflow to run Go tests.
+			</li>
+		</ul>
+	</section>
+
+	<div class="divider"><span class="divider-ring"></span></div>
+
+	<!-- v1.6.1 -->
+	<section class="version" id="v1-6-1">
+		<h2 class="version-heading"><a href="{base}/changelog#v1-6-1">v1.6.1</a></h2>
+		<ul class="changes">
+			<li>
+				<strong>GitHub Pages site</strong> — SvelteKit static site with LOTR theme, all documentation pages, and CI deployment.
+			</li>
+			<li>
+				<strong><code>/rekindle</code> skill</strong> — Crash recovery. Scans worktrees and state files, presents a recovery dashboard, and re-spawns Gandalf with recovered quest context.
+			</li>
+			<li>
+				<strong><code>/lorebook</code> skill</strong> — Loads phase-specific guidance from quest templates created by <code>/scribe</code>.
+			</li>
+			<li>
+				<strong>Skills to commands migration</strong> — 5 user-only skills moved to <code>commands/</code> for lower base context cost.
+			</li>
+			<li>
+				<strong>LOTR theming</strong> — Internal renames: convoy → company, cv → tome, patrol → eagles, work/hook → errand, events/feed → herald.
+			</li>
+		</ul>
+	</section>
+
+	<div class="divider"><span class="divider-ring"></span></div>
+
 	<!-- v1.6.0 -->
 	<section class="version" id="v1-6-0">
 		<h2 class="version-heading"><a href="{base}/changelog#v1-6-0">v1.6.0</a></h2>

@@ -53,6 +53,11 @@
 			details: 'Analyzes a completed fellowship\u2019s gate history, palantir alerts, and quest metrics to surface patterns. Identifies which gates added value, which phases caused delays, and interactively recommends configuration changes like auto-approving gates with zero rejection rates.'
 		},
 		{
+			name: '/lorebook',
+			summary: 'Load phase-specific guidance from a quest template.',
+			details: 'Invoked at the start of each quest phase when your spawn prompt includes a TEMPLATE: assignment. Resolves the template file from project (.claude/fellowship-templates/) or user (~/.claude/fellowship-templates/) directories, reads the section matching the current phase, and applies the guidance as advisory context. Created via /scribe.'
+		},
+		{
 			name: '/settings',
 			summary: 'View or edit fellowship settings.',
 			details: 'Interactive setup for all configuration options in ~/.claude/fellowship.json. View current settings, edit individual values, or reset to defaults.'
