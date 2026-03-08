@@ -32,7 +32,7 @@ type State struct {
 	HeldReason       *string  `json:"held_reason"`
 }
 
-var phaseOrder = []string{"Onboard", "Research", "Plan", "Implement", "Review", "Complete"}
+var phaseOrder = []string{"Onboard", "Research", "Plan", "Implement", "Adversarial", "Review", "Complete"}
 
 func NextPhase(current string) (string, error) {
 	for i, p := range phaseOrder {

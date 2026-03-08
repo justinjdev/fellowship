@@ -14,7 +14,7 @@ func CompletionGuard(s *state.State, input *HookInput) HookResult {
 	if s.Phase != "Complete" {
 		return HookResult{
 			Block:   true,
-			Message: fmt.Sprintf("Cannot complete task — current phase is '%s'. You must submit gates for all phases (Onboard → Research → Plan → Implement → Review → Complete) before completing.", s.Phase),
+			Message: fmt.Sprintf("Cannot complete task — current phase is '%s'. You must submit gates for all phases (Onboard → Research → Plan → Implement → Adversarial → Review → Complete) before completing.", s.Phase),
 		}
 	}
 	return HookResult{}

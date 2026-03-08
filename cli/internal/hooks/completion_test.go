@@ -25,7 +25,7 @@ func TestCompletionGuard_AllowsMetadataOnly(t *testing.T) {
 }
 
 func TestCompletionGuard_BlocksCompletionBeforeComplete(t *testing.T) {
-	for _, phase := range []string{"Onboard", "Research", "Plan", "Implement", "Review"} {
+	for _, phase := range []string{"Onboard", "Research", "Plan", "Implement", "Adversarial", "Review"} {
 		s := &state.State{Phase: phase}
 		input := &HookInput{ToolInput: ToolInput{Status: "completed"}}
 		result := CompletionGuard(s, input)
