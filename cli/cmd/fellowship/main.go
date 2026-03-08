@@ -68,7 +68,7 @@ func main() {
 		os.Exit(runErrand(os.Args[2:]))
 	case "state":
 		if len(os.Args) < 3 {
-			fmt.Fprintln(os.Stderr, "usage: fellowship state <init|add-quest|add-scout|update-quest|show>")
+			fmt.Fprintln(os.Stderr, "usage: fellowship state <init|add-quest|add-scout|add-company|update-quest|show>")
 			os.Exit(1)
 		}
 		os.Exit(runState(os.Args[2:]))
