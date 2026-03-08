@@ -223,6 +223,72 @@ main {
     color: var(--text-secondary);
 }
 
+/* ── Done Quests ───────────────────────────────── */
+
+.quest-card.completed {
+    opacity: 0.6;
+    border-color: var(--green);
+}
+
+.quest-card.completed .progress-segment.filled {
+    background: var(--green);
+}
+
+.quest-card.cancelled {
+    opacity: 0.6;
+    border-color: #4a4a4a;
+}
+
+.quest-card.cancelled .progress-segment.filled {
+    background: #6a6a6a;
+}
+
+.done-section {
+    margin-top: 1.5rem;
+}
+
+.done-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #3a3028;
+    margin-bottom: 0.75rem;
+}
+
+.done-section-header h2 {
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.06em;
+}
+
+.done-section-header::before {
+    content: "▾";
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.done-section-header.collapsed::before {
+    content: "▸";
+}
+
+.done-count {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.done-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.done-cards.collapsed {
+    display: none;
+}
+
 /* ── Errands ───────────────────────────────────── */
 
 .errand-progress {

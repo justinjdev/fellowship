@@ -36,6 +36,16 @@ type QuestEntry struct {
 	Worktree        string `json:"worktree"`
 	Branch          string `json:"branch"`
 	TaskID          string `json:"task_id"`
+	Status          string `json:"status,omitempty"`
+}
+
+// QuestEntryStatus returns the effective status of a quest entry.
+// Returns q.Status if set, otherwise "active".
+func QuestEntryStatus(q QuestEntry) string {
+	if q.Status != "" {
+		return q.Status
+	}
+	return "active"
 }
 
 type ScoutEntry struct {
@@ -48,6 +58,7 @@ type QuestStatus struct {
 	Name            string  `json:"name"`
 	Worktree        string  `json:"worktree"`
 	Phase           string  `json:"phase"`
+	Status          string  `json:"status"`
 	GatePending     bool    `json:"gate_pending"`
 	GateID          *string `json:"gate_id"`
 	LembasCompleted bool    `json:"lembas_completed"`
@@ -92,9 +103,20 @@ func discoverFromFellowshipState(fs *FellowshipState) (*DashboardStatus, error) 
 	for _, q := range fs.Quests {
 		qs, err := loadQuestStatus(q.Name, q.Worktree)
 		if err != nil {
-			// Skip quests where state can't be loaded
+			// Worktree state can't be loaded — show completed/cancelled quests
+			// as synthetic entries, skip active quests with missing worktrees
+			entryStatus := QuestEntryStatus(q)
+			if entryStatus == "completed" || entryStatus == "cancelled" {
+				status.Quests = append(status.Quests, QuestStatus{
+					Name:     q.Name,
+					Worktree: q.Worktree,
+					Phase:    "Complete",
+					Status:   entryStatus,
+				})
+			}
 			continue
 		}
+		qs.Status = QuestEntryStatus(q)
 		status.Quests = append(status.Quests, *qs)
 	}
 	return status, nil
