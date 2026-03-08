@@ -98,6 +98,32 @@ For each quest, Gandalf:
 
 **Spawn prompt:** See [resources/spawn-prompts.md](resources/spawn-prompts.md) for the full quest spawn prompt template and substitution rules.
 
+### Spawn a Plan-Driven Quest
+
+When the user's prompt references a plan file (e.g., "implement docs/plans/my-plan.md with fellowship"):
+
+**Solo mode (single quest for the whole plan):**
+
+1. Validate the plan file exists — read it to confirm
+2. `TaskCreate` with the task description including the plan reference
+3. Spawn a teammate using the **Plan-Driven Quest Spawn Prompt** from spawn-prompts.md
+4. After spawning, add the quest to fellowship state as normal
+
+**Fan-out mode (multiple quests from one plan):**
+
+1. Read the plan file
+2. Propose task groupings to the user (e.g., "I'd split this into 3 quests: ...")
+3. Wait for user approval or adjustment
+4. Spawn each quest using the plan-driven spawn prompt, with scoped instructions for each quest's subset of tasks
+5. Each quest gets the full plan file path but instructions to focus on specific tasks
+
+**Deciding solo vs fan-out:** Default to solo. Use fan-out when:
+- The plan explicitly has independent sections/tasks
+- The user requests parallel execution
+- The plan has 3+ tasks touching different file sets
+
+When uncertain, ask the user.
+
 ### Spawn a Scout
 
 For each scout, Gandalf:

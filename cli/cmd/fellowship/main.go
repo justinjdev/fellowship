@@ -120,6 +120,9 @@ Setup commands:
   install                (deprecated — hooks are now provided by the plugin)
   uninstall              (deprecated — hooks are now provided by the plugin)
   init                   Create quest-state.json in data directory
+    --phase PHASE        Initial phase (default: Onboard)
+    --plan-skip          Record Onboard/Research/Plan as skipped in tome
+    --quest NAME         Quest name for tome recording
 
 Company commands:
   company list            List all companies and their quest/scout counts
@@ -533,9 +536,35 @@ func runUnhold(args []string) int {
 }
 
 func runInit() int {
+	fs := flag.NewFlagSet("init", flag.ExitOnError)
+	phase := fs.String("phase", "", "Initial phase (default: Onboard)")
+	planSkip := fs.Bool("plan-skip", false, "Record Onboard/Research/Plan as skipped in tome")
+	questName := fs.String("quest", "", "Quest name for tome recording")
+	fs.Parse(os.Args[2:])
+
+	validPhases := map[string]bool{
+		"Onboard": true, "Research": true, "Plan": true,
+		"Implement": true, "Review": true, "Complete": true,
+	}
+	if *phase != "" && !validPhases[*phase] {
+		fmt.Fprintf(os.Stderr, "fellowship: invalid phase %q\n", *phase)
+		return 1
+	}
+
+	if *planSkip && *phase == "" {
+		*phase = "Implement"
+	}
+	if *planSkip && *phase != "Implement" {
+		fmt.Fprintln(os.Stderr, "fellowship: --plan-skip requires --phase Implement")
+		return 1
+	}
+
 	root := gitRootOrCwd()
 	dir := filepath.Join(root, datadir.Name())
-	os.MkdirAll(dir, 0755)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: creating data directory: %v\n", err)
+		return 1
+	}
 	path := filepath.Join(dir, "quest-state.json")
 
 	if _, err := os.Stat(path); err == nil {
@@ -546,24 +575,47 @@ func runInit() int {
 		}
 		s.GatePending = false
 		s.GateID = nil
+		if *phase != "" {
+			s.Phase = *phase
+			s.LembasCompleted = false
+			s.MetadataUpdated = false
+		}
 		if err := state.Save(path, s); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
 		}
-		fmt.Printf("State file reset (gate_pending cleared, phase preserved: %s).\n", s.Phase)
-		return 0
+		fmt.Printf("State file reset (gate_pending cleared, phase: %s).\n", s.Phase)
+	} else {
+		initPhase := "Onboard"
+		if *phase != "" {
+			initPhase = *phase
+		}
+		s := &state.State{
+			Version:          1,
+			Phase:            initPhase,
+			AutoApproveGates: []string{},
+		}
+		if err := state.Save(path, s); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+			return 1
+		}
+		fmt.Printf("State file created at %s/quest-state.json (phase: %s)\n", datadir.Name(), initPhase)
 	}
 
-	s := &state.State{
-		Version:          1,
-		Phase:            "Onboard",
-		AutoApproveGates: []string{},
+	if *planSkip {
+		tomePath := filepath.Join(dir, "quest-tome.json")
+		c := tome.LoadOrCreate(tomePath)
+		if *questName != "" {
+			c.QuestName = *questName
+		}
+		tome.RecordSkippedPhases(c, []string{"Onboard", "Research", "Plan"}, "pre-existing plan")
+		if err := tome.Save(tomePath, c); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+			return 1
+		}
+		fmt.Println("Recorded Onboard/Research/Plan as skipped (pre-existing plan).")
 	}
-	if err := state.Save(path, s); err != nil {
-		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-		return 1
-	}
-	fmt.Printf("State file created at %s/quest-state.json\n", datadir.Name())
+
 	return 0
 }
 
@@ -945,7 +997,10 @@ func runErrandInit(args []string) int {
 	}
 
 	errandDir := filepath.Join(root, datadir.Name())
-	os.MkdirAll(errandDir, 0755)
+	if err := os.MkdirAll(errandDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: creating data directory: %v\n", err)
+		return 1
+	}
 	errandPath := filepath.Join(errandDir, "quest-errands.json")
 
 	if _, err := os.Stat(errandPath); err == nil {
@@ -1122,7 +1177,10 @@ func runStateInit(args []string) int {
 	}
 
 	dataDirPath := filepath.Join(root, datadir.Name())
-	os.MkdirAll(dataDirPath, 0755)
+	if err := os.MkdirAll(dataDirPath, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: creating data directory: %v\n", err)
+		return 1
+	}
 	statePath := filepath.Join(dataDirPath, "fellowship-state.json")
 
 	if _, err := os.Stat(statePath); err == nil {
