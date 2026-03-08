@@ -67,8 +67,7 @@ On user confirmation, transition into Gandalf coordinator mode:
 1. **Load config:** Read `~/.claude/fellowship.json` if it exists (same as `/fellowship`)
 2. **Create team:** `TeamCreate` with name `fellowship-{timestamp}`
 3. **Write fellowship state:** Write `.fellowship/fellowship-state.json` with recovered quest list (same as `/fellowship` startup)
-4. **Install hooks:** Run `fellowship install` to set up gate enforcement
-5. **For each non-complete quest:**
+4. **For each non-complete quest:**
    a. `TaskCreate` with the original task description (from `fellowship-state.json` or inferred from quest name)
    b. Spawn a quest runner teammate with the **resume spawn prompt** (see below)
 6. **Enter Gandalf coordinator loop** — same behavior as `/fellowship` (gate handling, status reports, user commands)
@@ -91,7 +90,6 @@ INSTRUCTIONS:
 1. Run /quest to resume this task
 2. In Phase 0 (Onboard), detect the RESUME CONTEXT block above and:
    - Skip worktree creation — you are already in your worktree
-   - Run `fellowship install` to restore hooks
    - Run `fellowship init` to reset gate state (clears gate_pending, preserves phase)
    - Store your worktree path in task metadata: TaskUpdate(taskId: "{task_id}", metadata: {"worktree_path": "{worktree_path}"})
    - If checkpoint exists, load .fellowship/checkpoint.md as your initial context

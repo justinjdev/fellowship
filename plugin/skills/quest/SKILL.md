@@ -84,8 +84,7 @@ When running as a fellowship teammate, a state file at `.fellowship/quest-state.
 If the spawn prompt contains a `RESUME CONTEXT:` block, this is a recovered quest:
 
 1. **Skip worktree creation** — your worktree already exists and you're already in it
-2. **Re-install hooks:** Run `fellowship install` to restore gate enforcement in the worktree
-3. **Reset state file:** Run `fellowship init` to clear `gate_pending` while preserving the current phase
+2. **Reset state file:** Run `fellowship init` to clear `gate_pending` while preserving the current phase
 4. **Update task metadata:** `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})` with the new task ID from the recovery spawn
 5. **Load checkpoint:** If `.fellowship/checkpoint.md` exists, read it as your initial context — this replaces `/council` orientation
 6. **Skip `/council`** — the checkpoint provides equivalent context from the previous session
@@ -112,7 +111,6 @@ After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, upda
      1. Run `git rev-parse HEAD` and save the full SHA in your response text (not a shell variable — shell state does not persist between tool calls). This is the base commit.
      2. Call `EnterWorktree` with the resolved branch name. If `config.worktree.directory` is set, create the worktree there instead of the default location.
      3. **Immediately** after entering the worktree — before ANY other action — run `git reset --hard <sha>` using the exact SHA from step 1. `EnterWorktree` bases off the default branch, not the current branch. This reset is what makes the worktree start from the correct point. Skip this and the worktree will be wrong.
-   - **Install hooks in worktree (fellowship only):** After entering the worktree, project-level hooks must be re-created so gate enforcement continues. Run: `fellowship install`. This must happen before the state file creation below.
 3. **State file (fellowship only):** This MUST happen before any other tool calls (Skill, Bash, etc.) so that hooks can enforce gates from the start. If running as a fellowship teammate:
    - If `.fellowship/quest-state.json` already exists (respawn), reset `gate_pending` to `false` and preserve the existing `phase`.
    - Otherwise, create `.fellowship/quest-state.json`:

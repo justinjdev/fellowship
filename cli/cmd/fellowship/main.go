@@ -20,7 +20,7 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
-	"github.com/justinjdev/fellowship/cli/internal/install"
+
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/status"
 	"github.com/justinjdev/fellowship/cli/internal/tome"
@@ -48,9 +48,9 @@ func main() {
 		}
 		os.Exit(runGate(os.Args[2:]))
 	case "install":
-		os.Exit(runInstall())
+		fmt.Println("Gate hooks are now provided by the plugin. No install needed.")
 	case "uninstall":
-		os.Exit(runUninstall())
+		fmt.Println("Gate hooks are now provided by the plugin. No uninstall needed.")
 	case "init":
 		os.Exit(runInit())
 	case "status":
@@ -108,8 +108,8 @@ Agent/lead commands:
     --json               Output as JSON
 
 Setup commands:
-  install                Merge gate hooks into .claude/settings.json
-  uninstall              Remove gate hooks from .claude/settings.json
+  install                (deprecated — hooks are now provided by the plugin)
+  uninstall              (deprecated — hooks are now provided by the plugin)
   init                   Create quest-state.json in data directory
 
 Company commands:
@@ -389,26 +389,6 @@ func runGate(args []string) int {
 	}
 }
 
-func runInstall() int {
-	cwd, _ := os.Getwd()
-	binPath, _ := os.Executable()
-	if err := install.Install(cwd, binPath); err != nil {
-		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-		return 1
-	}
-	fmt.Println("Gate hooks installed.")
-	return 0
-}
-
-func runUninstall() int {
-	cwd, _ := os.Getwd()
-	if err := install.Uninstall(cwd); err != nil {
-		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-		return 1
-	}
-	fmt.Println("Gate hooks removed.")
-	return 0
-}
 
 func runInit() int {
 	root := gitRootOrCwd()
