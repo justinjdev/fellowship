@@ -120,6 +120,9 @@ Setup commands:
   install                (deprecated — hooks are now provided by the plugin)
   uninstall              (deprecated — hooks are now provided by the plugin)
   init                   Create quest-state.json in data directory
+    --phase PHASE        Initial phase (default: Onboard)
+    --plan-skip          Record Onboard/Research/Plan as skipped in tome
+    --quest NAME         Quest name for tome recording
 
 Company commands:
   company list            List all companies and their quest/scout counts
@@ -533,6 +536,12 @@ func runUnhold(args []string) int {
 }
 
 func runInit() int {
+	fs := flag.NewFlagSet("init", flag.ExitOnError)
+	phase := fs.String("phase", "", "Initial phase (default: Onboard)")
+	planSkip := fs.Bool("plan-skip", false, "Record Onboard/Research/Plan as skipped in tome")
+	questName := fs.String("quest", "", "Quest name for tome recording")
+	fs.Parse(os.Args[2:])
+
 	root := gitRootOrCwd()
 	dir := filepath.Join(root, datadir.Name())
 	os.MkdirAll(dir, 0755)
@@ -546,24 +555,42 @@ func runInit() int {
 		}
 		s.GatePending = false
 		s.GateID = nil
+		if *phase != "" {
+			s.Phase = *phase
+		}
 		if err := state.Save(path, s); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
 		}
-		fmt.Printf("State file reset (gate_pending cleared, phase preserved: %s).\n", s.Phase)
-		return 0
+		fmt.Printf("State file reset (gate_pending cleared, phase: %s).\n", s.Phase)
+	} else {
+		initPhase := "Onboard"
+		if *phase != "" {
+			initPhase = *phase
+		}
+		s := &state.State{
+			Version:          1,
+			Phase:            initPhase,
+			AutoApproveGates: []string{},
+		}
+		if err := state.Save(path, s); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+			return 1
+		}
+		fmt.Printf("State file created at %s/quest-state.json (phase: %s)\n", datadir.Name(), initPhase)
 	}
 
-	s := &state.State{
-		Version:          1,
-		Phase:            "Onboard",
-		AutoApproveGates: []string{},
+	if *planSkip {
+		tomePath := filepath.Join(dir, "quest-tome.json")
+		c := tome.LoadOrCreate(tomePath)
+		if *questName != "" {
+			c.QuestName = *questName
+		}
+		tome.RecordSkippedPhases(c, []string{"Onboard", "Research", "Plan"}, "pre-existing plan")
+		tome.Save(tomePath, c)
+		fmt.Println("Recorded Onboard/Research/Plan as skipped (pre-existing plan).")
 	}
-	if err := state.Save(path, s); err != nil {
-		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-		return 1
-	}
-	fmt.Printf("State file created at %s/quest-state.json\n", datadir.Name())
+
 	return 0
 }
 
