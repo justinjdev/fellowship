@@ -65,6 +65,16 @@ For new code that handles collections, I/O, or external calls:
 
 You may not be able to write runnable tests for all of these — resource exhaustion and race conditions are hard to reproduce. Document them as findings regardless.
 
+### 5. Structural Testability
+
+For each new or modified function, check whether its error paths can be exercised from outside:
+
+- **Infrastructure coupling**: does the function call a database, HTTP client, file system, or external service directly — without any seam (interface, injected dependency, or wrapper) that a test could replace? If yes, its error paths are untestable without production infrastructure.
+- **Hidden dependencies**: does the function construct its own dependencies internally (e.g., `new DB()`, `open(file)`) rather than receiving them? Self-construction locks callers out of error injection.
+- **Untriggerable error paths**: flag any error handler in the diff that cannot be triggered without infrastructure — these findings complement Vector 2.
+
+This is not a full structural review. Flag only coupling that directly prevents error path coverage. Document as testability findings, not design critique.
+
 ## Output Format
 
 Rank every finding by severity:
