@@ -81,7 +81,6 @@ Released v{version}
 
   plugin.json    ✓ bumped
   site changelog ✓ updated
-  README         ✓ current
   tag            ✓ v{version} pushed
   marketplace    ✓ bumped to v{version}
 

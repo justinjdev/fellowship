@@ -2,7 +2,7 @@
 description: Audit plugin skills, commands, and agents for structure, size, and naming issues.
 ---
 
-# Lint Skills
+# Audit Plugin
 
 Checks plugin structure against best practices. Run during development to catch issues before release.
 
