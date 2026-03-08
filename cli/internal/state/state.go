@@ -8,9 +8,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
+	"github.com/justinjdev/fellowship/cli/internal/filelock"
 )
 
 // ErrNoSave can be returned from a WithLock callback to skip saving
@@ -93,10 +93,10 @@ func WithLock(path string, fn func(s *State) error) error {
 	}
 	defer lockFile.Close()
 
-	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX); err != nil {
+	if err := filelock.Lock(lockFile.Fd()); err != nil {
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
-	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+	defer filelock.Unlock(lockFile.Fd())
 
 	s, err := Load(path)
 	if err != nil {
