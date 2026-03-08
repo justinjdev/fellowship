@@ -210,6 +210,15 @@
 					</div>
 					<span class="connector-label">spawn with task</span>
 					<span class="connector-label return-label">gate submissions, status updates</span>
+					<!-- Balrog sub-row -->
+					<div class="balrog-sub">
+						<div class="balrog-connector-line"></div>
+						<div class="diagram-node node-balrog">
+							<span class="node-label">Balrog</span>
+						</div>
+						<span class="connector-label">spawn pre-review</span>
+						<span class="connector-label return-label">findings report</span>
+					</div>
 				</div>
 				<div class="agent-column">
 					<div class="diagram-node node-scout">
@@ -545,6 +554,28 @@
 	.return-label {
 		opacity: 0.65;
 		font-style: italic;
+	}
+
+	/* Balrog sub-node (spawned by Quest Runner) */
+	.balrog-sub {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.3rem;
+		margin-top: 0.2rem;
+	}
+
+	.balrog-connector-line {
+		width: 2px;
+		height: 1.5rem;
+		background: var(--color-border);
+		opacity: 0.6;
+	}
+
+	.node-balrog {
+		border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+		border-style: dashed;
+		opacity: 0.9;
 	}
 
 	/* Responsive */
