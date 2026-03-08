@@ -83,7 +83,11 @@ fellowship state update-quest --dir <repo_root> --name <quest_name> [--worktree 
 fellowship state add-scout --dir <repo_root> --name <scout_name> --question "<research question>" [--task-id <id>]
 ```
 
-**Companies:** When the user creates a company (e.g., `"company: API work — quest: add endpoint, quest: add tests, scout: review API docs"`), Gandalf records the company in `fellowship-state.json` and spawns the quests and scouts as normal. The company entry references quest and scout names for grouping. Company entries are currently managed via direct file write (append to the `companies` array).
+**Companies:** When the user creates a company (e.g., `"company: API work — quest: add endpoint, quest: add tests, scout: review API docs"`), Gandalf records the company and spawns the quests and scouts as normal:
+
+```bash
+fellowship state add-company --dir <repo_root> --name <company_name> --quests quest-1,quest-2 --scouts scout-1
+```
 
 **Show state:** To inspect the current fellowship state:
 

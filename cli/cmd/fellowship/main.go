@@ -135,6 +135,11 @@ Fellowship state:
     --name NAME           Scout name (required)
     --question "Q"        Research question (required)
     --task-id ID          Task ID
+  state add-company       Add a company entry to fellowship state
+    --dir PATH            Git repo root (default: auto-detect)
+    --name NAME           Company name (required)
+    --quests q1,q2        Comma-separated quest names
+    --scouts s1,s2        Comma-separated scout names
   state update-quest      Update an existing quest entry
     --dir PATH            Git repo root (default: auto-detect)
     --name NAME           Quest name (required)
@@ -966,6 +971,8 @@ func runState(args []string) int {
 		return runStateAddScout(args[1:])
 	case "update-quest":
 		return runStateUpdateQuest(args[1:])
+	case "add-company":
+		return runStateAddCompany(args[1:])
 	case "show":
 		return runStateShow(args[1:])
 	default:
@@ -1099,6 +1106,55 @@ func runStateAddScout(args []string) int {
 		return 1
 	}
 	fmt.Printf("Added scout %q\n", *name)
+	return 0
+}
+
+func runStateAddCompany(args []string) int {
+	fs := flag.NewFlagSet("state add-company", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	name := fs.String("name", "", "Company name (required)")
+	quests := fs.String("quests", "", "Comma-separated quest names")
+	scouts := fs.String("scouts", "", "Comma-separated scout names")
+	fs.Parse(args)
+
+	if *name == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship state add-company --name <name> [--quests q1,q2] [--scouts s1,s2] [--dir PATH]")
+		return 1
+	}
+
+	statePath := fellowshipStatePath(*dir)
+	s, err := dashboard.LoadFellowshipState(statePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	for _, c := range s.Companies {
+		if c.Name == *name {
+			fmt.Fprintf(os.Stderr, "fellowship: company %q already exists\n", *name)
+			return 1
+		}
+	}
+
+	entry := dashboard.CompanyEntry{Name: *name}
+	if *quests != "" {
+		entry.Quests = strings.Split(*quests, ",")
+	} else {
+		entry.Quests = []string{}
+	}
+	if *scouts != "" {
+		entry.Scouts = strings.Split(*scouts, ",")
+	} else {
+		entry.Scouts = []string{}
+	}
+
+	s.Companies = append(s.Companies, entry)
+
+	if err := dashboard.SaveFellowshipState(statePath, s); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Added company %q\n", *name)
 	return 0
 }
 
