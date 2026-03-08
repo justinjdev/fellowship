@@ -119,8 +119,9 @@ When the user says "wrap up" or "disband":
 
 1. Send `shutdown_request` to all active teammates (including palantir)
 2. Synthesize a summary: quests completed, PR URLs, any open items
-3. Run `fellowship uninstall` to remove gate hooks from `.claude/settings.json`
-4. Run `TeamDelete` to clean up
+3. **Suggest retrospective (optional):** Mention to the user: "Consider running `/retro` for a retrospective analysis of this fellowship — it identifies patterns across quests and can recommend configuration improvements." This is a suggestion only — the user can skip it and proceed directly to cleanup.
+4. Run `fellowship uninstall` to remove gate hooks from `.claude/settings.json`
+5. Run `TeamDelete` to clean up
 
 ## Gate Handling
 

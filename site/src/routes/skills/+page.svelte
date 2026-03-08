@@ -48,6 +48,11 @@
 			details: 'After a PR review, extracts conventions from reviewer comments and adds them to CLAUDE.md. Closes the convention learning loop \u2014 reviewer feedback becomes documented patterns that future quests will follow.'
 		},
 		{
+			name: '/retro',
+			summary: 'Post-fellowship retrospective analysis.',
+			details: 'Analyzes a completed fellowship\u2019s gate history, palantir alerts, and quest metrics to surface patterns. Identifies which gates added value, which phases caused delays, and interactively recommends configuration changes like auto-approving gates with zero rejection rates.'
+		},
+		{
 			name: '/settings',
 			summary: 'View or edit fellowship settings.',
 			details: 'Interactive setup for all configuration options in ~/.claude/fellowship.json. View current settings, edit individual values, or reset to defaults.'
