@@ -21,13 +21,14 @@ type CompanyEntry struct {
 }
 
 type FellowshipState struct {
-	Version   int            `json:"version"`
-	Name      string         `json:"name"`
-	CreatedAt string         `json:"created_at"`
-	MainRepo  string         `json:"main_repo"`
-	Quests    []QuestEntry   `json:"quests"`
-	Scouts    []ScoutEntry   `json:"scouts"`
-	Companies []CompanyEntry  `json:"companies"`
+	Version    int            `json:"version"`
+	Name       string         `json:"name"`
+	CreatedAt  string         `json:"created_at"`
+	MainRepo   string         `json:"main_repo"`
+	BaseBranch string         `json:"base_branch,omitempty"`
+	Quests     []QuestEntry   `json:"quests"`
+	Scouts     []ScoutEntry   `json:"scouts"`
+	Companies  []CompanyEntry  `json:"companies"`
 }
 
 type QuestEntry struct {
