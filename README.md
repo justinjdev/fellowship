@@ -171,6 +171,21 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 
 ## Changelog
 
+### v1.7.0
+
+- **Eagles** — quest health monitoring daemon. Detects stuck quests, scope drift, and file conflicts via periodic patrol scans.
+- **Tome** — persistent agent identity with quest CV chains. Tracks phases completed, gate history, and files touched across quest lifetimes.
+- **Company** — work bundling for quest grouping. Groups related quests into a company for coordinated tracking and status reporting.
+- **Herald** — activity feed with event logging, problem detection, and dashboard integration. Surfaces quest events and auto-detected problems.
+- **State CLI** — `fellowship state` commands for inspecting and managing quest state, plus `fellowship state add-company` for company management.
+- **File locking** — mutex-based file locking for concurrent state mutations across parallel quests.
+- **`.fellowship/` data directory** — working files (state, checkpoints, errands, tome) now use `.fellowship/` instead of `tmp/`. Configurable via `dataDir` setting.
+- **CI** — PR workflow to run Go tests on pull requests.
+- **LOTR theming** — renamed internals: patrol→eagles, convoy→company, cv→tome, events/feed→herald.
+- **Shared helpers** — extracted common git/file utilities into `internal/gitutil` package.
+- **Fix** — phase tracking for auto-approved gates and pending submissions.
+- **Fix** — hook errors silenced in non-quest contexts.
+
 ### v1.6.3
 
 - **Fix plugin discovery** — moved `.claude-plugin/plugin.json` to repo root with explicit path fields for skills, agents, commands, and hooks. Fixes skills not showing up after install.
