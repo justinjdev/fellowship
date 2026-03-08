@@ -1,13 +1,24 @@
 {
-  "description": "Fellowship gate state machine — enforces phase gates for quest teammates",
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/plugin/hooks/scripts/ensure-binary.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write|Bash|Agent|Skill|NotebookEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/fellowship.sh hook gate-guard",
+            "command": "${HOME}/.claude/fellowship/bin/fellowship hook gate-guard",
             "timeout": 5
           }
         ]
@@ -17,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/fellowship.sh hook gate-submit",
+            "command": "${HOME}/.claude/fellowship/bin/fellowship hook gate-submit",
             "timeout": 5
           }
         ]
@@ -27,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/fellowship.sh hook completion-guard",
+            "command": "${HOME}/.claude/fellowship/bin/fellowship hook completion-guard",
             "timeout": 5
           }
         ]
@@ -39,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/fellowship.sh hook gate-prereq",
+            "command": "${HOME}/.claude/fellowship/bin/fellowship hook gate-prereq",
             "timeout": 5
           }
         ]
@@ -49,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/fellowship.sh hook metadata-track",
+            "command": "${HOME}/.claude/fellowship/bin/fellowship hook metadata-track",
             "timeout": 5
           }
         ]
