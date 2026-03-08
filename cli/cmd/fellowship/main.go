@@ -136,7 +136,7 @@ Fellowship state:
   state init              Create fellowship-state.json in data directory
     --dir PATH            Git repo root (default: auto-detect)
     --name NAME           Fellowship name (required)
-    --base-branch BRANCH  Base branch for quest worktrees (default: main)
+    --base-branch BRANCH  Base branch for quest worktrees (default: auto-detected)
   state add-quest         Add a quest entry to fellowship state
     --dir PATH            Git repo root (default: auto-detect)
     --name NAME           Quest name (required)
