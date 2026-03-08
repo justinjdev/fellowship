@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
+	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -87,6 +89,8 @@ func BatchApprove(company dashboard.CompanyEntry, fellowshipState *dashboard.Fel
 			continue
 		}
 
+		prevPhase := st.Phase
+
 		nextPhase, err := state.NextPhase(st.Phase)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("advancing phase for %s: %w", qName, err))
@@ -103,6 +107,16 @@ func BatchApprove(company dashboard.CompanyEntry, fellowshipState *dashboard.Fel
 			errs = append(errs, fmt.Errorf("saving state for %s: %w", qName, err))
 			continue
 		}
+
+		now := time.Now().UTC().Format(time.RFC3339)
+		herald.Announce(wt, herald.Tiding{
+			Timestamp: now, Quest: qName, Type: herald.GateApproved,
+			Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
+		})
+		herald.Announce(wt, herald.Tiding{
+			Timestamp: now, Quest: qName, Type: herald.PhaseTransition,
+			Phase: nextPhase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, nextPhase),
+		})
 
 		approved = append(approved, qName)
 	}
