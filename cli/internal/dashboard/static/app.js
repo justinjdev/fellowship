@@ -65,7 +65,13 @@
 
     const quests = status.quests || [];
     const scouts = status.scouts || [];
-    document.getElementById("quest-count").textContent = quests.length + " quest" + (quests.length !== 1 ? "s" : "");
+    var activeQuests = quests.filter(function (q) { return q.status !== "completed" && q.status !== "cancelled"; });
+    var doneQuests = quests.filter(function (q) { return q.status === "completed" || q.status === "cancelled"; });
+    var questCountText = quests.length + " quest" + (quests.length !== 1 ? "s" : "");
+    if (doneQuests.length > 0) {
+      questCountText += " (" + doneQuests.length + " done)";
+    }
+    document.getElementById("quest-count").textContent = questCountText;
     document.getElementById("scout-count").textContent = scouts.length + " scout" + (scouts.length !== 1 ? "s" : "");
 
     // Quest cards — group by company
@@ -75,7 +81,7 @@
     var rendered = {};
 
     companies.forEach(function (c) {
-      var companyQuests = quests.filter(function (q) {
+      var companyQuests = activeQuests.filter(function (q) {
         return c.quests && c.quests.indexOf(q.name) !== -1;
       });
       var companyScouts = scouts.filter(function (s) {
@@ -95,8 +101,8 @@
       });
     });
 
-    // Ungrouped quests and scouts
-    var ungroupedQuests = quests.filter(function (q) { return !rendered[q.name]; });
+    // Ungrouped active quests and scouts
+    var ungroupedQuests = activeQuests.filter(function (q) { return !rendered[q.name]; });
     var ungroupedScouts = scouts.filter(function (s) { return !rendered[s.name]; });
     if (ungroupedQuests.length > 0 || ungroupedScouts.length > 0) {
       if (companies.length > 0) {
@@ -111,6 +117,34 @@
       ungroupedScouts.forEach(function (s) {
         container.appendChild(renderScoutCard(s));
       });
+    }
+
+    // Done quests section
+    if (doneQuests.length > 0) {
+      var doneSection = document.createElement("div");
+      doneSection.className = "done-section";
+
+      var doneHeader = document.createElement("div");
+      doneHeader.className = "done-section-header";
+      doneHeader.innerHTML = "<h2>Done</h2>" +
+        '<span class="done-count">' + doneQuests.length + " quest" + (doneQuests.length !== 1 ? "s" : "") + "</span>";
+      doneHeader.style.cursor = "pointer";
+
+      var doneCards = document.createElement("div");
+      doneCards.className = "done-cards";
+
+      doneQuests.forEach(function (q) {
+        doneCards.appendChild(renderCard(q));
+      });
+
+      doneHeader.addEventListener("click", function () {
+        doneCards.classList.toggle("collapsed");
+        doneHeader.classList.toggle("collapsed");
+      });
+
+      doneSection.appendChild(doneHeader);
+      doneSection.appendChild(doneCards);
+      container.appendChild(doneSection);
     }
 
     prevStatus = status;
@@ -149,7 +183,8 @@
 
   function renderCard(quest) {
     const card = document.createElement("div");
-    card.className = "quest-card" + (quest.gate_pending ? " pending" : "");
+    var isDone = quest.status === "completed" || quest.status === "cancelled";
+    card.className = "quest-card" + (quest.gate_pending ? " pending" : "") + (isDone ? " " + quest.status : "");
 
     const phaseIndex = PHASES.indexOf(quest.phase);
 
@@ -163,6 +198,13 @@
     var eaglesHealth = getQuestHealth(quest.worktree);
     var badgeHTML = eaglesHealth ? " " + renderHealthBadge(eaglesHealth.health) : "";
 
+    var statusBadgeHTML = "";
+    if (isDone) {
+      var statusLabel = quest.status === "completed" ? "completed" : "cancelled";
+      var statusClass = quest.status === "completed" ? "status-done" : "status-blocked";
+      statusBadgeHTML = ' <span class="status-badge ' + statusClass + '">' + escapeHTML(statusLabel) + "</span>";
+    }
+
     var errandProgressHTML = "";
     if (quest.errands_total > 0) {
       errandProgressHTML = '<div class="errand-progress">' +
@@ -171,7 +213,7 @@
     }
 
     card.innerHTML =
-      "<h3>" + escapeHTML(quest.name || quest.worktree) + badgeHTML + "</h3>" +
+      "<h3>" + escapeHTML(quest.name || quest.worktree) + badgeHTML + statusBadgeHTML + "</h3>" +
       '<div class="quest-phase">' + escapeHTML(quest.phase || "Unknown") + "</div>" +
       progressHTML +
       errandProgressHTML;

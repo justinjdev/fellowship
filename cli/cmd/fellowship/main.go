@@ -147,6 +147,7 @@ Fellowship state:
     --worktree PATH       Worktree path
     --branch BRANCH       Branch name
     --task-id ID          Task ID
+    --status STATUS       Quest status (active, completed, cancelled)
   state show              Show fellowship state as JSON
     --dir PATH            Git repo root (default: auto-detect)
 
@@ -1147,10 +1148,16 @@ func runStateUpdateQuest(args []string) int {
 	worktree := fs.String("worktree", "", "Worktree path")
 	branch := fs.String("branch", "", "Branch name")
 	taskID := fs.String("task-id", "", "Task ID")
+	statusFlag := fs.String("status", "", "Quest status (active, completed, cancelled)")
 	fs.Parse(args)
 
 	if *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship state update-quest --name <name> [--worktree PATH] [--branch BRANCH] [--task-id ID] [--dir PATH]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship state update-quest --name <name> [--worktree PATH] [--branch BRANCH] [--task-id ID] [--status STATUS] [--dir PATH]")
+		return 1
+	}
+
+	if *statusFlag != "" && *statusFlag != "active" && *statusFlag != "completed" && *statusFlag != "cancelled" {
+		fmt.Fprintf(os.Stderr, "fellowship: invalid status %q (must be active, completed, or cancelled)\n", *statusFlag)
 		return 1
 	}
 
@@ -1167,6 +1174,9 @@ func runStateUpdateQuest(args []string) int {
 				}
 				if *taskID != "" {
 					s.Quests[i].TaskID = *taskID
+				}
+				if *statusFlag != "" {
+					s.Quests[i].Status = *statusFlag
 				}
 				return nil
 			}
