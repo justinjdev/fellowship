@@ -51,7 +51,11 @@ Built-in names to check against: `help`, `clear`, `config`, `status`, `login`, `
 ✗ plugin/skills/config/SKILL.md — "config" collides with Claude Code built-in
 ```
 
-## Step 5: Report
+## Step 5: Validate Docs
+
+Invoke the `validate-docs` skill using the Skill tool. Include its output in the final report below.
+
+## Step 6: Report
 
 Summarize results:
 
