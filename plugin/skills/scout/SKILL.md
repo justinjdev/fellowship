@@ -97,6 +97,8 @@ Goal: Send findings to the requester in a structured format.
 **Fellowship teammate:** Send via `SendMessage` to the lead (Gandalf).
 **Standalone:** Present findings directly to the user.
 
+**Write findings file:** In both modes, write the full report to `.fellowship/scout-findings-{scout_name}.md` (using the configured `dataDir` if overridden). This file enables scout-to-quest promotion — without it, findings can't be promoted into a quest. The `{scout_name}` comes from the scout's name (e.g., `scout-auth-analysis`). Do NOT commit this file.
+
 **Report format:**
 
 ```
