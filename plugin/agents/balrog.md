@@ -95,11 +95,13 @@ When your analysis is complete, send your findings to the quest runner via `Send
 ```json
 {
   "type": "message",
-  "recipient": "quest-runner",
+  "recipient": "<requester_task_id>",
   "content": "## Balrog Report\n\n[findings here]\n\n### Summary\nCritical: N | High: N | Medium: N | Low: N\n\n### Verdict\n[BLOCKED: address Critical/High before Review] or [CLEAR: proceed to Review]",
   "summary": "balrog: [N critical, N high, N medium, N low findings]"
 }
 ```
+
+Use the **Requester task ID** from your spawn context as the `recipient` value. If no requester task ID was provided (standalone mode), present findings directly to the user instead of using SendMessage.
 
 If there are no findings, send a clear verdict — zero findings is a valid result.
 

@@ -65,7 +65,7 @@ When running as a fellowship teammate (indicated by the spawn prompt), the gate 
 2. Update task metadata: `TaskUpdate(taskId: "<your_task_id>", metadata: {"phase": "<current_phase>"})` (hooks verify this)
 3. Send `[GATE]` message to the lead via SendMessage
 
-Both steps 1 and 2 must complete before step 3 — the hooks will block gate submission otherwise. Valid phase names: Onboard, Research, Plan, Implement, Review, Complete.
+Both steps 1 and 2 must complete before step 3 — the hooks will block gate submission otherwise. Valid phase names: Onboard, Research, Plan, Implement, Adversarial, Review, Complete.
 
 ### Gate State Machine
 
