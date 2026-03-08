@@ -9,8 +9,18 @@ BINARY="$INSTALL_DIR/fellowship"
 REPO="justinjdev/fellowship"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PLUGIN_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 VERSION=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$PLUGIN_ROOT/.claude-plugin/plugin.json" | head -1 | grep -o '"[^"]*"$' | tr -d '"')
+
+if [ -z "$VERSION" ]; then
+  echo "fellowship: could not determine version from plugin.json" >&2
+  exit 2
+fi
+
+VERSION_FILE="$INSTALL_DIR/.version"
+if [ -x "$BINARY" ] && [ -f "$VERSION_FILE" ] && [ "$(cat "$VERSION_FILE")" = "$VERSION" ]; then
+  exit 0
+fi
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
@@ -19,16 +29,6 @@ case "$ARCH" in
   aarch64|arm64) ARCH="arm64" ;;
   *) echo "fellowship: unsupported architecture $ARCH" >&2; exit 2 ;;
 esac
-
-VERSION_FILE="$INSTALL_DIR/.version"
-if [ -x "$BINARY" ] && [ -f "$VERSION_FILE" ] && [ "$(cat "$VERSION_FILE")" = "$VERSION" ]; then
-  exit 0
-fi
-
-if [ -z "$VERSION" ]; then
-  echo "fellowship: could not determine version from plugin.json" >&2
-  exit 2
-fi
 
 TARBALL="fellowship_${VERSION}_${OS}_${ARCH}.tar.gz"
 URL="https://github.com/$REPO/releases/download/v${VERSION}/${TARBALL}"
