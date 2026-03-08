@@ -151,7 +151,8 @@ CONVENTIONS:
 
 BOUNDARIES:
 - Stay in YOUR worktree. Do NOT read, write, or navigate into other
-  teammates' worktrees.
+  teammates' worktrees. Exception: you may read {plan_path} once during
+  Onboard to copy it into your worktree.
 - Do NOT use MCP tools or external service integrations without lead approval.
 - Do NOT push branches, create PRs, or take any action visible to
   others without lead approval (except at Phase 5 as instructed above).

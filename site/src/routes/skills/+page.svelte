@@ -5,7 +5,7 @@
 		{
 			name: '/quest',
 			summary: 'Full Research \u2192 Plan \u2192 Implement lifecycle for non-trivial tasks.',
-			details: 'The hub skill that orchestrates everything. Takes a task description, creates an isolated worktree, and walks through six phases: Onboard, Research, Plan, Implement, Review, Complete. Each phase has a hard gate requiring approval before proceeding. Uses /council for context, /gather-lore for conventions, /lembas for context compression between phases, and /warden for pre-PR review. Supports plan-driven mode: provide a pre-existing plan file and the quest skips Research and Plan, jumping straight to Implement.'
+			details: 'The hub skill that orchestrates everything. Takes a task description, creates an isolated worktree, and walks through six phases: Onboard, Research, Plan, Implement, Review, Complete. In standard mode, each phase has a hard gate requiring approval before proceeding. Uses /council for context, /gather-lore for conventions, /lembas for context compression between phases, and /warden for pre-PR review. Supports plan-driven mode: provide a pre-existing plan file and the quest skips Research and Plan, jumping straight to Implement.'
 		},
 		{
 			name: '/fellowship',

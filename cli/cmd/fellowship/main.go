@@ -542,6 +542,23 @@ func runInit() int {
 	questName := fs.String("quest", "", "Quest name for tome recording")
 	fs.Parse(os.Args[2:])
 
+	validPhases := map[string]bool{
+		"Onboard": true, "Research": true, "Plan": true,
+		"Implement": true, "Review": true, "Complete": true,
+	}
+	if *phase != "" && !validPhases[*phase] {
+		fmt.Fprintf(os.Stderr, "fellowship: invalid phase %q\n", *phase)
+		return 1
+	}
+
+	if *planSkip && *phase == "" {
+		*phase = "Implement"
+	}
+	if *planSkip && *phase != "Implement" {
+		fmt.Fprintln(os.Stderr, "fellowship: --plan-skip requires --phase Implement")
+		return 1
+	}
+
 	root := gitRootOrCwd()
 	dir := filepath.Join(root, datadir.Name())
 	os.MkdirAll(dir, 0755)
@@ -557,6 +574,8 @@ func runInit() int {
 		s.GateID = nil
 		if *phase != "" {
 			s.Phase = *phase
+			s.LembasCompleted = false
+			s.MetadataUpdated = false
 		}
 		if err := state.Save(path, s); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -587,7 +606,10 @@ func runInit() int {
 			c.QuestName = *questName
 		}
 		tome.RecordSkippedPhases(c, []string{"Onboard", "Research", "Plan"}, "pre-existing plan")
-		tome.Save(tomePath, c)
+		if err := tome.Save(tomePath, c); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+			return 1
+		}
 		fmt.Println("Recorded Onboard/Research/Plan as skipped (pre-existing plan).")
 	}
 
