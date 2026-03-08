@@ -4,8 +4,6 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BINARY="$HOME/.claude/fellowship/bin/fellowship"
 
-if [ ! -x "$BINARY" ]; then
-  "$SCRIPT_DIR/ensure-binary.sh" || exit $?
-fi
+"$SCRIPT_DIR/ensure-binary.sh" || exit $?
 
 exec "$BINARY" "$@"
