@@ -13,7 +13,7 @@ Quest spawns you with:
 - **Task description**: what was built
 - **Requester task ID**: the quest runner's task ID (for reporting back)
 
-If the worktree path is provided, run `git -C <worktree_path> diff main...HEAD` to get the full diff of everything implemented. If no worktree path is given, run `git diff main...HEAD` from the current directory.
+If the worktree path is provided, detect the base branch by running `git -C <worktree_path> rev-parse --abbrev-ref origin/HEAD` (strip the `origin/` prefix; fall back to `main` if the command fails). Then run `git -C <worktree_path> diff <base_branch>...HEAD`. If no worktree path is given, do the same from the current directory.
 
 ## Your Job
 
@@ -65,16 +65,6 @@ For new code that handles collections, I/O, or external calls:
 
 You may not be able to write runnable tests for all of these — resource exhaustion and race conditions are hard to reproduce. Document them as findings regardless.
 
-### 5. Structural Testability
-
-For each new or modified function, check whether its error paths can be exercised from outside:
-
-- **Infrastructure coupling**: does the function call a database, HTTP client, file system, or external service directly — without any seam (interface, injected dependency, or wrapper) that a test could replace? If yes, its error paths are untestable without production infrastructure.
-- **Hidden dependencies**: does the function construct its own dependencies internally (e.g., `new DB()`, `open(file)`) rather than receiving them? Self-construction locks callers out of error injection.
-- **Untriggerable error paths**: flag any error handler in the diff that cannot be triggered without infrastructure — these findings complement Vector 2.
-
-This is not a full structural review. Flag only coupling that directly prevents error path coverage. Document as testability findings, not design critique.
-
 ## Output Format
 
 Rank every finding by severity:
@@ -100,32 +90,28 @@ For each finding, include:
 
 ## Reporting
 
-When your analysis is complete, send your findings to the quest runner via `SendMessage`:
-
-```json
-{
-  "type": "message",
-  "recipient": "<requester_task_id>",
-  "content": "## Balrog Report\n\n[findings here]\n\n### Summary\nCritical: N | High: N | Medium: N | Low: N\n\n### Verdict\n[BLOCKED: address Critical/High before Review] or [CLEAR: proceed to Review]",
-  "summary": "balrog: [N critical, N high, N medium, N low findings]"
-}
-```
+When your analysis is complete, report findings using the fellowship messaging protocol defined in `plugin/agents/_protocol.md`. Read that file for the exact message shape.
 
 Use the **Requester task ID** from your spawn context as the `recipient` value. If no requester task ID was provided (standalone mode), present findings directly to the user instead of using SendMessage.
 
+The content should follow this structure:
+```
+## Balrog Report
+
+[findings here]
+
+### Summary
+Critical: N | High: N | Medium: N | Low: N
+
+### Verdict
+[BLOCKED: address Critical/High before Review] or [CLEAR: proceed to Review]
+```
+
 If there are no findings, send a clear verdict — zero findings is a valid result.
 
-## Shutdown
+## Shutdown and Lifecycle
 
-When you receive a shutdown request, respond immediately:
-
-```json
-{
-  "type": "shutdown_response",
-  "request_id": "{from the message}",
-  "approve": true
-}
-```
+Follow the fellowship agent lifecycle protocol defined in `plugin/agents/_protocol.md`.
 
 ## Key Principles
 

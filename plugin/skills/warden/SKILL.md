@@ -65,6 +65,10 @@ Compare your code against reference files across every dimension:
 - [ ] Nothing added that reference files conspicuously avoid
 - [ ] No "improvements" that deviate from established patterns
 
+**Testability Seams**
+- [ ] New functions that call infrastructure (DB, HTTP, filesystem, external services) receive dependencies via injection or an interface — not constructed internally (`new DB()`, `open(file)`)
+- [ ] Error paths introduced in the diff can be triggered without production infrastructure
+
 **Hygiene**
 - [ ] No unused imports or dependencies
 - [ ] No dead code or commented-out blocks

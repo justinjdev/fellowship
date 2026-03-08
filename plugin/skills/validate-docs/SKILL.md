@@ -5,6 +5,8 @@ description: Validate that site and README documentation is current. Report-only
 
 # Validate Docs
 
+> **Layout assumption:** This skill expects the standard fellowship layout — site at `site/src/routes/`, plugin at `plugin/`. If your project uses a different structure, the path checks below will not match.
+
 ## Overview
 
 Checks that documentation is current against the codebase: the site changelog, README changelog, skills/commands page, and agents page. Collects all findings across Steps 1–4, then emits a single structured report in Step 5. Does not modify any files — report-only.
