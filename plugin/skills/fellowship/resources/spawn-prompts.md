@@ -176,7 +176,6 @@ Same substitutions as the standard quest spawn prompt, plus:
 | Placeholder | Source |
 |---|---|
 | `{plan_path}` | Absolute path to the plan file in the main repo |
-| `{issue_context}` | Output from `/missive` if the task references GitHub issues. Empty string if no issues. |
 
 ## Promoted Quest Spawn Prompt
 

@@ -77,7 +77,7 @@ For each successfully fetched issue, produce a structured block:
 #### Branch Suggestion
 
 Resolve the branch name:
-1. If `branch.pattern` is configured: substitute placeholders per the quest skill's rules, but override `{slug}` with a slug derived from the issue title (not the task description). The `{ticket}` placeholder retains its existing semantics (matches `branch.ticketPattern` against the task description — typically Jira-style IDs). If `{author}` is in the pattern but `branch.author` is not set, replace with empty string and collapse any resulting double-separator (e.g., `//` → `/`, `--` → `-`).
+1. If `branch.pattern` is configured: substitute placeholders per the quest skill's rules, but override `{slug}` with a slug derived from the issue title (not the task description). The `{ticket}` placeholder matches `branch.ticketPattern` against the issue title — if no match, replace with empty string. If `{author}` is in the pattern but `branch.author` is not set, replace with empty string. After all substitutions, collapse any resulting double-separators (e.g., `//` → `/`, `--` → `-`).
 2. If no pattern configured (default): use `fellowship/<number>-<slugified-title>` — incorporating the issue number for traceability (e.g., `fellowship/42-fix-auth-bug`).
 
 Slug generation: lowercase the issue title, replace spaces with hyphens, strip non-alphanumeric characters (except hyphens), collapse consecutive hyphens, max 50 characters.
