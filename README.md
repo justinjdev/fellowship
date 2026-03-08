@@ -171,6 +171,20 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 
 ## Changelog
 
+### v1.8.0
+
+- **Scout-to-quest promotion** — Say `promote scout-X to a quest` during a fellowship. Gandalf reads the scout's findings file, spawns a quest pre-loaded with the research, and the quest enters validation mode instead of researching from scratch.
+- **`/retro` skill** — Post-fellowship retrospective. Analyzes gate history, palantir alerts, and quest metrics. Recommends configuration changes like auto-approving gates with zero rejection rates. Integrated into the fellowship disband flow.
+- **Plan-driven quests** — Provide a pre-existing plan file and quests skip Research and Plan phases, jumping straight to Implement. Gandalf can fan out large plans into multiple parallel quests.
+- **Structured conflict resolution** — Hold mechanism for quests with file conflicts. Gandalf detects overlapping file sets and holds conflicting quests until dependencies complete.
+- **Herald logging** — Dashboard gate handlers and company batch approve now emit herald events for observability.
+- **Palantir alert persistence** — Alerts persisted to JSONL log for post-fellowship analysis by `/retro`.
+- **`/release` command** — Repo-level release automation. Suggests version based on conventional commits, audits docs/site/changelog, bumps plugin.json, tags, pushes, and updates marketplace.
+
+### v1.7.5
+
+- **Fix** — Hook binary distribution fixes (v1.7.1–v1.7.5). Use binary directly in hooks, bootstrap via SessionStart, remove duplicate hook installation.
+
 ### v1.7.0
 
 - **Eagles** — quest health monitoring daemon. Detects stuck quests, scope drift, and file conflicts via periodic patrol scans.

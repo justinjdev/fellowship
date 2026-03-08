@@ -61,6 +61,21 @@
 			name: '/settings',
 			summary: 'View or edit fellowship settings.',
 			details: 'Interactive setup for all configuration options in ~/.claude/fellowship.json. View current settings, edit individual values, or reset to defaults.'
+		},
+		{
+			name: '/scribe',
+			summary: 'Create reusable quest templates from codebase conventions.',
+			details: 'Analyzes your project to create quest templates that encode project-specific knowledge — conventions Claude wouldn\u2019t know, domain rules that aren\u2019t in code, team workflows that matter. Templates provide phase-specific guidance loaded automatically by /lorebook during quests. Stored in .claude/fellowship-templates/ (project) or ~/.claude/fellowship-templates/ (personal).'
+		},
+		{
+			name: '/guide',
+			summary: 'Interactive guide to how fellowship works.',
+			details: 'Presents an overview of fellowship concepts — quests, gates, Gandalf, worktrees, lembas, scouts — then enters Q&A mode. Use when you\u2019re new to fellowship or need a refresher on how things fit together.'
+		},
+		{
+			name: '/rekindle',
+			summary: 'Recover a fellowship after a session crash.',
+			details: 'Scans worktrees and state files to reconstruct fellowship state from on-disk artifacts. Presents a recovery dashboard showing which quests are resumable (have checkpoints), stale (no checkpoint), or already complete (branch merged). On confirmation, re-spawns Gandalf and quest runners with recovered context.'
 		}
 	];
 </script>

@@ -10,9 +10,9 @@
 <div class="container page">
 	<h1>Changelog</h1>
 
-	<!-- unreleased -->
-	<section class="version" id="unreleased">
-		<h2 class="version-heading"><a href="{base}/changelog#unreleased">Unreleased</a></h2>
+	<!-- v1.8.0 -->
+	<section class="version" id="v1-8-0">
+		<h2 class="version-heading"><a href="{base}/changelog#v1-8-0">v1.8.0</a></h2>
 		<ul class="changes">
 			<li>
 				<strong>Scout-to-quest promotion</strong> — Say <code>promote scout-X to a quest</code> during a fellowship. Gandalf reads the scout's findings file, spawns a quest pre-loaded with the research, and the quest enters validation mode (verify and supplement findings) instead of researching from scratch.
