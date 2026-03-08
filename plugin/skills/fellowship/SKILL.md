@@ -59,54 +59,41 @@ If the user asks to set up or modify their config, invoke `/settings`.
 
 ### Write Fellowship State
 
-After loading config, write `tmp/fellowship-state.json` in the main repo root:
+Initialize `tmp/fellowship-state.json` using the CLI. The fellowship name comes from the `TeamCreate` name (e.g., `"fellowship-1709734200"`). This file is the primary recovery artifact — `/rekindle` uses it to reconstruct state after a crash.
 
-```json
-{
-  "version": 1,
-  "name": "<fellowship_name>",
-  "created_at": "<ISO 8601 timestamp>",
-  "main_repo": "<absolute path to repo root>",
-  "quests": [],
-  "scouts": [],
-  "companies": []
-}
+```bash
+fellowship state init --dir <repo_root> --name <fellowship_name>
 ```
 
-Create the `tmp/` directory if it doesn't exist. The fellowship name comes from the `TeamCreate` name (e.g., `"fellowship-1709734200"`). This file is the primary recovery artifact — `/rekindle` uses it to reconstruct state after a crash.
+**Add quest on spawn:** After spawning each quest, add it to the state file:
 
-**Update on quest/scout spawn:** After spawning each quest or scout, append to the `quests` or `scouts` array:
-
-Quest entry:
-```json
-{
-  "name": "<quest_name>",
-  "task_description": "<original task text from user>",
-  "worktree": "<worktree path from TaskGet metadata>",
-  "branch": "<resolved branch name>"
-}
+```bash
+fellowship state add-quest --dir <repo_root> --name <quest_name> --task "<original task text>" [--branch <branch_name>] [--task-id <id>]
 ```
 
-Scout entry:
-```json
-{
-  "name": "<scout_name>",
-  "question": "<original question from user>"
-}
+The worktree path is available after the quest runner reports back from Phase 0 (stored in task metadata as `worktree_path`). Update the quest entry when it becomes available:
+
+```bash
+fellowship state update-quest --dir <repo_root> --name <quest_name> [--worktree <path>] [--branch <branch>] [--task-id <id>]
 ```
 
-Company entry (when the user creates a company):
-```json
-{
-  "name": "<company_name>",
-  "quests": ["<quest_name_1>", "<quest_name_2>"],
-  "scouts": ["<scout_name_1>"]
-}
+**Add scout on spawn:** After spawning each scout:
+
+```bash
+fellowship state add-scout --dir <repo_root> --name <scout_name> --question "<research question>" [--task-id <id>]
 ```
 
-When the user creates a company (e.g., `"company: API work — quest: add endpoint, quest: add tests, scout: review API docs"`), Gandalf records the company in `fellowship-state.json` and spawns the quests and scouts as normal. The company entry references quest and scout names for grouping.
+**Companies:** When the user creates a company (e.g., `"company: API work — quest: add endpoint, quest: add tests, scout: review API docs"`), Gandalf records the company and spawns the quests and scouts as normal:
 
-Read the file, append to the array, write it back. The worktree path for quests is available after the quest runner reports back from Phase 0 (stored in task metadata as `worktree_path`). Update the quest entry with the worktree path when it becomes available.
+```bash
+fellowship state add-company --dir <repo_root> --name <company_name> --quests quest-1,quest-2 --scouts scout-1
+```
+
+**Show state:** To inspect the current fellowship state:
+
+```bash
+fellowship state show --dir <repo_root>
+```
 
 ### Discover Templates
 

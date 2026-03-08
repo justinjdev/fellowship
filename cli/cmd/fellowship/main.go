@@ -66,6 +66,12 @@ func main() {
 		os.Exit(runEagles(os.Args[2:]))
 	case "errand":
 		os.Exit(runErrand(os.Args[2:]))
+	case "state":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: fellowship state <init|add-quest|add-scout|add-company|update-quest|show>")
+			os.Exit(1)
+		}
+		os.Exit(runState(os.Args[2:]))
 	case "herald":
 		os.Exit(runHerald(os.Args[2:]))
 	case "dashboard":
@@ -111,6 +117,36 @@ Company commands:
   company show <name>     Show detailed company status (phases, progress)
     --dir PATH            Git repo root (default: auto-detect)
   company approve <name>  Batch-approve all pending gates in a company
+    --dir PATH            Git repo root (default: auto-detect)
+
+Fellowship state:
+  state init              Create tmp/fellowship-state.json
+    --dir PATH            Git repo root (default: auto-detect)
+    --name NAME           Fellowship name (required)
+  state add-quest         Add a quest entry to fellowship state
+    --dir PATH            Git repo root (default: auto-detect)
+    --name NAME           Quest name (required)
+    --task "DESC"         Task description (required)
+    --branch BRANCH       Branch name
+    --worktree PATH       Worktree path
+    --task-id ID          Task ID
+  state add-scout         Add a scout entry to fellowship state
+    --dir PATH            Git repo root (default: auto-detect)
+    --name NAME           Scout name (required)
+    --question "Q"        Research question (required)
+    --task-id ID          Task ID
+  state add-company       Add a company entry to fellowship state
+    --dir PATH            Git repo root (default: auto-detect)
+    --name NAME           Company name (required)
+    --quests q1,q2        Comma-separated quest names
+    --scouts s1,s2        Comma-separated scout names
+  state update-quest      Update an existing quest entry
+    --dir PATH            Git repo root (default: auto-detect)
+    --name NAME           Quest name (required)
+    --worktree PATH       Worktree path
+    --branch BRANCH       Branch name
+    --task-id ID          Task ID
+  state show              Show fellowship state as JSON
     --dir PATH            Git repo root (default: auto-detect)
 
 Errands (persistent work items):
@@ -923,6 +959,249 @@ func runErrandShow(args []string) int {
 	data, _ := json.MarshalIndent(h, "", "  ")
 	fmt.Println(string(data))
 	return 0
+}
+
+func runState(args []string) int {
+	switch args[0] {
+	case "init":
+		return runStateInit(args[1:])
+	case "add-quest":
+		return runStateAddQuest(args[1:])
+	case "add-scout":
+		return runStateAddScout(args[1:])
+	case "update-quest":
+		return runStateUpdateQuest(args[1:])
+	case "add-company":
+		return runStateAddCompany(args[1:])
+	case "show":
+		return runStateShow(args[1:])
+	default:
+		fmt.Fprintf(os.Stderr, "unknown state command: %s\n", args[0])
+		return 1
+	}
+}
+
+func runStateInit(args []string) int {
+	fs := flag.NewFlagSet("state init", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	name := fs.String("name", "", "Fellowship name (required)")
+	fs.Parse(args)
+
+	if *name == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship state init --name <name> [--dir PATH]")
+		return 1
+	}
+
+	root := *dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+
+	tmpDir := filepath.Join(root, "tmp")
+	os.MkdirAll(tmpDir, 0755)
+	statePath := filepath.Join(tmpDir, "fellowship-state.json")
+
+	if _, err := os.Stat(statePath); err == nil {
+		fmt.Fprintln(os.Stderr, "fellowship: fellowship-state.json already exists")
+		return 1
+	}
+
+	s := &dashboard.FellowshipState{
+		Version:   1,
+		Name:      *name,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		MainRepo:  root,
+		Quests:    []dashboard.QuestEntry{},
+		Scouts:    []dashboard.ScoutEntry{},
+		Companies: []dashboard.CompanyEntry{},
+	}
+	if err := dashboard.SaveFellowshipState(statePath, s); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Fellowship state created at %s\n", statePath)
+	return 0
+}
+
+func runStateAddQuest(args []string) int {
+	fs := flag.NewFlagSet("state add-quest", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	name := fs.String("name", "", "Quest name (required)")
+	task := fs.String("task", "", "Task description (required)")
+	branch := fs.String("branch", "", "Branch name")
+	worktree := fs.String("worktree", "", "Worktree path")
+	taskID := fs.String("task-id", "", "Task ID")
+	fs.Parse(args)
+
+	if *name == "" || *task == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship state add-quest --name <name> --task \"<desc>\" [--dir PATH] [--branch BRANCH] [--worktree PATH] [--task-id ID]")
+		return 1
+	}
+
+	statePath := fellowshipStatePath(*dir)
+	questName := *name
+	if err := dashboard.WithStateLock(statePath, func(s *dashboard.FellowshipState) error {
+		for _, q := range s.Quests {
+			if q.Name == questName {
+				return fmt.Errorf("quest %q already exists", questName)
+			}
+		}
+		s.Quests = append(s.Quests, dashboard.QuestEntry{
+			Name:            *name,
+			TaskDescription: *task,
+			Worktree:        *worktree,
+			Branch:          *branch,
+			TaskID:          *taskID,
+		})
+		return nil
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Added quest %q\n", *name)
+	return 0
+}
+
+func runStateAddScout(args []string) int {
+	fs := flag.NewFlagSet("state add-scout", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	name := fs.String("name", "", "Scout name (required)")
+	question := fs.String("question", "", "Research question (required)")
+	taskID := fs.String("task-id", "", "Task ID")
+	fs.Parse(args)
+
+	if *name == "" || *question == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship state add-scout --name <name> --question \"<question>\" [--dir PATH] [--task-id ID]")
+		return 1
+	}
+
+	statePath := fellowshipStatePath(*dir)
+	scoutName := *name
+	if err := dashboard.WithStateLock(statePath, func(s *dashboard.FellowshipState) error {
+		for _, sc := range s.Scouts {
+			if sc.Name == scoutName {
+				return fmt.Errorf("scout %q already exists", scoutName)
+			}
+		}
+		s.Scouts = append(s.Scouts, dashboard.ScoutEntry{
+			Name:     *name,
+			Question: *question,
+			TaskID:   *taskID,
+		})
+		return nil
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Added scout %q\n", *name)
+	return 0
+}
+
+func runStateAddCompany(args []string) int {
+	fs := flag.NewFlagSet("state add-company", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	name := fs.String("name", "", "Company name (required)")
+	quests := fs.String("quests", "", "Comma-separated quest names")
+	scouts := fs.String("scouts", "", "Comma-separated scout names")
+	fs.Parse(args)
+
+	if *name == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship state add-company --name <name> [--quests q1,q2] [--scouts s1,s2] [--dir PATH]")
+		return 1
+	}
+
+	statePath := fellowshipStatePath(*dir)
+	companyName := *name
+	if err := dashboard.WithStateLock(statePath, func(s *dashboard.FellowshipState) error {
+		for _, c := range s.Companies {
+			if c.Name == companyName {
+				return fmt.Errorf("company %q already exists", companyName)
+			}
+		}
+		entry := dashboard.CompanyEntry{Name: *name}
+		if *quests != "" {
+			entry.Quests = strings.Split(*quests, ",")
+		} else {
+			entry.Quests = []string{}
+		}
+		if *scouts != "" {
+			entry.Scouts = strings.Split(*scouts, ",")
+		} else {
+			entry.Scouts = []string{}
+		}
+		s.Companies = append(s.Companies, entry)
+		return nil
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Added company %q\n", *name)
+	return 0
+}
+
+func runStateUpdateQuest(args []string) int {
+	fs := flag.NewFlagSet("state update-quest", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	name := fs.String("name", "", "Quest name (required)")
+	worktree := fs.String("worktree", "", "Worktree path")
+	branch := fs.String("branch", "", "Branch name")
+	taskID := fs.String("task-id", "", "Task ID")
+	fs.Parse(args)
+
+	if *name == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship state update-quest --name <name> [--worktree PATH] [--branch BRANCH] [--task-id ID] [--dir PATH]")
+		return 1
+	}
+
+	statePath := fellowshipStatePath(*dir)
+	questName := *name
+	if err := dashboard.WithStateLock(statePath, func(s *dashboard.FellowshipState) error {
+		for i := range s.Quests {
+			if s.Quests[i].Name == questName {
+				if *worktree != "" {
+					s.Quests[i].Worktree = *worktree
+				}
+				if *branch != "" {
+					s.Quests[i].Branch = *branch
+				}
+				if *taskID != "" {
+					s.Quests[i].TaskID = *taskID
+				}
+				return nil
+			}
+		}
+		return fmt.Errorf("quest %q not found", questName)
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Updated quest %q\n", *name)
+	return 0
+}
+
+func runStateShow(args []string) int {
+	fs := flag.NewFlagSet("state show", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	fs.Parse(args)
+
+	statePath := fellowshipStatePath(*dir)
+	s, err := dashboard.LoadFellowshipState(statePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	data, _ := json.MarshalIndent(s, "", "  ")
+	fmt.Println(string(data))
+	return 0
+}
+
+func fellowshipStatePath(dir string) string {
+	root := dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+	return filepath.Join(root, "tmp", "fellowship-state.json")
 }
 
 func loadErrandFile(dir string) (*errand.QuestErrandList, string, error) {

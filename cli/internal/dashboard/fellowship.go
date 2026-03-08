@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -163,6 +164,60 @@ func LoadErrandProgress(worktree string) (done, total int) {
 		return 0, 0
 	}
 	return errand.Progress(h)
+}
+
+// WithStateLock acquires an exclusive file lock, loads the state, calls fn to
+// mutate it, and saves the result. The entire load→mutate→save is atomic with
+// respect to other processes using the same lock.
+func WithStateLock(path string, fn func(s *FellowshipState) error) error {
+	lockPath := path + ".lock"
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return fmt.Errorf("opening lock file: %w", err)
+	}
+	defer lockFile.Close()
+
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX); err != nil {
+		return fmt.Errorf("acquiring lock: %w", err)
+	}
+	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+
+	s, err := LoadFellowshipState(path)
+	if err != nil {
+		return err
+	}
+
+	if err := fn(s); err != nil {
+		return err
+	}
+
+	return SaveFellowshipState(path, s)
+}
+
+func SaveFellowshipState(path string, s *FellowshipState) error {
+	if s.Quests == nil {
+		s.Quests = []QuestEntry{}
+	}
+	if s.Scouts == nil {
+		s.Scouts = []ScoutEntry{}
+	}
+	if s.Companies == nil {
+		s.Companies = []CompanyEntry{}
+	}
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling fellowship state: %w", err)
+	}
+	data = append(data, '\n')
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		return fmt.Errorf("writing temp file: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("renaming temp file: %w", err)
+	}
+	return nil
 }
 
 func LoadFellowshipState(path string) (*FellowshipState, error) {

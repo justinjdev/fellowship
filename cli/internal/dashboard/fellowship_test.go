@@ -183,6 +183,99 @@ func TestDiscoverQuests_SkipsMissingWorktree(t *testing.T) {
 	}
 }
 
+func TestSaveFellowshipState_RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fellowship-state.json")
+
+	original := &FellowshipState{
+		Version:   1,
+		Name:      "test-fellowship",
+		CreatedAt: "2025-01-15T10:30:00Z",
+		MainRepo:  "/path/to/repo",
+		Quests: []QuestEntry{
+			{Name: "quest-1", TaskDescription: "do stuff", Worktree: "/tmp/wt", Branch: "fellowship/quest-1", TaskID: "t1"},
+		},
+		Scouts: []ScoutEntry{
+			{Name: "scout-1", Question: "how does X work?", TaskID: "t2"},
+		},
+		Companies: []CompanyEntry{
+			{Name: "company-1", Quests: []string{"quest-1"}, Scouts: []string{"scout-1"}},
+		},
+	}
+
+	if err := SaveFellowshipState(path, original); err != nil {
+		t.Fatalf("SaveFellowshipState() error: %v", err)
+	}
+
+	loaded, err := LoadFellowshipState(path)
+	if err != nil {
+		t.Fatalf("LoadFellowshipState() error: %v", err)
+	}
+
+	if loaded.Name != original.Name {
+		t.Errorf("Name = %q, want %q", loaded.Name, original.Name)
+	}
+	if loaded.Version != original.Version {
+		t.Errorf("Version = %d, want %d", loaded.Version, original.Version)
+	}
+	if loaded.MainRepo != original.MainRepo {
+		t.Errorf("MainRepo = %q, want %q", loaded.MainRepo, original.MainRepo)
+	}
+	if len(loaded.Quests) != 1 {
+		t.Fatalf("len(Quests) = %d, want 1", len(loaded.Quests))
+	}
+	if loaded.Quests[0].TaskDescription != "do stuff" {
+		t.Errorf("Quests[0].TaskDescription = %q, want %q", loaded.Quests[0].TaskDescription, "do stuff")
+	}
+	if loaded.Quests[0].Branch != "fellowship/quest-1" {
+		t.Errorf("Quests[0].Branch = %q, want %q", loaded.Quests[0].Branch, "fellowship/quest-1")
+	}
+	if len(loaded.Scouts) != 1 {
+		t.Fatalf("len(Scouts) = %d, want 1", len(loaded.Scouts))
+	}
+	if loaded.Scouts[0].Question != "how does X work?" {
+		t.Errorf("Scouts[0].Question = %q, want %q", loaded.Scouts[0].Question, "how does X work?")
+	}
+	if len(loaded.Companies) != 1 {
+		t.Fatalf("len(Companies) = %d, want 1", len(loaded.Companies))
+	}
+	if loaded.Companies[0].Name != "company-1" {
+		t.Errorf("Companies[0].Name = %q, want %q", loaded.Companies[0].Name, "company-1")
+	}
+}
+
+func TestSaveFellowshipState_NilSlices(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fellowship-state.json")
+
+	s := &FellowshipState{
+		Version:   1,
+		Name:      "test",
+		CreatedAt: "2025-01-15T10:30:00Z",
+		MainRepo:  "/repo",
+	}
+
+	if err := SaveFellowshipState(path, s); err != nil {
+		t.Fatalf("SaveFellowshipState() error: %v", err)
+	}
+
+	loaded, err := LoadFellowshipState(path)
+	if err != nil {
+		t.Fatalf("LoadFellowshipState() error: %v", err)
+	}
+
+	// Nil slices should be saved as empty arrays, not null
+	if loaded.Quests == nil {
+		t.Error("Quests should be non-nil (empty slice)")
+	}
+	if loaded.Scouts == nil {
+		t.Error("Scouts should be non-nil (empty slice)")
+	}
+	if loaded.Companies == nil {
+		t.Error("Companies should be non-nil (empty slice)")
+	}
+}
+
 func TestLoadFellowshipState_Missing(t *testing.T) {
 	_, err := LoadFellowshipState("/nonexistent/path/fellowship-state.json")
 	if err == nil {
