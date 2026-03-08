@@ -36,7 +36,13 @@ digraph gandalf {
     "Quest stuck?" -> "Report error, offer respawn" [label="yes"];
     "Quest stuck?" -> "No action (idle is normal)" [label="no"];
     "From user?" -> "quest: {desc}?" [label="yes"];
-    "quest: {desc}?" -> "Spawn teammate in worktree" [label="yes"];
+    "Contains #N?" [shape=diamond];
+    "Invoke /missive, enrich context" [shape=box];
+
+    "quest: {desc}?" -> "Contains #N?" [label="yes"];
+    "Contains #N?" -> "Invoke /missive, enrich context" [label="yes"];
+    "Invoke /missive, enrich context" -> "Spawn teammate in worktree";
+    "Contains #N?" -> "Spawn teammate in worktree" [label="no"];
     "quest: {desc}?" -> "scout: {question}?" [label="no"];
     "scout: {question}?" -> "Spawn scout teammate" [label="yes"];
     "promote scout?" [shape=diamond];
@@ -80,6 +86,7 @@ This is defense-in-depth — the `completion-guard` hook also mechanically block
 ## Proactive (responding to user commands)
 
 - **"quest: {desc}"** → spawn new quest teammate (see Spawn a Quest). After spawning, send a "check" message to palantir (if active) with the updated quest list.
+- **Issue references detected** (`#\d+` in quest description) → invoke `/missive` to fetch issue context before spawning. Use missive output for `{issue_context}` placeholder and branch name suggestion. Spawn one quest per issue if multiple references found.
 - **"scout: {question}"** → spawn new scout teammate (see Spawn a Scout). Scouts don't count toward palantir's quest threshold.
 - **"status"** → read task list (including metadata), present structured progress report (see [progress-tracking.md](progress-tracking.md))
 - **"approve" / "reject"** → relay to the relevant teammate
