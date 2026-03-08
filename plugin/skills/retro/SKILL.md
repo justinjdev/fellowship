@@ -19,8 +19,9 @@ Analyzes a completed fellowship's history to surface patterns and interactively 
 ### Step 1: Locate Fellowship Data
 
 1. Find the git root directory
-2. Read `fellowship-state.json` from the data directory (`.fellowship/` by default) to enumerate all quest worktrees and their metadata
-3. If no fellowship state file exists, report "No fellowship state found — nothing to analyze" and stop
+2. Read `~/.claude/fellowship.json` to check for a custom `dataDir` setting. If absent, use the default data directory (`.fellowship/`).
+3. Read `fellowship-state.json` from the resolved data directory to enumerate all quest worktrees and their metadata
+4. If no fellowship state file exists, report "No fellowship state found — nothing to analyze" and stop
 
 ### Step 2: Collect Data
 
@@ -34,9 +35,9 @@ For each quest worktree listed in `fellowship-state.json`:
 
 4. **Git metrics:** Run these Bash commands for each worktree:
    - `git -C {worktree} log --oneline | wc -l` — commit count
-   - `git -C {worktree} diff --stat HEAD~$(git -C {worktree} rev-list --count HEAD) 2>/dev/null || echo "0 files changed"` — change summary
+   - `git -C {worktree} diff --stat "$(git -C {worktree} rev-list --max-parents=0 HEAD | tail -n1)"..HEAD 2>/dev/null || echo "0 files changed"` — change summary
 
-5. **Palantir alerts:** Read `.fellowship/palantir-alerts.jsonl` from the git root if it exists. Each line is a JSON object with `timestamp`, `type` (stuck/drift/conflict/health), `quests`, and `detail`.
+5. **Palantir alerts:** Read `palantir-alerts.jsonl` from the resolved data directory at the git root if it exists. Each line is a JSON object with `timestamp`, `type` (stuck/drift/conflict/health), `quests`, and `detail`.
 
 ### Step 3: Analyze
 
