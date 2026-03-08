@@ -39,7 +39,12 @@ digraph gandalf {
     "quest: {desc}?" -> "Spawn teammate in worktree" [label="yes"];
     "quest: {desc}?" -> "scout: {question}?" [label="no"];
     "scout: {question}?" -> "Spawn scout teammate" [label="yes"];
-    "scout: {question}?" -> "approve/reject?" [label="no"];
+    "promote scout?" [shape=diamond];
+    "Copy findings, spawn promoted quest" [shape=box];
+
+    "scout: {question}?" -> "promote scout?" [label="no"];
+    "promote scout?" -> "Copy findings, spawn promoted quest" [label="yes"];
+    "promote scout?" -> "approve/reject?" [label="no"];
     "approve/reject?" -> "Relay to teammate" [label="yes"];
     "approve/reject?" -> "status?" [label="no"];
     "status?" -> "Present progress report" [label="yes"];
@@ -84,6 +89,24 @@ This is defense-in-depth — the `completion-guard` hook also mechanically block
 - **"cancel quest-N"** → send `shutdown_request` to teammate, preserve worktree
 - **"tell quest-N to ..."** → relay message to specific teammate via `SendMessage`
 - **"wrap up" / "disband"** → shutdown all teammates, synthesize summary, `TeamDelete`
+- **"promote {scout_name}" / "promote that scout to a quest"** → follow Scout-to-Quest Promotion protocol (see below)
+
+## Scout-to-Quest Promotion
+
+When the user explicitly requests promotion (e.g., "promote scout-auth findings to a quest"):
+
+1. **Identify the scout:** Match the user's reference to an active or completed scout by name
+2. **Locate findings:** The scout's findings file is at `.fellowship/scout-findings-{scout_name}.md` (using the configured `dataDir` if overridden)
+3. **Verify findings exist:** If the file doesn't exist, tell the user the scout hasn't written findings yet — cannot promote
+4. **Get task description:** Ask the user what the quest task should be (scout questions are research-oriented; quest tasks should be action-oriented). If the user already provided one, use it
+5. **Spawn promoted quest:**
+   - `TaskCreate` with the quest description
+   - Read the findings file content
+   - Spawn a teammate using the **Promoted Quest Spawn Prompt** from spawn-prompts.md, with `{scout_findings_content}` set to the full file content
+   - Add to state file via `fellowship state add-quest`
+6. **Report:** Tell the user the promotion is underway
+
+**Important:** Promotion is always explicit — Gandalf never auto-promotes. Scout findings might suggest work that doesn't warrant a quest, or should be folded into an existing quest.
 
 ## Gate Discipline
 

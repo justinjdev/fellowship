@@ -156,6 +156,25 @@ The plan file at `.fellowship/plan.md` is your implementation blueprint for Phas
 
 Goal: Understand the system well enough to plan changes. Stay objective — gather information, don't propose solutions yet.
 
+#### Validation Mode (Promoted Quests)
+
+If the spawn prompt contains a `PROMOTED FROM:` block, this is a promoted quest with pre-existing scout findings:
+
+1. **Write findings to worktree:** The spawn prompt includes `SCOUT FINDINGS CONTENT:` with the full scout findings. Write this content to `.fellowship/scout-findings-{scout_name}.md` in your worktree so it survives context compression.
+2. **Assess relevance:** Read the scout findings. Compare them against your quest task description. Are these findings about the same system, files, or problem space?
+   - **Relevant:** Findings directly inform this quest's task → proceed with validation (step 3)
+   - **Not relevant:** Findings are tangential or stale → skip to Standard Research below
+3. **Validate findings:** Spot-check key claims by reading the referenced files and line ranges. Are the findings still accurate? Flag any that are outdated or incorrect.
+4. **Supplement:** Fill implementation-specific gaps the scout didn't cover:
+   - File structure and write targets (where will changes go?)
+   - Test locations and existing test patterns
+   - Build/lint/test commands for verification
+5. **Produce output:** Amended scout findings with validation notes and supplemental research
+
+The same hard gate requirements apply — validation mode doesn't lower the bar, it changes the starting point.
+
+#### Standard Research
+
 **Actions:**
 1. If entering an unfamiliar area, invoke `/gather-lore` to extract conventions from reference files
 2. Use Explore agents (Task tool, subagent_type=Explore) to scan relevant code paths
