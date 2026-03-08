@@ -327,22 +327,25 @@ func runGate(args []string) int {
 		return 0
 
 	case "approve":
-		if !s.GatePending {
-			fmt.Fprintln(os.Stderr, "No gate pending")
-			return 1
-		}
-		nextPhase, err := state.NextPhase(s.Phase)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-			return 1
-		}
-		prevPhase := s.Phase
-		s.GatePending = false
-		s.Phase = nextPhase
-		s.GateID = nil
-		s.LembasCompleted = false
-		s.MetadataUpdated = false
-		if err := state.Save(statePath, s); err != nil {
+		var prevPhase, nextPhase, questName string
+		if err := state.WithLock(statePath, func(s *state.State) error {
+			if !s.GatePending {
+				return fmt.Errorf("no gate pending")
+			}
+			np, err := state.NextPhase(s.Phase)
+			if err != nil {
+				return err
+			}
+			prevPhase = s.Phase
+			nextPhase = np
+			questName = s.QuestName
+			s.GatePending = false
+			s.Phase = nextPhase
+			s.GateID = nil
+			s.LembasCompleted = false
+			s.MetadataUpdated = false
+			return nil
+		}); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
 		}
@@ -352,46 +355,48 @@ func runGate(args []string) int {
 		tome.RecordPhase(c, prevPhase)
 		tome.Save(tomePath, c)
 		gateDir := filepath.Dir(filepath.Dir(statePath))
-		gateQuestName := s.QuestName
-		if gateQuestName == "" {
-			gateQuestName = filepath.Base(gateDir)
+		if questName == "" {
+			questName = filepath.Base(gateDir)
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
 		herald.Announce(gateDir, herald.Tiding{
-			Timestamp: now, Quest: gateQuestName, Type: herald.GateApproved,
+			Timestamp: now, Quest: questName, Type: herald.GateApproved,
 			Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
 		})
 		herald.Announce(gateDir, herald.Tiding{
-			Timestamp: now, Quest: gateQuestName, Type: herald.PhaseTransition,
+			Timestamp: now, Quest: questName, Type: herald.PhaseTransition,
 			Phase: nextPhase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, nextPhase),
 		})
 		fmt.Printf("Gate approved. Phase advanced to %s.\n", nextPhase)
 		return 0
 
 	case "reject":
-		if !s.GatePending {
-			fmt.Fprintln(os.Stderr, "No gate pending")
-			return 1
-		}
-		s.GatePending = false
-		s.GateID = nil
-		if err := state.Save(statePath, s); err != nil {
+		var phase, questName string
+		if err := state.WithLock(statePath, func(s *state.State) error {
+			if !s.GatePending {
+				return fmt.Errorf("no gate pending")
+			}
+			s.GatePending = false
+			s.GateID = nil
+			phase = s.Phase
+			questName = s.QuestName
+			return nil
+		}); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
 		}
 		tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
 		c := tome.LoadOrCreate(tomePath)
-		tome.RecordGate(c, s.Phase, "rejected")
+		tome.RecordGate(c, phase, "rejected")
 		tome.Save(tomePath, c)
 		rejDir := filepath.Dir(filepath.Dir(statePath))
-		rejQuestName := s.QuestName
-		if rejQuestName == "" {
-			rejQuestName = filepath.Base(rejDir)
+		if questName == "" {
+			questName = filepath.Base(rejDir)
 		}
 		herald.Announce(rejDir, herald.Tiding{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			Quest: rejQuestName, Type: herald.GateRejected,
-			Phase: s.Phase, Detail: fmt.Sprintf("Gate rejected for %s", s.Phase),
+			Quest: questName, Type: herald.GateRejected,
+			Phase: phase, Detail: fmt.Sprintf("Gate rejected for %s", phase),
 		})
 		fmt.Println("Gate rejected. Teammate unblocked to address feedback.")
 		return 0
@@ -415,27 +420,23 @@ func runHold(args []string) int {
 	}
 
 	statePath := filepath.Join(*dir, datadir.Name(), "quest-state.json")
-	s, err := state.Load(statePath)
-	if err != nil {
+	var questName, phase string
+	if err := state.WithLock(statePath, func(s *state.State) error {
+		if s.Held {
+			return fmt.Errorf("quest is already held")
+		}
+		s.Held = true
+		if *reason != "" {
+			s.HeldReason = reason
+		}
+		questName = s.QuestName
+		phase = s.Phase
+		return nil
+	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
 
-	if s.Held {
-		fmt.Fprintln(os.Stderr, "Quest is already held")
-		return 1
-	}
-
-	s.Held = true
-	if *reason != "" {
-		s.HeldReason = reason
-	}
-	if err := state.Save(statePath, s); err != nil {
-		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-		return 1
-	}
-
-	questName := s.QuestName
 	if questName == "" {
 		questName = filepath.Base(*dir)
 	}
@@ -447,7 +448,7 @@ func runHold(args []string) int {
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Quest:     questName,
 		Type:      herald.QuestHeld,
-		Phase:     s.Phase,
+		Phase:     phase,
 		Detail:    detail,
 	})
 
@@ -471,25 +472,21 @@ func runUnhold(args []string) int {
 	}
 
 	statePath := filepath.Join(*dir, datadir.Name(), "quest-state.json")
-	s, err := state.Load(statePath)
-	if err != nil {
+	var questName, phase string
+	if err := state.WithLock(statePath, func(s *state.State) error {
+		if !s.Held {
+			return fmt.Errorf("quest is not held")
+		}
+		s.Held = false
+		s.HeldReason = nil
+		questName = s.QuestName
+		phase = s.Phase
+		return nil
+	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
 
-	if !s.Held {
-		fmt.Fprintln(os.Stderr, "Quest is not held")
-		return 1
-	}
-
-	s.Held = false
-	s.HeldReason = nil
-	if err := state.Save(statePath, s); err != nil {
-		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-		return 1
-	}
-
-	questName := s.QuestName
 	if questName == "" {
 		questName = filepath.Base(*dir)
 	}
@@ -497,7 +494,7 @@ func runUnhold(args []string) int {
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Quest:     questName,
 		Type:      herald.QuestUnheld,
-		Phase:     s.Phase,
+		Phase:     phase,
 		Detail:    "Quest unheld — resumed",
 	})
 

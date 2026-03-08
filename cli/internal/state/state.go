@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 )
@@ -75,6 +76,34 @@ func Save(path string, s *State) error {
 		return fmt.Errorf("renaming temp file: %w", err)
 	}
 	return nil
+}
+
+// WithLock acquires an exclusive file lock, loads the state, calls fn to
+// mutate it, and saves the result. The entire load→mutate→save is atomic with
+// respect to other processes using the same lock.
+func WithLock(path string, fn func(s *State) error) error {
+	lockPath := path + ".lock"
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return fmt.Errorf("opening lock file: %w", err)
+	}
+	defer lockFile.Close()
+
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX); err != nil {
+		return fmt.Errorf("acquiring lock: %w", err)
+	}
+	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+
+	s, err := Load(path)
+	if err != nil {
+		return err
+	}
+
+	if err := fn(s); err != nil {
+		return err
+	}
+
+	return Save(path, s)
 }
 
 func FindStateFile(fromDir string) (string, error) {

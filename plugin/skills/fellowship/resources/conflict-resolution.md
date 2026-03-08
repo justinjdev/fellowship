@@ -10,7 +10,7 @@ Hold the later quest immediately to prevent further divergence:
 fellowship hold --dir <later-quest-worktree> --reason "file conflict with <other-quest>: <file_path>"
 ```
 
-This structurally blocks the held quest's Edit/Write/Bash/Agent/Skill tools via the gate-guard hook. The quest cannot proceed until unheld.
+This structurally blocks the held quest's Edit/Write/Bash/Agent/Skill/NotebookEdit tools via the gate-guard hook. The quest cannot proceed until unheld.
 
 Notify the held quest via SendMessage explaining the hold.
 
