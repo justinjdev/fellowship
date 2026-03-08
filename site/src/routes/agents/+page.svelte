@@ -85,8 +85,39 @@
 				</div>
 			</div>
 
-			<!-- Scout -->
+			<!-- Balrog -->
 			<div class="agent-card animate-in" style="animation-delay: 200ms">
+				<div class="agent-header">
+					<div class="agent-icon balrog-icon">
+						<svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<circle cx="24" cy="24" r="18" stroke="currentColor" stroke-width="1.5" opacity="0.25" />
+							<line x1="24" y1="24" x2="6" y2="8"  stroke="currentColor" stroke-width="1.5" opacity="0.7" />
+							<line x1="24" y1="24" x2="42" y2="10" stroke="currentColor" stroke-width="1.5" opacity="0.7" />
+							<line x1="24" y1="24" x2="40" y2="40" stroke="currentColor" stroke-width="1.5" opacity="0.7" />
+							<line x1="24" y1="24" x2="8"  y2="42" stroke="currentColor" stroke-width="1.5" opacity="0.7" />
+							<line x1="24" y1="24" x2="24" y2="6"  stroke="currentColor" stroke-width="1.5" opacity="0.5" />
+							<line x1="24" y1="24" x2="42" y2="24" stroke="currentColor" stroke-width="1.5" opacity="0.5" />
+							<circle cx="24" cy="24" r="3.5" fill="currentColor" opacity="0.9" />
+						</svg>
+					</div>
+					<div>
+						<h3 class="agent-name">Balrog</h3>
+						<span class="agent-role">Adversarial Validator</span>
+					</div>
+				</div>
+				<p class="agent-desc">
+					Attacks the implementation before it reaches review. Analyzes the quest diff for
+					failure modes, writes targeted test cases using the project's existing test framework,
+					runs them, and delivers a severity-ranked findings report. Critical and High findings
+					block the Review gate until addressed.
+				</p>
+				<div class="agent-note">
+					Spawned by quest between Implement and Review. No gates, no commits — findings only.
+				</div>
+			</div>
+
+			<!-- Scout -->
+			<div class="agent-card animate-in" style="animation-delay: 300ms">
 				<div class="agent-header">
 					<div class="agent-icon scout-icon">
 						<svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">

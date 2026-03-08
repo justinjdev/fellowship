@@ -8,7 +8,7 @@
   "repository": "https://github.com/justinjdev/fellowship",
   "license": "MIT",
   "skills": ["./plugin/skills/"],
-  "agents": ["./plugin/agents/palantir.md", "./plugin/agents/quest-runner.md", "./plugin/agents/scout.md"],
+  "agents": ["./plugin/agents/balrog.md", "./plugin/agents/palantir.md", "./plugin/agents/quest-runner.md", "./plugin/agents/scout.md"],
   "commands": ["./plugin/commands/"],
   "hooks": "./plugin/hooks/hooks.json"
 }
