@@ -29,23 +29,11 @@ Enter version to release (or confirm suggested):
 
 Use `AskUserQuestion` with the suggested version as default and a free-text option.
 
-## Step 2: Audit Docs and Site
+## Step 2: Validate Docs
 
-Before bumping anything, verify all documentation is current. Check each item and report status:
+Invoke the `validate-docs` skill using the Skill tool. Review any flagged issues and ask the user whether to fix them now or proceed anyway.
 
-### Changelog (site)
-Read `site/src/routes/changelog/+page.svelte`. If there is an "Unreleased" section, it should be renamed to the new version. If there is no unreleased section and there are commits since the last changelog entry, flag it as needing an update.
-
-### Changelog (README)
-Read `README.md` and check the `## Changelog` section. If the latest entry doesn't cover the commits being released, flag it.
-
-### Skills page
-Read `site/src/routes/skills/+page.svelte`. Cross-reference against `plugin/skills/` and `plugin/commands/` directories. Flag any skills or commands that exist but aren't documented.
-
-### Agents page
-Read `site/src/routes/agents/+page.svelte`. Cross-reference against `plugin/agents/` directory. Flag any agents that exist but aren't documented.
-
-**If any flags were raised**, present them and ask the user whether to fix them now or proceed anyway. If fixing, make the updates before continuing.
+If fixing: make the updates before continuing. Renaming an "Unreleased" changelog section to the new version is handled in Step 3 below — skip that specific fix here.
 
 ## Step 3: Bump Version
 
