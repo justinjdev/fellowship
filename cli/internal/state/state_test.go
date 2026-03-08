@@ -96,7 +96,8 @@ func TestNextPhase(t *testing.T) {
 		{"Onboard", "Research", false},
 		{"Research", "Plan", false},
 		{"Plan", "Implement", false},
-		{"Implement", "Review", false},
+		{"Implement", "Adversarial", false},
+		{"Adversarial", "Review", false},
 		{"Review", "Complete", false},
 		{"Complete", "", true},
 		{"InvalidPhase", "", true},
@@ -114,7 +115,7 @@ func TestNextPhase(t *testing.T) {
 
 func TestIsEarlyPhase(t *testing.T) {
 	early := []string{"Onboard", "Research", "Plan"}
-	late := []string{"Implement", "Review", "Complete"}
+	late := []string{"Implement", "Adversarial", "Review", "Complete"}
 	for _, p := range early {
 		if !IsEarlyPhase(p) {
 			t.Errorf("IsEarlyPhase(%q) should be true", p)

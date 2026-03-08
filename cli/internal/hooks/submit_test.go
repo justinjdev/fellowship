@@ -128,7 +128,8 @@ func TestGateSubmit_AllPhaseTransitions(t *testing.T) {
 		{"Onboard", "Research"},
 		{"Research", "Plan"},
 		{"Plan", "Implement"},
-		{"Implement", "Review"},
+		{"Implement", "Adversarial"},
+		{"Adversarial", "Review"},
 		{"Review", "Complete"},
 	}
 	for _, tr := range transitions {

@@ -85,8 +85,39 @@
 				</div>
 			</div>
 
-			<!-- Scout -->
+			<!-- Balrog -->
 			<div class="agent-card animate-in" style="animation-delay: 200ms">
+				<div class="agent-header">
+					<div class="agent-icon balrog-icon">
+						<svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<circle cx="24" cy="24" r="18" stroke="currentColor" stroke-width="1.5" opacity="0.25" />
+							<line x1="24" y1="24" x2="6" y2="8"  stroke="currentColor" stroke-width="1.5" opacity="0.7" />
+							<line x1="24" y1="24" x2="42" y2="10" stroke="currentColor" stroke-width="1.5" opacity="0.7" />
+							<line x1="24" y1="24" x2="40" y2="40" stroke="currentColor" stroke-width="1.5" opacity="0.7" />
+							<line x1="24" y1="24" x2="8"  y2="42" stroke="currentColor" stroke-width="1.5" opacity="0.7" />
+							<line x1="24" y1="24" x2="24" y2="6"  stroke="currentColor" stroke-width="1.5" opacity="0.5" />
+							<line x1="24" y1="24" x2="42" y2="24" stroke="currentColor" stroke-width="1.5" opacity="0.5" />
+							<circle cx="24" cy="24" r="3.5" fill="currentColor" opacity="0.9" />
+						</svg>
+					</div>
+					<div>
+						<h3 class="agent-name">Balrog</h3>
+						<span class="agent-role">Adversarial Validator</span>
+					</div>
+				</div>
+				<p class="agent-desc">
+					Attacks the implementation before it reaches review. Analyzes the quest diff for
+					failure modes, writes targeted test cases using the project's existing test framework,
+					runs them, and delivers a severity-ranked findings report. Critical and High findings
+					block the Review gate until addressed.
+				</p>
+				<div class="agent-note">
+					Spawned by quest between Implement and Review. No gates, no commits — findings only.
+				</div>
+			</div>
+
+			<!-- Scout -->
+			<div class="agent-card animate-in" style="animation-delay: 300ms">
 				<div class="agent-header">
 					<div class="agent-icon scout-icon">
 						<svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -179,6 +210,15 @@
 					</div>
 					<span class="connector-label">spawn with task</span>
 					<span class="connector-label return-label">gate submissions, status updates</span>
+					<!-- Balrog sub-row -->
+					<div class="balrog-sub">
+						<div class="balrog-connector-line"></div>
+						<div class="diagram-node node-balrog">
+							<span class="node-label">Balrog</span>
+						</div>
+						<span class="connector-label">spawn pre-review</span>
+						<span class="connector-label return-label">findings report</span>
+					</div>
 				</div>
 				<div class="agent-column">
 					<div class="diagram-node node-scout">
@@ -514,6 +554,28 @@
 	.return-label {
 		opacity: 0.65;
 		font-style: italic;
+	}
+
+	/* Balrog sub-node (spawned by Quest Runner) */
+	.balrog-sub {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.3rem;
+		margin-top: 0.2rem;
+	}
+
+	.balrog-connector-line {
+		width: 2px;
+		height: 1.5rem;
+		background: var(--color-border);
+		opacity: 0.6;
+	}
+
+	.node-balrog {
+		border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+		border-style: dashed;
+		opacity: 0.9;
 	}
 
 	/* Responsive */

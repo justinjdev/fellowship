@@ -49,7 +49,7 @@ func TestGateGuard_AllowsDataDirWriteDuringEarlyPhase(t *testing.T) {
 }
 
 func TestGateGuard_AllowsEditDuringLatePhase(t *testing.T) {
-	for _, phase := range []string{"Implement", "Review", "Complete"} {
+	for _, phase := range []string{"Implement", "Adversarial", "Review", "Complete"} {
 		s := &state.State{Phase: phase}
 		input := &HookInput{ToolInput: ToolInput{FilePath: "/repo/src/main.ts"}}
 		result := GateGuard(s, input)

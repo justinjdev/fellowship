@@ -39,6 +39,12 @@ Phase 3: Implement ──→ TDD (test-driven-development) + execute plan
   /lembas
      │
      ▼
+Phase 3.5: Adversarial → balrog agent (edge cases, error paths, adversarial inputs)
+     │                   Goal: find failure modes before review
+     ▼
+  /lembas
+     │
+     ▼
 Phase 4: Review ─────→ /warden → /pr-review-toolkit:review-pr
      │                 → verification-before-completion
      │                 Goal: conventions + code quality + verified passing
@@ -59,7 +65,7 @@ When running as a fellowship teammate (indicated by the spawn prompt), the gate 
 2. Update task metadata: `TaskUpdate(taskId: "<your_task_id>", metadata: {"phase": "<current_phase>"})` (hooks verify this)
 3. Send `[GATE]` message to the lead via SendMessage
 
-Both steps 1 and 2 must complete before step 3 — the hooks will block gate submission otherwise. Valid phase names: Onboard, Research, Plan, Implement, Review, Complete.
+Both steps 1 and 2 must complete before step 3 — the hooks will block gate submission otherwise. Valid phase names: Onboard, Research, Plan, Implement, Adversarial, Review, Complete.
 
 ### Gate State Machine
 
@@ -248,7 +254,30 @@ Recovery procedure:
 4. **Get user approval** on the revised plan before resuming implementation.
 5. If running as a fellowship teammate, message the lead with the blocker before replanning.
 
-**Transition:** Invoke `/lembas` with phase "Implement" before moving to Review.
+**Transition:** Invoke `/lembas` with phase "Implement" before moving to Adversarial Review.
+
+### Phase 3.5: Adversarial Review
+
+Goal: Find failure modes before conventions and code quality review. Spawn balrog to attack the implementation.
+
+**Actions:**
+1. Spawn the balrog agent via the Agent tool, passing:
+   - The worktree path (from Session Context / task metadata)
+   - The task description
+   - Your task ID (so balrog can report back via SendMessage)
+2. Wait for balrog's SendMessage report. If balrog does not respond within a reasonable time (or if you receive an error from the Agent tool), proceed to Phase 4 and note in your gate message that adversarial review was skipped due to agent failure.
+3. Evaluate findings by severity:
+   - **Critical/High** — must address before Review gate opens. Fix, re-run relevant tests, then confirm fixes with balrog's reproduction steps.
+   - **Medium** — present to user for decision. Document outcome either way.
+   - **Low** — log in your response, do not block on them.
+4. If Critical/High findings were fixed, note what changed and confirm the fix is complete.
+
+**Hard gate — Adversarial Review must produce:**
+- [ ] Balrog report received (even if zero findings), or agent failure documented in gate message
+- [ ] All Critical/High findings addressed or explicitly accepted by user
+- [ ] Medium findings presented to user
+
+**Transition:** Invoke `/lembas` with phase "Adversarial" before moving to Review.
 
 ### Phase 4: Review
 

@@ -81,7 +81,7 @@
 			name: '/rekindle',
 			summary: 'Recover a fellowship after a session crash.',
 			details: 'Scans worktrees and state files to reconstruct fellowship state from on-disk artifacts. Presents a recovery dashboard showing which quests are resumable (have checkpoints), stale (no checkpoint), or already complete (branch merged). On confirmation, re-spawns Gandalf and quest runners with recovered context.'
-		}
+		},
 	];
 </script>
 
