@@ -53,18 +53,29 @@ func GateGuard(s *state.State, input *HookInput) HookResult {
 // be allowed through even when gate_pending is true — specifically the commands
 // needed to unstick a blocked session without requiring user intervention.
 //
-// Shell chaining operators (&&, ||, ;, |) are rejected to prevent abuse.
+// The command is tokenized and matched exactly against the fellowship binary
+// plus the allowed subcommands (gate reject, gate approve, init). Shell
+// metacharacters are rejected to prevent bypass abuse.
 func isFellowshipEscapeCommand(command string) bool {
-	if command == "" {
-		return false
-	}
 	trimmed := strings.TrimSpace(command)
-	if strings.Contains(trimmed, "&&") || strings.Contains(trimmed, "||") ||
-		strings.Contains(trimmed, ";") || strings.Contains(trimmed, "|") {
+	if trimmed == "" ||
+		strings.ContainsAny(trimmed, ";&|<>\n\r`") ||
+		strings.Contains(trimmed, "$(") {
 		return false
 	}
-	return strings.Contains(trimmed, "fellowship gate reject") ||
-		strings.Contains(trimmed, "fellowship gate approve") ||
-		strings.Contains(trimmed, "fellowship init")
+	fields := strings.Fields(trimmed)
+	if len(fields) < 2 {
+		return false
+	}
+	// Accept bare "fellowship" or any path ending in "/fellowship".
+	bin := fields[0]
+	if bin != "fellowship" && !strings.HasSuffix(bin, "/fellowship") {
+		return false
+	}
+	if len(fields) >= 3 && fields[1] == "gate" &&
+		(fields[2] == "reject" || fields[2] == "approve") {
+		return true
+	}
+	return fields[1] == "init"
 }
 

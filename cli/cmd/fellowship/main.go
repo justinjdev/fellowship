@@ -1420,21 +1420,27 @@ func runStateCleanWorktrees(args []string) int {
 		}
 		statePath := filepath.Join(worktreesDir, entry.Name(), datadir.Name(), "quest-state.json")
 		if _, err := os.Stat(statePath); err != nil {
+			if !os.IsNotExist(err) {
+				fmt.Fprintf(os.Stderr, "fellowship: warning: could not access %s: %v\n", statePath, err)
+			}
 			continue
 		}
-		s, err := state.Load(statePath)
+		var prevPending, prevHeld bool
+		err := state.WithLock(statePath, func(s *state.State) error {
+			if !s.GatePending && !s.Held {
+				return state.ErrNoSave
+			}
+			prevPending, prevHeld = s.GatePending, s.Held
+			s.GatePending = false
+			s.GateID = nil
+			s.Held = false
+			s.HeldReason = nil
+			return nil
+		})
+		if err == state.ErrNoSave {
+			continue
+		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "fellowship: warning: could not load %s: %v\n", statePath, err)
-			continue
-		}
-		if !s.GatePending && !s.Held {
-			continue
-		}
-		prevPending, prevHeld := s.GatePending, s.Held
-		s.GatePending = false
-		s.Held = false
-		s.HeldReason = nil
-		if err := state.Save(statePath, s); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: warning: could not save %s: %v\n", statePath, err)
 			continue
 		}

@@ -151,6 +151,9 @@ func TestGateGuard_BlocksChainedCommandsWithFellowshipEscape(t *testing.T) {
 		"fellowship gate reject; rm -rf /",
 		"fellowship gate reject || evil",
 		"echo foo | fellowship gate reject",
+		"echo fellowship gate reject",    // first token is echo, not fellowship
+		"fellowship gate reject\nrm -rf /", // newline-separated second command
+		"$(fellowship gate reject)",      // subshell
 	} {
 		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
 		result := GateGuard(s, input)
