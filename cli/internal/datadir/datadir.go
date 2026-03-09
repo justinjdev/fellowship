@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 // DefaultName is the default directory name for fellowship working files.
@@ -16,27 +17,32 @@ type cfg struct {
 	DataDir string `json:"dataDir"`
 }
 
+var (
+	nameOnce   sync.Once
+	cachedName string
+)
+
 // Name returns the configured data directory name.
 // Merge order: defaults → project (.fellowship/config.json) → user (~/.claude/fellowship.json).
-// User config always wins.
+// User config always wins. Result is cached after the first call.
 func Name() string {
-	dataDir := ""
+	nameOnce.Do(func() {
+		dataDir := ""
 
-	if p := readProjectConfig(); p.DataDir != "" {
-		dataDir = p.DataDir
-	}
-	if u := readUserConfig(); u.DataDir != "" {
-		dataDir = u.DataDir
-	}
+		if p := readProjectConfig(); p.DataDir != "" {
+			dataDir = p.DataDir
+		}
+		if u := readUserConfig(); u.DataDir != "" {
+			dataDir = u.DataDir
+		}
 
-	if dataDir == "" {
-		return DefaultName
-	}
-	// Reject values with path separators or traversal to prevent writing outside the repo.
-	if strings.ContainsAny(dataDir, "/\\") || strings.Contains(dataDir, "..") {
-		return DefaultName
-	}
-	return dataDir
+		if dataDir == "" || strings.ContainsAny(dataDir, "/\\") || strings.Contains(dataDir, "..") {
+			cachedName = DefaultName
+			return
+		}
+		cachedName = dataDir
+	})
+	return cachedName
 }
 
 // IsDataDirPath reports whether the given path is inside the fellowship data directory.

@@ -56,9 +56,9 @@ If the user picks "Change user settings" or "Change project settings", ask which
 
 ### Step 4: Write Config
 
-For user settings: write only non-default values to `~/.claude/fellowship.json`. If all values match defaults and no project config overrides them, delete the file instead.
+For user settings: write only values that differ from the effective merged value of `defaults → project`. This means you may need to write an explicit default value when the user wants to override a non-default project config value back to its default. If no keys remain after this minimization, delete `~/.claude/fellowship.json` instead of writing an empty object.
 
-For project settings: write only non-default values to `.fellowship/config.json`. Create `.fellowship/` directory if needed. If all values match defaults, delete the file.
+For project settings: write only non-default values to `.fellowship/config.json`. Create `.fellowship/` directory if needed. If all values match defaults, delete the file instead of writing an empty object.
 
 Validate each value against the Schema Reference below before writing.
 

@@ -4,8 +4,20 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
+
+// resetCache resets the sync.Once cache so each test gets a fresh Name() call.
+func resetCache(t *testing.T) {
+	t.Helper()
+	nameOnce = sync.Once{}
+	cachedName = ""
+	t.Cleanup(func() {
+		nameOnce = sync.Once{}
+		cachedName = ""
+	})
+}
 
 func TestDefaultName(t *testing.T) {
 	if DefaultName != ".fellowship" {
@@ -14,6 +26,7 @@ func TestDefaultName(t *testing.T) {
 }
 
 func TestName_NoConfigFile(t *testing.T) {
+	resetCache(t)
 	// Point to a non-existent config dir
 	t.Setenv("HOME", t.TempDir())
 
@@ -24,6 +37,7 @@ func TestName_NoConfigFile(t *testing.T) {
 }
 
 func TestName_ConfigWithDataDir(t *testing.T) {
+	resetCache(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -56,6 +70,7 @@ func TestName_RejectsPathTraversal(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			resetCache(t)
 			home := t.TempDir()
 			t.Setenv("HOME", home)
 
@@ -78,6 +93,7 @@ func TestName_RejectsPathTraversal(t *testing.T) {
 }
 
 func TestName_ConfigWithEmptyDataDir(t *testing.T) {
+	resetCache(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -95,6 +111,7 @@ func TestName_ConfigWithEmptyDataDir(t *testing.T) {
 }
 
 func TestName_ConfigWithNoDataDir(t *testing.T) {
+	resetCache(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -112,6 +129,7 @@ func TestName_ConfigWithNoDataDir(t *testing.T) {
 }
 
 func TestName_InvalidJSON(t *testing.T) {
+	resetCache(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -126,6 +144,7 @@ func TestName_InvalidJSON(t *testing.T) {
 }
 
 func TestName_ProjectConfigDataDir(t *testing.T) {
+	resetCache(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -152,6 +171,7 @@ func TestName_ProjectConfigDataDir(t *testing.T) {
 }
 
 func TestName_UserOverridesProjectConfig(t *testing.T) {
+	resetCache(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -180,6 +200,7 @@ func TestName_UserOverridesProjectConfig(t *testing.T) {
 }
 
 func TestName_ProjectConfigNoGitRoot(t *testing.T) {
+	resetCache(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -194,6 +215,7 @@ func TestName_ProjectConfigNoGitRoot(t *testing.T) {
 }
 
 func TestName_ProjectConfigInvalidJSON(t *testing.T) {
+	resetCache(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -213,6 +235,7 @@ func TestName_ProjectConfigInvalidJSON(t *testing.T) {
 }
 
 func TestIsDataDirPath(t *testing.T) {
+	resetCache(t)
 	tests := []struct {
 		name string
 		path string
@@ -239,6 +262,7 @@ func TestIsDataDirPath(t *testing.T) {
 }
 
 func TestIsDataDirPath_CustomDir(t *testing.T) {
+	resetCache(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
