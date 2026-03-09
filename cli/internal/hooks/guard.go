@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -25,7 +26,7 @@ func GateGuard(s *state.State, input *HookInput) HookResult {
 		}
 	}
 
-	if s.GatePending {
+	if s.GatePending && !isFellowshipEscapeCommand(input.ToolInput.Command) {
 		return HookResult{
 			Block:   true,
 			Message: "Gate pending — waiting for lead approval. Do not take any action until the lead approves your gate.",
@@ -46,5 +47,35 @@ func GateGuard(s *state.State, input *HookInput) HookResult {
 	}
 
 	return HookResult{}
+}
+
+// isFellowshipEscapeCommand returns true for fellowship CLI commands that must
+// be allowed through even when gate_pending is true — specifically the commands
+// needed to unstick a blocked session without requiring user intervention.
+//
+// The command is tokenized and matched exactly against the fellowship binary
+// plus the allowed subcommands (gate reject, gate approve, init). Shell
+// metacharacters are rejected to prevent bypass abuse.
+func isFellowshipEscapeCommand(command string) bool {
+	trimmed := strings.TrimSpace(command)
+	if trimmed == "" ||
+		strings.ContainsAny(trimmed, ";&|<>\n\r`") ||
+		strings.Contains(trimmed, "$(") {
+		return false
+	}
+	fields := strings.Fields(trimmed)
+	if len(fields) < 2 {
+		return false
+	}
+	// Accept bare "fellowship" or any path ending in "/fellowship".
+	bin := fields[0]
+	if bin != "fellowship" && !strings.HasSuffix(bin, "/fellowship") {
+		return false
+	}
+	if len(fields) >= 3 && fields[1] == "gate" &&
+		(fields[2] == "reject" || fields[2] == "approve") {
+		return true
+	}
+	return fields[1] == "init"
 }
 
