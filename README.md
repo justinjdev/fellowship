@@ -171,6 +171,14 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 
 ## Changelog
 
+### v1.9.0
+
+- **`/missive` skill** — Fetches GitHub issue context for quest spawning. Pulls title, body, labels, and comments via `gh` CLI. Returns issue context, suggested branch name (with issue number), and PR closing keywords. Gandalf invokes it automatically on `#N` references; also usable standalone as `/missive 42`.
+- **Balrog agent** — Adversarial validation agent. Reviews code for structural quality: factoring, coupling, cohesion, abstraction levels, information hiding. Challenges every design decision, not just obvious violations.
+- **Per-project config** — Committable `.fellowship/config.json` for team-shared settings. Three-way merge: defaults → project → user (user always wins). `/settings` shows merged config with provenance annotations.
+- **`issues.autoClose` config** — When true (default), `/missive` adds `Closes #N` to PR keywords so issues close on merge.
+- **Base branch fixes** — Worktrees receive the correct base branch; handles detached HEAD and dirty working tree edge cases.
+
 ### v1.8.0
 
 - **Scout-to-quest promotion** — Say `promote scout-X to a quest` during a fellowship. Gandalf reads the scout's findings file, spawns a quest pre-loaded with the research, and the quest enters validation mode instead of researching from scratch.

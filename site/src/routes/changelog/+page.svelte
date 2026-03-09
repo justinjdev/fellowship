@@ -10,6 +10,30 @@
 <div class="container page">
 	<h1>Changelog</h1>
 
+	<!-- v1.9.0 -->
+	<section class="version" id="v1-9-0">
+		<h2 class="version-heading"><a href="{base}/changelog#v1-9-0">v1.9.0</a></h2>
+		<ul class="changes">
+			<li>
+				<strong><code>/missive</code> skill</strong> — Fetches GitHub issue context for quest spawning. Pulls title, body, labels, and recent comments via <code>gh</code> CLI. Returns a structured package with issue context, a suggested branch name (incorporating the issue number), and PR closing keywords. Gandalf invokes it automatically when issue references (<code>#N</code>) are detected. Also usable standalone: <code>/missive 42</code>.
+			</li>
+			<li>
+				<strong>Balrog agent</strong> — Adversarial validation agent that reviews code for structural quality: factoring, coupling, cohesion, abstraction levels, and information hiding. Challenges every design decision, not just obvious violations. Integrated into the review workflow.
+			</li>
+			<li>
+				<strong>Per-project config</strong> — Committable project-level config at <code>.fellowship/config.json</code>. Three-way merge chain: defaults → project → user (user always wins). Team can share gate policies, branch patterns, and PR templates. <code>/settings</code> shows merged config with <code>[default]</code> / <code>[project]</code> / <code>[user]</code> provenance per field.
+			</li>
+			<li>
+				<strong><code>issues.autoClose</code> config key</strong> — When true (default), <code>/missive</code> includes <code>Closes #N</code> in PR keywords so issues close automatically on merge.
+			</li>
+			<li>
+				<strong>Base branch fixes</strong> — Worktrees now receive the correct base branch. Handles detached HEAD, dirty working tree warnings, and prompts when not on main.
+			</li>
+		</ul>
+	</section>
+
+	<div class="divider"><span class="divider-ring"></span></div>
+
 	<!-- v1.8.0 -->
 	<section class="version" id="v1-8-0">
 		<h2 class="version-heading"><a href="{base}/changelog#v1-8-0">v1.8.0</a></h2>
