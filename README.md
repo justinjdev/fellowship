@@ -171,6 +171,13 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 
 ## Changelog
 
+### v1.9.1
+
+- **Fellowship startup fix** — `ensure-binary.sh` now runs before any fellowship operations, removing the PATH dependency. All CLI calls use the full binary path (`~/.claude/fellowship/bin/fellowship`).
+- **`state init` overwrite warning** — Instead of erroring when `fellowship-state.json` already exists, `fellowship state init` now warns and proceeds (shows existing name and quest count).
+- **`validate-docs` marketplace check** — Validates that skill and agent counts in the marketplace description match the actual plugin.
+- **Deprecated commands removed** — `fellowship install` and `fellowship uninstall` CLI subcommands removed.
+
 ### v1.9.0
 
 - **`/missive` skill** — Fetches GitHub issue context for quest spawning. Pulls title, body, labels, and comments via `gh` CLI. Returns issue context, suggested branch name (with issue number), and PR closing keywords. Gandalf invokes it automatically on `#N` references; also usable standalone as `/missive 42`.

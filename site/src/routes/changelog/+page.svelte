@@ -10,6 +10,27 @@
 <div class="container page">
 	<h1>Changelog</h1>
 
+	<!-- v1.9.1 -->
+	<section class="version" id="v1-9-1">
+		<h2 class="version-heading"><a href="{base}/changelog#v1-9-1">v1.9.1</a></h2>
+		<ul class="changes">
+			<li>
+				<strong>Fellowship startup fix</strong> — <code>ensure-binary.sh</code> now runs before any fellowship operations, removing the PATH dependency. The full binary path (<code>~/.claude/fellowship/bin/fellowship</code>) is used for all CLI calls.
+			</li>
+			<li>
+				<strong><code>state init</code> overwrite warning</strong> — Instead of erroring when <code>fellowship-state.json</code> already exists, <code>fellowship state init</code> now warns and proceeds. Warning includes the existing fellowship name and quest count.
+			</li>
+			<li>
+				<strong><code>validate-docs</code> marketplace check</strong> — Validates that the skill and agent counts in the marketplace description match the actual plugin.
+			</li>
+			<li>
+				<strong>Deprecated commands removed</strong> — <code>fellowship install</code> and <code>fellowship uninstall</code> CLI subcommands removed (hooks are provided by the plugin).
+			</li>
+		</ul>
+	</section>
+
+	<div class="divider"><span class="divider-ring"></span></div>
+
 	<!-- v1.9.0 -->
 	<section class="version" id="v1-9-0">
 		<h2 class="version-heading"><a href="{base}/changelog#v1-9-0">v1.9.0</a></h2>
