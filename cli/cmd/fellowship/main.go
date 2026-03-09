@@ -1179,6 +1179,9 @@ func runStateInit(args []string) int {
 	}
 	statePath := filepath.Join(dataDirPath, "fellowship-state.json")
 
+	if _, err := os.Stat(statePath); err == nil {
+		fmt.Fprintln(os.Stderr, "fellowship: warning: overwriting existing fellowship-state.json")
+	}
 
 	s := &dashboard.FellowshipState{
 		Version:    1,
