@@ -171,6 +171,10 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 
 ## Changelog
 
+### v1.9.2
+
+- **Stale gate state fix** — Gate guard hook no longer blocks Gandalf when a previous quest's gate state file is present in a fresh worktree. Prevents stale state from causing spurious tool blocks at session start. ([#56](https://github.com/justinjdev/fellowship/issues/56))
+
 ### v1.9.1
 
 - **Fellowship startup fix** — `ensure-binary.sh` now runs before any fellowship operations, removing the PATH dependency. All CLI calls use the full binary path (`~/.claude/fellowship/bin/fellowship`).

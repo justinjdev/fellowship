@@ -10,6 +10,18 @@
 <div class="container page">
 	<h1>Changelog</h1>
 
+	<!-- v1.9.2 -->
+	<section class="version" id="v1-9-2">
+		<h2 class="version-heading"><a href="{base}/changelog#v1-9-2">v1.9.2</a></h2>
+		<ul class="changes">
+			<li>
+				<strong>Stale gate state fix</strong> — Gate guard hook no longer blocks Gandalf when a previous quest's gate state file is present in a fresh worktree. Prevents stale state from causing spurious tool blocks at session start.
+			</li>
+		</ul>
+	</section>
+
+	<div class="divider"><span class="divider-ring"></span></div>
+
 	<!-- v1.9.1 -->
 	<section class="version" id="v1-9-1">
 		<h2 class="version-heading"><a href="{base}/changelog#v1-9-1">v1.9.1</a></h2>
