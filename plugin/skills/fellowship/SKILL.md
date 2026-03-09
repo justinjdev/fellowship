@@ -23,10 +23,11 @@ Coordinates parallel teammates — quest runners and scouts — using the agent 
 Before doing anything else, run `ensure-binary.sh` to guarantee the CLI binary is installed and up to date (it is idempotent — no-ops if the correct version is already present):
 
 ```bash
-~/.claude/plugins/cache/justinjdev/fellowship/*/plugin/hooks/scripts/ensure-binary.sh
+latest_plugin_dir="$(ls -dt ~/.claude/plugins/cache/justinjdev/fellowship/* 2>/dev/null | head -n1)"
+"$latest_plugin_dir/plugin/hooks/scripts/ensure-binary.sh"
 ```
 
-The glob `*` matches the installed version. After this runs, the binary is at `~/.claude/fellowship/bin/fellowship`. Use that full path for all CLI calls in this session — do not rely on `fellowship` being in PATH.
+This resolves the most-recently-installed version directory, avoiding ambiguity if multiple cached versions exist. After this runs, the binary is at `~/.claude/fellowship/bin/fellowship`. Use that full path for all CLI calls in this session — do not rely on `fellowship` being in PATH.
 
 If `ensure-binary.sh` fails, stop and tell the user:
 
