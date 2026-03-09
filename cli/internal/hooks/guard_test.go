@@ -119,3 +119,52 @@ func TestGateGuard_HeldTakesPriorityOverGatePending(t *testing.T) {
 		t.Errorf("held should take priority over gate_pending, got: %s", result.Message)
 	}
 }
+
+func TestGateGuard_AllowsFellowshipGateRejectWhenPending(t *testing.T) {
+	s := &state.State{Phase: "Research", GatePending: true}
+	for _, cmd := range []string{
+		"~/.claude/fellowship/bin/fellowship gate reject",
+		"fellowship gate reject",
+		"/usr/local/bin/fellowship gate reject",
+	} {
+		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
+		result := GateGuard(s, input)
+		if result.Block {
+			t.Errorf("fellowship gate reject should be allowed through gate_pending, cmd=%q got: %s", cmd, result.Message)
+		}
+	}
+}
+
+func TestGateGuard_AllowsFellowshipInitWhenPending(t *testing.T) {
+	s := &state.State{Phase: "Implement", GatePending: true}
+	input := &HookInput{ToolInput: ToolInput{Command: "~/.claude/fellowship/bin/fellowship init"}}
+	result := GateGuard(s, input)
+	if result.Block {
+		t.Errorf("fellowship init should be allowed through gate_pending: %s", result.Message)
+	}
+}
+
+func TestGateGuard_BlocksChainedCommandsWithFellowshipEscape(t *testing.T) {
+	s := &state.State{Phase: "Implement", GatePending: true}
+	for _, cmd := range []string{
+		"rm -rf / && fellowship gate reject",
+		"fellowship gate reject; rm -rf /",
+		"fellowship gate reject || evil",
+		"echo foo | fellowship gate reject",
+	} {
+		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
+		result := GateGuard(s, input)
+		if !result.Block {
+			t.Errorf("chained command should be blocked even with fellowship gate reject, cmd=%q", cmd)
+		}
+	}
+}
+
+func TestGateGuard_HeldBlocksFellowshipEscapeCommands(t *testing.T) {
+	s := &state.State{Phase: "Implement", Held: true}
+	input := &HookInput{ToolInput: ToolInput{Command: "fellowship gate reject"}}
+	result := GateGuard(s, input)
+	if !result.Block {
+		t.Error("held state should block even fellowship escape commands")
+	}
+}

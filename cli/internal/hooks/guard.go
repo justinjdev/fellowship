@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -25,7 +26,7 @@ func GateGuard(s *state.State, input *HookInput) HookResult {
 		}
 	}
 
-	if s.GatePending {
+	if s.GatePending && !isFellowshipEscapeCommand(input.ToolInput.Command) {
 		return HookResult{
 			Block:   true,
 			Message: "Gate pending — waiting for lead approval. Do not take any action until the lead approves your gate.",
@@ -46,5 +47,24 @@ func GateGuard(s *state.State, input *HookInput) HookResult {
 	}
 
 	return HookResult{}
+}
+
+// isFellowshipEscapeCommand returns true for fellowship CLI commands that must
+// be allowed through even when gate_pending is true — specifically the commands
+// needed to unstick a blocked session without requiring user intervention.
+//
+// Shell chaining operators (&&, ||, ;, |) are rejected to prevent abuse.
+func isFellowshipEscapeCommand(command string) bool {
+	if command == "" {
+		return false
+	}
+	trimmed := strings.TrimSpace(command)
+	if strings.Contains(trimmed, "&&") || strings.Contains(trimmed, "||") ||
+		strings.Contains(trimmed, ";") || strings.Contains(trimmed, "|") {
+		return false
+	}
+	return strings.Contains(trimmed, "fellowship gate reject") ||
+		strings.Contains(trimmed, "fellowship gate approve") ||
+		strings.Contains(trimmed, "fellowship init")
 }
 

@@ -157,6 +157,8 @@ Fellowship state:
     --status STATUS       Quest status (active, completed, cancelled)
   state show              Show fellowship state as JSON
     --dir PATH            Git repo root (default: auto-detect)
+  state clean-worktrees   Reset stale gate_pending/held flags in all worktrees
+    --dir PATH            Git repo root (default: auto-detect)
 
 Errands (persistent work items):
   errand init            Create initial quest-errands.json
@@ -1149,6 +1151,8 @@ func runState(args []string) int {
 		return runStateAddCompany(args[1:])
 	case "show":
 		return runStateShow(args[1:])
+	case "clean-worktrees":
+		return runStateCleanWorktrees(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown state command: %s\n", args[0])
 		return 1
@@ -1385,6 +1389,64 @@ func runStateShow(args []string) int {
 
 	data, _ := json.MarshalIndent(s, "", "  ")
 	fmt.Println(string(data))
+	return 0
+}
+
+func runStateCleanWorktrees(args []string) int {
+	fs := flag.NewFlagSet("state clean-worktrees", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	fs.Parse(args)
+
+	root := *dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+
+	worktreesDir := filepath.Join(root, ".claude", "worktrees")
+	entries, err := os.ReadDir(worktreesDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("No worktrees directory found.")
+			return 0
+		}
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	cleaned := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		statePath := filepath.Join(worktreesDir, entry.Name(), datadir.Name(), "quest-state.json")
+		if _, err := os.Stat(statePath); err != nil {
+			continue
+		}
+		s, err := state.Load(statePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: warning: could not load %s: %v\n", statePath, err)
+			continue
+		}
+		if !s.GatePending && !s.Held {
+			continue
+		}
+		prevPending, prevHeld := s.GatePending, s.Held
+		s.GatePending = false
+		s.Held = false
+		s.HeldReason = nil
+		if err := state.Save(statePath, s); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: warning: could not save %s: %v\n", statePath, err)
+			continue
+		}
+		fmt.Printf("Cleared stale state in %s (gate_pending=%v, held=%v)\n", entry.Name(), prevPending, prevHeld)
+		cleaned++
+	}
+
+	if cleaned == 0 {
+		fmt.Println("No stale state found.")
+	} else {
+		fmt.Printf("Cleaned %d worktree(s).\n", cleaned)
+	}
 	return 0
 }
 

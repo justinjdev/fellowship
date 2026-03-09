@@ -55,6 +55,14 @@ User: "company: API work — quest: add endpoint, quest: add tests, scout: revie
 
 **Companies** group related quests and scouts for batch operations and progress tracking. A company is a lightweight grouping layer — it does not change how quests execute, only how they are organized and reported.
 
+### Pre-flight: Verify CWD
+
+**Before anything else**, run `pwd` to get your current working directory. If the path contains `.claude/worktrees`, you are running inside a quest worktree — Gandalf must not start here. Stop immediately and tell the user:
+
+> "Error: Gandalf cannot start from inside a quest worktree (`<CWD>`). Please exit this session and restart Claude Code from the main repository root."
+
+Do not proceed with any other startup steps.
+
 ### Load Config
 
 At startup, read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. Merge with defaults — any key not present uses the default value. If the file does not exist, all defaults apply.
