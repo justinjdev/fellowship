@@ -57,6 +57,18 @@
   }
 }`;
 
+	const projectExample = `{
+  "branch": {
+    "pattern": "feat/{ticket}-{slug}"
+  },
+  "gates": {
+    "autoApprove": []
+  },
+  "pr": {
+    "draft": true
+  }
+}`;
+
 	const settings = [
 		{
 			key: 'dataDir',
@@ -145,10 +157,31 @@
 	<section class="section">
 		<h2>Overview</h2>
 		<p class="intro">
-			All settings live in <code>~/.claude/fellowship.json</code> &mdash; your personal Claude directory.
-			Settings are cross-project and read at fellowship startup and quest onboard (Phase 0).
-			All settings are optional; missing keys use sensible defaults.
+			Fellowship reads configuration from two files and merges them at startup.
+			<code>~/.claude/fellowship.json</code> is your personal cross-project config.
+			<code>.fellowship/config.json</code> at the repo root is a per-project config checked into source control.
+			Settings are merged in order: built-in defaults &rarr; project config &rarr; user config.
+			User config always wins. All settings are optional; missing keys use sensible defaults.
 		</p>
+	</section>
+
+	<div class="divider"><span class="divider-ring"></span></div>
+
+	<section class="section">
+		<h2>Project Config</h2>
+		<p class="intro">
+			Place a <code>.fellowship/config.json</code> file at the root of your repository to share team-wide
+			defaults. Useful for enforcing a consistent branch naming convention or gate policy across everyone
+			who works on the project. Individual team members can still override any setting in their personal
+			<code>~/.claude/fellowship.json</code>.
+		</p>
+		<div class="code-block" style="margin-top: var(--space-md);">
+			<div class="code-block-header">
+				<span class="code-block-label">.fellowship/config.json</span>
+				<CopyButton text={projectExample} />
+			</div>
+			<pre><code>{projectExample}</code></pre>
+		</div>
 	</section>
 
 	<div class="divider"><span class="divider-ring"></span></div>
