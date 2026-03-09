@@ -8,7 +8,7 @@ description: Validate that site and README documentation is current. Report-only
 
 ## Overview
 
-Checks that documentation is current against the codebase: the site changelog, README changelog, skills/commands page, and agents page. Collects all findings across Steps 1–4, then emits a single structured report in Step 5. Does not modify any files — report-only.
+Checks that documentation is current against the codebase: the site changelog, README changelog, skills/commands page, agents page, and marketplace description. Collects all findings across Steps 1–5, then emits a single structured report in Step 6. Does not modify any files — report-only.
 
 ## Process
 
@@ -45,9 +45,19 @@ Read `site/src/routes/agents/+page.svelte`. If the file does not exist, flag it 
 
 List all registered agents from `.claude-plugin/plugin.json`. If reading from `plugin/agents/*.md` instead, ignore helper docs such as underscore-prefixed files (e.g., `_protocol.md`). Cross-reference against what's documented on the agents page. Flag any registered agents that are missing from the page.
 
-### Step 5: Report
+### Step 5: Marketplace description
 
-Emit all findings collected from Steps 1–4. Do not output inline findings during earlier steps — accumulate them and report here.
+Read `~/git/claude-plugins/.claude-plugin/marketplace.json`. If it does not exist, skip and note "marketplace not found."
+
+Find the fellowship plugin entry and check that:
+- The skill count in `description` matches the actual number of skills in `plugin/skills/*/SKILL.md`
+- The agent count in `description` matches the number of registered agents in `.claude-plugin/plugin.json` (excluding underscore-prefixed files)
+
+Flag any mismatch.
+
+### Step 6: Report
+
+Emit all findings collected from Steps 1–5. Do not output inline findings during earlier steps — accumulate them and report here.
 
 If no issues:
 
@@ -58,6 +68,7 @@ Docs validation
   README          ✓
   Skills page     ✓
   Agents page     ✓
+  Marketplace     ✓
 
   ✓ All docs current
 ```
@@ -71,6 +82,7 @@ Docs validation
   README          ✓
   Skills page     ✗ missing: some-skill
   Agents page     ✓
+  Marketplace     ✗ description says 2 agents, found 4
 
   2 issues found
 ```
@@ -78,5 +90,5 @@ Docs validation
 ## Key Principles
 
 - **Report-only.** Never modify any files. Flag issues; do not fix them.
-- **Accumulate before reporting.** Collect all findings across Steps 1–4, then emit the single structured report in Step 5.
+- **Accumulate before reporting.** Collect all findings across Steps 1–5, then emit the single structured report in Step 6.
 - **Graceful degradation.** If a file or data source is missing, flag it as missing, note it in the report, and continue to the next step.
