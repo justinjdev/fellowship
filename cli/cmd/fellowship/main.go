@@ -47,10 +47,6 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(runGate(os.Args[2:]))
-	case "install":
-		fmt.Println("Gate hooks are now provided by the plugin. No install needed.")
-	case "uninstall":
-		fmt.Println("Gate hooks are now provided by the plugin. No uninstall needed.")
 	case "init":
 		os.Exit(runInit())
 	case "status":
@@ -117,8 +113,6 @@ Agent/lead commands:
     --json               Output as JSON
 
 Setup commands:
-  install                (deprecated — hooks are now provided by the plugin)
-  uninstall              (deprecated — hooks are now provided by the plugin)
   init                   Create quest-state.json in data directory
     --phase PHASE        Initial phase (default: Onboard)
     --plan-skip          Record Onboard/Research/Plan as skipped in tome
@@ -1185,10 +1179,6 @@ func runStateInit(args []string) int {
 	}
 	statePath := filepath.Join(dataDirPath, "fellowship-state.json")
 
-	if _, err := os.Stat(statePath); err == nil {
-		fmt.Fprintln(os.Stderr, "fellowship: fellowship-state.json already exists")
-		return 1
-	}
 
 	s := &dashboard.FellowshipState{
 		Version:    1,

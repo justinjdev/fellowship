@@ -18,6 +18,22 @@ Coordinates parallel teammates — quest runners and scouts — using the agent 
 
 ## Lifecycle
 
+### Ensure CLI
+
+Before doing anything else, run `ensure-binary.sh` to guarantee the CLI binary is installed and up to date (it is idempotent — no-ops if the correct version is already present):
+
+```bash
+~/.claude/plugins/cache/justinjdev/fellowship/*/plugin/hooks/scripts/ensure-binary.sh
+```
+
+The glob `*` matches the installed version. After this runs, the binary is at `~/.claude/fellowship/bin/fellowship`. Use that full path for all CLI calls in this session — do not rely on `fellowship` being in PATH.
+
+If `ensure-binary.sh` fails, stop and tell the user:
+
+> "Failed to install the `fellowship` CLI binary. Check your internet connection or reinstall the plugin."
+
+Do not proceed until the binary is confirmed available.
+
 ### Start
 
 `/fellowship` creates the fellowship team via `TeamCreate` with name `fellowship-{timestamp}`. The lead enters coordinator mode, waiting for quests. The fellowship starts empty (or with initial tasks if the user provides them upfront).
@@ -172,8 +188,7 @@ When the user says "wrap up" or "disband":
 1. Send `shutdown_request` to all active teammates (including palantir)
 2. Synthesize a summary: quests completed, PR URLs, any open items
 3. **Suggest retrospective (optional):** Mention to the user: "Consider running `/retro` for a retrospective analysis of this fellowship — it identifies patterns across quests and can recommend configuration improvements." This is a suggestion only — the user can skip it and proceed directly to cleanup.
-4. Run `fellowship uninstall` to remove gate hooks from `.claude/settings.json`
-5. Run `TeamDelete` to clean up
+4. Run `TeamDelete` to clean up
 
 ## Gate Handling
 
