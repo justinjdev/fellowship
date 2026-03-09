@@ -6,55 +6,69 @@ description: View or edit fellowship configuration (~/.claude/fellowship.json). 
 
 ## Steps
 
-### Step 1: Read Current Config
+### Step 1: Read Config Layers
 
-Read `~/.claude/fellowship.json`. If it does not exist, report "No config file found — all defaults active."
+Read both config files (neither is required to exist):
 
-If it exists, show the current settings as a table comparing each key to its default, highlighting only non-default values.
+1. **Project config:** `.fellowship/config.json` in the git repository root (find with `git rev-parse --show-toplevel`)
+2. **User config:** `~/.claude/fellowship.json`
+
+Note which keys are present in each file. The effective value for each key follows this precedence:
+**defaults → project → user** (user always wins).
 
 ### Step 2: Show Settings
 
-Present the user's current config (or defaults if no file) in this format:
+Present the merged config as a table with a **Source** column showing `[default]`, `[project]`, or `[user]` for each key:
 
 ```
-Fellowship Config (~/.claude/fellowship.json)
+Fellowship Config
 
-  branch.pattern      null               (default)
-  branch.author       null               (default)
-  branch.ticketPattern [A-Z]+-\d+        (default)
-  worktree.enabled    true               (default)
-  worktree.directory  null               (default)
-  gates.autoApprove   []                 (default)
-  pr.draft            false              (default)
-  pr.template         null               (default)
-  palantir.enabled    true               (default)
-  palantir.minQuests  2                  (default)
-  issues.autoClose    true               (default)
+  Setting                Value                    Source
+  ─────────────────────────────────────────────────────────
+  branch.pattern         null                     [default]
+  branch.author          null                     [default]
+  branch.ticketPattern   [A-Z]+-\d+               [default]
+  worktree.enabled       true                     [default]
+  worktree.directory     null                     [default]
+  gates.autoApprove      []                       [default]
+  pr.draft               false                    [default]
+  pr.template            null                     [default]
+  palantir.enabled       true                     [default]
+  palantir.minQuests     2                        [default]
+  issues.autoClose       true                     [default]
+
+  User config:    ~/.claude/fellowship.json
+  Project config: .fellowship/config.json (none found)
 ```
 
-Mark non-default values with `(custom)` instead of `(default)`.
+Show both file paths at the bottom, noting "(none found)" if a file doesn't exist.
 
 ### Step 3: Ask What to Change
 
 Ask the user what they'd like to change. Use `AskUserQuestion` with these options:
 
-1. **Change settings** — modify specific values
-2. **Reset to defaults** — delete the config file
-3. **Done** — exit without changes
+1. **Change user settings** — modify values in `~/.claude/fellowship.json`
+2. **Change project settings** — modify values in `.fellowship/config.json` (committable)
+3. **Reset user config to defaults** — delete `~/.claude/fellowship.json`
+4. **Done** — exit without changes
 
-If the user picks "Change settings", ask which settings to modify. Present each setting with its current value and valid options. Use the schema below for validation.
+If the user picks "Change user settings" or "Change project settings", ask which settings to modify. Present each setting with its current effective value and valid options. Use the schema below for validation.
 
 ### Step 4: Write Config
 
-Write only non-default values to `~/.claude/fellowship.json`. If all values match defaults, delete the file instead (no point keeping it). Validate each value against the Schema Reference below before writing.
+For user settings: write only non-default values to `~/.claude/fellowship.json`. If all values match defaults and no project config overrides them, delete the file instead.
+
+For project settings: write only non-default values to `.fellowship/config.json`. Create `.fellowship/` directory if needed. If all values match defaults, delete the file.
+
+Validate each value against the Schema Reference below before writing.
 
 ### Step 5: Confirm
 
-Read back the file and show the updated settings table from Step 2.
+Read back both files and show the updated settings table from Step 2.
 
 ## Schema Reference
 
-This is the canonical schema for `~/.claude/fellowship.json`. Other skills reference this table.
+This is the canonical schema for fellowship config files. Both `~/.claude/fellowship.json` and `.fellowship/config.json` support the same keys.
 
 | Key | Type | Default | Valid values |
 |-----|------|---------|--------------|
@@ -69,3 +83,11 @@ This is the canonical schema for `~/.claude/fellowship.json`. Other skills refer
 | `palantir.enabled` | boolean | `true` | `true`, `false` |
 | `palantir.minQuests` | number | `2` | Any positive integer |
 | `issues.autoClose` | boolean | `true` | `true`, `false`. When true, `/missive` includes `Closes #N` in PR keywords. |
+
+## Merge Semantics
+
+| Type | Behavior |
+|------|----------|
+| Scalars (strings, booleans, numbers) | Later in chain wins: user overrides project, project overrides defaults |
+| Arrays (e.g., `gates.autoApprove`) | Replace, not union — later in chain wins entirely |
+| Nested objects | Deep merge per the rules above |
