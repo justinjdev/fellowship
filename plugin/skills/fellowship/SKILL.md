@@ -18,6 +18,23 @@ Coordinates parallel teammates — quest runners and scouts — using the agent 
 
 ## Lifecycle
 
+### Ensure CLI
+
+Before doing anything else, run `ensure-binary.sh` to guarantee the CLI binary is installed and up to date (it is idempotent — no-ops if the correct version is already present):
+
+```bash
+latest_plugin_dir="$(ls -dt ~/.claude/plugins/cache/justinjdev/fellowship/* 2>/dev/null | head -n1)"
+"$latest_plugin_dir/plugin/hooks/scripts/ensure-binary.sh"
+```
+
+This resolves the most-recently-installed version directory, avoiding ambiguity if multiple cached versions exist. After this runs, the binary is at `~/.claude/fellowship/bin/fellowship`. Use that full path for all CLI calls in this session — do not rely on `fellowship` being in PATH.
+
+If `ensure-binary.sh` fails, stop and tell the user:
+
+> "Failed to install the `fellowship` CLI binary. Check your internet connection or reinstall the plugin."
+
+Do not proceed until the binary is confirmed available.
+
 ### Start
 
 `/fellowship` creates the fellowship team via `TeamCreate` with name `fellowship-{timestamp}`. The lead enters coordinator mode, waiting for quests. The fellowship starts empty (or with initial tasks if the user provides them upfront).
@@ -68,21 +85,21 @@ Store the confirmed branch as `base_branch`. This is passed to all quest spawn p
 Initialize the fellowship state file using the CLI (pass `--base-branch` if not on main/master):
 
 ```bash
-fellowship state init --dir <repo_root> --name <fellowship_name> [--base-branch <base_branch>]
+~/.claude/fellowship/bin/fellowship state init --dir <repo_root> --name <fellowship_name> [--base-branch <base_branch>]
 ```
 
 After spawning each quest/scout, add it to the state file:
 
 ```bash
-fellowship state add-quest --dir <repo_root> --name <quest_name> --task "<task text>" [--branch <branch>] [--task-id <id>]
-fellowship state add-scout --dir <repo_root> --name <scout_name> --question "<question>" [--task-id <id>]
-fellowship state add-company --dir <repo_root> --name <company_name> --quests q1,q2 --scouts s1
+~/.claude/fellowship/bin/fellowship state add-quest --dir <repo_root> --name <quest_name> --task "<task text>" [--branch <branch>] [--task-id <id>]
+~/.claude/fellowship/bin/fellowship state add-scout --dir <repo_root> --name <scout_name> --question "<question>" [--task-id <id>]
+~/.claude/fellowship/bin/fellowship state add-company --dir <repo_root> --name <company_name> --quests q1,q2 --scouts s1
 ```
 
 Update quest entries when worktree path becomes available (from task metadata `worktree_path`):
 
 ```bash
-fellowship state update-quest --dir <repo_root> --name <quest_name> [--worktree <path>] [--branch <branch>] [--task-id <id>]
+~/.claude/fellowship/bin/fellowship state update-quest --dir <repo_root> --name <quest_name> [--worktree <path>] [--branch <branch>] [--task-id <id>]
 ```
 
 ### Discover Templates
@@ -120,7 +137,7 @@ If no issue references are found, `{issue_context}` is substituted with an empty
    - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
    - Do NOT pass `isolation: "worktree"` — the teammate creates its own worktree during quest Phase 0.
 
-**Errand persistence:** After spawning, write initial errands via `fellowship errand init --dir <path> --quest <name> --task "description"`. Add errands to running quests: `fellowship errand add --dir <worktree> 'description'`.
+**Errand persistence:** After spawning, write initial errands via `~/.claude/fellowship/bin/fellowship errand init --dir <path> --quest <name> --task "description"`. Add errands to running quests: `~/.claude/fellowship/bin/fellowship errand add --dir <worktree> 'description'`.
 
 **Spawn prompt:** See [resources/spawn-prompts.md](resources/spawn-prompts.md) for the full quest spawn prompt template and substitution rules.
 
@@ -172,8 +189,7 @@ When the user says "wrap up" or "disband":
 1. Send `shutdown_request` to all active teammates (including palantir)
 2. Synthesize a summary: quests completed, PR URLs, any open items
 3. **Suggest retrospective (optional):** Mention to the user: "Consider running `/retro` for a retrospective analysis of this fellowship — it identifies patterns across quests and can recommend configuration improvements." This is a suggestion only — the user can skip it and proceed directly to cleanup.
-4. Run `fellowship uninstall` to remove gate hooks from `.claude/settings.json`
-5. Run `TeamDelete` to clean up
+4. Run `TeamDelete` to clean up
 
 ## Gate Handling
 
@@ -186,18 +202,18 @@ Each quest runs the full `/quest` lifecycle (6 phases with gates). Gates are enf
 ### Gate Approval Procedure
 
 1. **Read worktree path:** `TaskGet(taskId)` → `metadata.worktree_path`
-2. **Update state file:** `fellowship gate approve --dir <worktree_path>`
+2. **Update state file:** `~/.claude/fellowship/bin/fellowship gate approve --dir <worktree_path>`
 3. **Send approval message** to the teammate via SendMessage
 
 ### Gate Rejection Procedure
 
-1. **Clear pending:** `fellowship gate reject --dir <worktree_path>`
+1. **Clear pending:** `~/.claude/fellowship/bin/fellowship gate reject --dir <worktree_path>`
 2. **Send rejection message** with feedback
 3. Teammate addresses feedback, re-runs prerequisites, resubmits
 
 ## Conflict Resolution
 
-When Palantir raises a file conflict alert, Gandalf follows the conflict resolution protocol: Pause (`fellowship hold --dir <worktree> [--reason "..."]`) → Assess (real vs incidental) → Resolve (sequence/partition/merge) → Resume (`fellowship unhold --dir <worktree>`).
+When Palantir raises a file conflict alert, Gandalf follows the conflict resolution protocol: Pause (`~/.claude/fellowship/bin/fellowship hold --dir <worktree> [--reason "..."]`) → Assess (real vs incidental) → Resolve (sequence/partition/merge) → Resume (`~/.claude/fellowship/bin/fellowship unhold --dir <worktree>`).
 
 See [resources/conflict-resolution.md](resources/conflict-resolution.md) for the full protocol.
 
@@ -239,7 +255,7 @@ Keep it brief — one line, not a monologue. Functional information always comes
 - **Quest fails:** Report to user with context (which phase, what went wrong). Offer to respawn. Worktree is preserved.
   - **Respawn procedure:** Spawn a new teammate with the same task description, but add to the spawn prompt: `"You are resuming a failed quest. Your working directory is already set to the existing worktree at {worktree_path}. Skip worktree creation in quest Phase 0 — you're already isolated. Check .fellowship/checkpoint.md for a checkpoint from the previous attempt."` Set the new teammate's working directory to the failed quest's worktree path.
 - **Direct teammate access:** Through Gandalf ("tell quest-2 to skip the logger refactor") or direct via Shift+Down to message the teammate.
-- **Session death:** Worktrees survive but coordination is lost. To resume: start a new fellowship, use respawn procedure for each incomplete quest. Each worktree's `.fellowship/checkpoint.md` has the last known state. For manual recovery: `fellowship gate reject --dir <worktree>`
+- **Session death:** Worktrees survive but coordination is lost. To resume: start a new fellowship, use respawn procedure for each incomplete quest. Each worktree's `.fellowship/checkpoint.md` has the last known state. For manual recovery: `~/.claude/fellowship/bin/fellowship gate reject --dir <worktree>`
 
 ## Key Principles
 
