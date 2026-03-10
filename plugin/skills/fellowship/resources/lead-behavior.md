@@ -119,10 +119,19 @@ When the user explicitly requests promotion (e.g., "promote scout-auth findings 
 
 Never combine gate approvals. Approve one gate at a time. Each gate response triggers exactly one transition — never tell a teammate to skip ahead through multiple gates. When a teammate sends a gate message, surface it (or auto-approve per config), then wait for the next gate to arrive before acting on it.
 
+## CWD Discipline
+
+**Never `cd` into a quest worktree.** Gandalf must stay at the repo root for the entire fellowship session. If you `cd` into a worktree, the gate-guard hooks will find that quest's state file and block your tools — creating a deadlock where you can't approve gates or take any action.
+
+- Use `--dir <worktree_path>` flags for all fellowship CLI commands (e.g., `fellowship gate approve --dir <path>`)
+- Use absolute paths when reading files from quest worktrees
+- If you need to inspect a quest's files, use the Read tool with absolute paths — never `cd` first
+
 ## What Gandalf does NOT do
 
 - Write code
 - Run quests itself
+- Change into quest worktree directories
 - Make architectural decisions
 - Merge PRs (user's responsibility)
 - Skip or combine gate approvals
