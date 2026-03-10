@@ -139,3 +139,43 @@ func TestFindStateFile_NoFile(t *testing.T) {
 		t.Errorf("expected empty path, got %q", path)
 	}
 }
+
+func TestFindStateFile_SkipsWhenFellowshipStateExists(t *testing.T) {
+	// Simulate the main repo root where both quest-state.json and
+	// fellowship-state.json exist (lead's CWD). The hook should NOT
+	// find the quest-state file so the lead isn't blocked.
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	dd := filepath.Join(dir, ".fellowship")
+	os.MkdirAll(dd, 0755)
+	os.WriteFile(filepath.Join(dd, "quest-state.json"), []byte(validState), 0644)
+	os.WriteFile(filepath.Join(dd, "fellowship-state.json"), []byte(`{"version":1}`), 0644)
+
+	// FindStateFile uses gitRoot which won't work in a temp dir, so it
+	// falls back to fromDir. With both files present it should return "".
+	path, err := FindStateFile(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if path != "" {
+		t.Errorf("expected empty path when fellowship-state.json exists, got %q", path)
+	}
+}
+
+func TestFindStateFile_ReturnsPathWhenOnlyQuestState(t *testing.T) {
+	// Simulate a quest worktree where only quest-state.json exists.
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	dd := filepath.Join(dir, ".fellowship")
+	os.MkdirAll(dd, 0755)
+	os.WriteFile(filepath.Join(dd, "quest-state.json"), []byte(validState), 0644)
+
+	path, err := FindStateFile(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := filepath.Join(dd, "quest-state.json")
+	if path != expected {
+		t.Errorf("got %q, want %q", path, expected)
+	}
+}

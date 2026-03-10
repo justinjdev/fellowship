@@ -90,7 +90,7 @@ When running as a fellowship teammate, a state file at `.fellowship/quest-state.
 If the spawn prompt contains a `RESUME CONTEXT:` block, this is a recovered quest:
 
 1. **Skip worktree creation** — your worktree already exists and you're already in it
-2. **Reset state file:** Run `fellowship init` to clear `gate_pending` while preserving the current phase
+2. **Reset state file:** Run `fellowship init --dir <worktree_path>` to clear `gate_pending` while preserving the current phase
 4. **Update task metadata:** `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})` with the new task ID from the recovery spawn
 5. **Load checkpoint:** If `.fellowship/checkpoint.md` exists, read it as your initial context — this replaces `/council` orientation
 6. **Skip `/council`** — the checkpoint provides equivalent context from the previous session
@@ -113,11 +113,12 @@ After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, upda
      - `{slug}`: slugify the task description (lowercase, hyphens for spaces, strip non-alphanumeric). If a ticket was extracted, derive slug from the remaining text after extraction.
      - `{ticket}`: match `branch.ticketPattern` (default: `[A-Z]+-\d+`) against the task description. If matched, use the match. If not matched and the pattern contains `{ticket}`, ask the user to provide a ticket ID.
      - `{author}`: use `branch.author` from config. If not set and the pattern contains `{author}`, ask the user to provide their name.
-   - **Create worktree (3-step sequence — all steps are REQUIRED):**
+   - **Create worktree (4-step sequence — all steps are REQUIRED):**
      1. Determine the base ref: if the spawn prompt includes `Base branch:` in the CONTEXT section, use `git rev-parse <base_branch>` to get the SHA; otherwise run `git rev-parse HEAD`. Save the full SHA in your response text (not a shell variable — shell state does not persist between tool calls).
      2. Call `EnterWorktree` with the resolved branch name. If `config.worktree.directory` is set, create the worktree there instead of the default location.
      3. **Immediately** after entering the worktree — before ANY other action — run `git reset --hard <sha>` using the exact SHA from step 1. `EnterWorktree` bases off the default branch, not the current branch. This reset is what makes the worktree start from the correct point. Skip this and the worktree will be wrong.
-3. **State file (fellowship only):** This MUST happen before any other tool calls (Skill, Bash, etc.) so that hooks can enforce gates from the start. If running as a fellowship teammate:
+     4. **Verify CWD:** Run `pwd` and confirm the output contains your branch name or expected worktree path. When multiple quests spawn in parallel, a race condition can place your CWD in another quest's worktree. If `pwd` shows a different quest's worktree, run `cd <expected_worktree_path>` to correct it before proceeding. The expected path is the one printed by `EnterWorktree` (typically `.claude/worktrees/<branch_name>/`).
+3. **State file (fellowship only):** This MUST happen before any other tool calls (Skill, Bash, etc.) so that hooks can enforce gates from the start. Run `fellowship init --dir <worktree_path>` (using the verified worktree path from step 2.4) to ensure the state file is created in the correct worktree, regardless of CWD. If running as a fellowship teammate:
    - If `.fellowship/quest-state.json` already exists (respawn), reset `gate_pending` to `false` and preserve the existing `phase`.
    - Otherwise, create `.fellowship/quest-state.json`:
      ```json
@@ -151,7 +152,7 @@ If the spawn prompt contains `PRE-EXISTING PLAN:` with a plan file path:
 
 1. **Create worktree** as normal (follow the full 3-step sequence from Standard Onboard, including the immediate `git reset --hard <sha>` after `EnterWorktree`)
 2. **Copy plan file:** Read the plan file from the specified path and write it to `.fellowship/plan.md` in the worktree
-3. **Initialize state at Implement:** Run `fellowship init --phase Implement --plan-skip --quest <quest_name>` — this creates the state file starting at Implement and records Onboard/Research/Plan as skipped in the tome
+3. **Initialize state at Implement:** Run `fellowship init --dir <worktree_path> --phase Implement --plan-skip --quest <quest_name>` — this creates the state file starting at Implement and records Onboard/Research/Plan as skipped in the tome
 4. **Initialize errands:** Run `fellowship errand init` to create the errand file, then add one errand per plan task with `fellowship errand add`
 5. **Skip /council** — the plan provides sufficient context
 6. **Proceed directly to Phase 3 (Implement)** — skip the Onboard gate, Research, and Plan entirely
