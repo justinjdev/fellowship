@@ -150,7 +150,7 @@ If the user has already described their task, pass the description directly. Oth
 
 If the spawn prompt contains `PRE-EXISTING PLAN:` with a plan file path:
 
-1. **Create worktree** as normal (follow the full 3-step sequence from Standard Onboard, including the immediate `git reset --hard <sha>` after `EnterWorktree`)
+1. **Create worktree** as normal (follow the full 4-step sequence from Standard Onboard, including the immediate `git reset --hard <sha>` and CWD verification after `EnterWorktree`)
 2. **Copy plan file:** Read the plan file from the specified path and write it to `.fellowship/plan.md` in the worktree
 3. **Initialize state at Implement:** Run `fellowship init --dir <worktree_path> --phase Implement --plan-skip --quest <quest_name>` — this creates the state file starting at Implement and records Onboard/Research/Plan as skipped in the tome
 4. **Initialize errands:** Run `fellowship errand init` to create the errand file, then add one errand per plan task with `fellowship errand add`
