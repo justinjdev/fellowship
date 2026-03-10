@@ -114,6 +114,7 @@ Agent/lead commands:
 
 Setup commands:
   init                   Create quest-state.json in data directory
+    --dir PATH           Worktree or repo root (default: auto-detect via git)
     --phase PHASE        Initial phase (default: Onboard)
     --plan-skip          Record Onboard/Research/Plan as skipped in tome
     --quest NAME         Quest name for tome recording
@@ -537,6 +538,7 @@ func runInit() int {
 	phase := fs.String("phase", "", "Initial phase (default: Onboard)")
 	planSkip := fs.Bool("plan-skip", false, "Record Onboard/Research/Plan as skipped in tome")
 	questName := fs.String("quest", "", "Quest name for tome recording")
+	initDir := fs.String("dir", "", "Worktree or repo root (default: auto-detect via git)")
 	fs.Parse(os.Args[2:])
 
 	validPhases := map[string]bool{
@@ -556,13 +558,16 @@ func runInit() int {
 		return 1
 	}
 
-	root := gitRootOrCwd()
-	dir := filepath.Join(root, datadir.Name())
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	root := *initDir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+	dataDir := filepath.Join(root, datadir.Name())
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: creating data directory: %v\n", err)
 		return 1
 	}
-	path := filepath.Join(dir, "quest-state.json")
+	path := filepath.Join(dataDir, "quest-state.json")
 
 	if _, err := os.Stat(path); err == nil {
 		s, err := state.Load(path)
@@ -600,7 +605,7 @@ func runInit() int {
 	}
 
 	if *planSkip {
-		tomePath := filepath.Join(dir, "quest-tome.json")
+		tomePath := filepath.Join(dataDir, "quest-tome.json")
 		c := tome.LoadOrCreate(tomePath)
 		if *questName != "" {
 			c.QuestName = *questName

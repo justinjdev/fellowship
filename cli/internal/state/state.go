@@ -118,8 +118,16 @@ func FindStateFile(fromDir string) (string, error) {
 	if err != nil {
 		root = fromDir
 	}
-	path := filepath.Join(root, datadir.Name(), "quest-state.json")
+	dd := filepath.Join(root, datadir.Name())
+	path := filepath.Join(dd, "quest-state.json")
 	if _, err := os.Stat(path); err != nil {
+		return "", nil
+	}
+	// If fellowship-state.json also exists in this data directory, the CWD is
+	// at the main repo root where the lead (Gandalf) runs — not inside a quest
+	// worktree. Skip quest-state enforcement so the lead isn't blocked by a
+	// quest runner's state file that leaked into the repo root.
+	if _, err := os.Stat(filepath.Join(dd, "fellowship-state.json")); err == nil {
 		return "", nil
 	}
 	return path, nil
