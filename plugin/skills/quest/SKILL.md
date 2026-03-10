@@ -90,7 +90,7 @@ When running as a fellowship teammate, a state file at `.fellowship/quest-state.
 If the spawn prompt contains a `RESUME CONTEXT:` block, this is a recovered quest:
 
 1. **Skip worktree creation** — your worktree already exists and you're already in it
-2. **Reset state file:** Run `fellowship init --dir <worktree_path>` to clear `gate_pending` while preserving the current phase
+2. **Reset state file:** Run `fellowship init --dir $(pwd)` (you're already in the worktree) to clear `gate_pending` while preserving the current phase
 4. **Update task metadata:** `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})` with the new task ID from the recovery spawn
 5. **Load checkpoint:** If `.fellowship/checkpoint.md` exists, read it as your initial context — this replaces `/council` orientation
 6. **Skip `/council`** — the checkpoint provides equivalent context from the previous session
@@ -118,7 +118,7 @@ After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, upda
      2. Call `EnterWorktree` with the resolved branch name. If `config.worktree.directory` is set, create the worktree there instead of the default location.
      3. **Immediately** after entering the worktree — before ANY other action — run `git reset --hard <sha>` using the exact SHA from step 1. `EnterWorktree` bases off the default branch, not the current branch. This reset is what makes the worktree start from the correct point. Skip this and the worktree will be wrong.
      4. **Verify CWD:** Run `pwd` and confirm the output contains your branch name or expected worktree path. When multiple quests spawn in parallel, a race condition can place your CWD in another quest's worktree. If `pwd` shows a different quest's worktree, run `cd <expected_worktree_path>` to correct it before proceeding. The expected path is the one printed by `EnterWorktree` (typically `.claude/worktrees/<branch_name>/`).
-3. **State file (fellowship only):** This MUST happen before any other tool calls (Skill, Bash, etc.) so that hooks can enforce gates from the start. Run `fellowship init --dir <worktree_path>` (using the verified worktree path from step 2.4) to ensure the state file is created in the correct worktree, regardless of CWD. If running as a fellowship teammate:
+3. **State file (fellowship only):** This MUST happen before any other tool calls (Skill, Bash, etc.) so that hooks can enforce gates from the start. Run `fellowship init --dir <worktree_path>` (using the path from `EnterWorktree` in step 2.2, verified correct in step 2.4) to ensure the state file is created in the correct worktree, regardless of CWD. If running as a fellowship teammate:
    - If `.fellowship/quest-state.json` already exists (respawn), reset `gate_pending` to `false` and preserve the existing `phase`.
    - Otherwise, create `.fellowship/quest-state.json`:
      ```json
