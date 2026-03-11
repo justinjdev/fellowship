@@ -139,10 +139,11 @@
 			} else if (inputMode === 'restart-quest') {
 				await restartQuest(taskInput.trim());
 			}
-		} finally {
-			inputMode = null;
+		inputMode = null;
 			taskInput = '';
 			onClose();
+		} catch {
+			// Keep palette open so user can retry
 		}
 	}
 

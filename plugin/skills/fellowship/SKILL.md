@@ -263,7 +263,7 @@ Keep it brief — one line, not a monologue. Functional information always comes
 
 - **Quest fails:** Report to user with context (which phase, what went wrong). Before respawning, write an autopsy to preserve failure knowledge for future quests:
   ```bash
-  fellowship autopsy infer --dir <worktree_path> --repo <main_repo>
+  ~/.claude/fellowship/bin/fellowship autopsy infer --dir <worktree_path> --repo <main_repo>
   ```
   This reconstructs a best-effort failure record from the quest's tome, herald, and eagles data. Then offer to respawn. Worktree is preserved.
   - **Respawn procedure:** Spawn a new teammate with the same task description, but add to the spawn prompt: `"You are resuming a failed quest. Your working directory is already set to the existing worktree at {worktree_path}. Skip worktree creation in quest Phase 0 — you're already isolated. Check .fellowship/checkpoint.md for a checkpoint from the previous attempt."` Set the new teammate's working directory to the failed quest's worktree path.

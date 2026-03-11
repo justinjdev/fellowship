@@ -178,6 +178,11 @@
 		cursor: pointer;
 	}
 
+	.quest-select:focus-visible {
+		outline: 2px solid var(--accent-gold);
+		outline-offset: 2px;
+	}
+
 	.quest-select option {
 		background: var(--bg-raised);
 		color: var(--text-primary);

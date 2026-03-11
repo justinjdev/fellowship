@@ -36,8 +36,13 @@
 	}
 
 	onMount(async () => {
-		autopsies = (await fetchAutopsies()) as Autopsy[];
-		loading = false;
+		try {
+			autopsies = (await fetchAutopsies()) as Autopsy[];
+		} catch {
+			// Failed to load autopsies
+		} finally {
+			loading = false;
+		}
 	});
 </script>
 
