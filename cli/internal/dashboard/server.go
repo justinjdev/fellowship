@@ -46,6 +46,11 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 	s.mux.HandleFunc("POST /api/company/", s.handleCompanyApprove)
 	s.mux.HandleFunc("GET /api/errand/", s.handleErrand)
 	s.mux.HandleFunc("GET /api/bulletin", s.handleBulletin)
+	s.mux.HandleFunc("POST /api/quest/spawn", s.handleSpawnQuest)
+	s.mux.HandleFunc("POST /api/quest/kill", s.handleKillQuest)
+	s.mux.HandleFunc("POST /api/quest/restart", s.handleRestartQuest)
+	s.mux.HandleFunc("POST /api/scout/spawn", s.handleSpawnScout)
+	s.mux.HandleFunc("GET /api/commands", s.handleCommands)
 
 	staticFS, _ := iofs.Sub(staticFiles, "static")
 	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
