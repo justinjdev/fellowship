@@ -111,9 +111,14 @@ func TestCreate_NilSlicesDefaultToEmpty(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading autopsy file: %v", err)
+	}
 	var a Autopsy
-	json.Unmarshal(data, &a)
+	if err := json.Unmarshal(data, &a); err != nil {
+		t.Fatalf("parsing autopsy: %v", err)
+	}
 
 	if a.Files == nil {
 		t.Error("files should be empty slice, not nil")

@@ -1,6 +1,7 @@
 package autopsy
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -90,7 +91,9 @@ func Create(repoRoot string, input *CreateInput) (string, error) {
 		return "", fmt.Errorf("creating autopsies directory: %w", err)
 	}
 
-	filename := fmt.Sprintf("%s-%s.json", now.Format("20060102T150405"), sanitize(input.Quest))
+	randBytes := make([]byte, 4)
+	rand.Read(randBytes)
+	filename := fmt.Sprintf("%s-%s-%x.json", now.Format("20060102T150405"), sanitize(input.Quest), randBytes)
 	path := filepath.Join(dir, filename)
 
 	data, err := json.MarshalIndent(a, "", "  ")
@@ -173,7 +176,10 @@ func Infer(worktreeDir, repoRoot string) (string, error) {
 	}
 
 	// Determine trigger from signals
-	trigger, whatFailed := inferTrigger(worktreeDir, t)
+	trigger, whatFailed, err := inferTrigger(worktreeDir, t)
+	if err != nil {
+		return "", err
+	}
 	if trigger == "" {
 		return "", fmt.Errorf("no failure signals found in worktree")
 	}
@@ -194,30 +200,33 @@ func Infer(worktreeDir, repoRoot string) (string, error) {
 	return Create(repoRoot, input)
 }
 
-func inferTrigger(worktreeDir string, t *tome.QuestTome) (string, string) {
+func inferTrigger(worktreeDir string, t *tome.QuestTome) (string, string, error) {
 	// Check for respawns
 	if t.Respawns > 0 {
-		return "recovery", fmt.Sprintf("Quest required %d respawn(s)", t.Respawns)
+		return "recovery", fmt.Sprintf("Quest required %d respawn(s)", t.Respawns), nil
 	}
 
 	// Check for gate rejections in herald
-	tidings, _ := herald.Read(worktreeDir, 0)
+	tidings, err := herald.Read(worktreeDir, 0)
+	if err != nil && !os.IsNotExist(err) {
+		return "", "", fmt.Errorf("reading herald: %w", err)
+	}
 	for i := len(tidings) - 1; i >= 0; i-- {
 		if tidings[i].Type == herald.GateRejected {
 			detail := tidings[i].Detail
 			if detail == "" {
 				detail = fmt.Sprintf("Gate rejected at %s phase", tidings[i].Phase)
 			}
-			return "rejection", detail
+			return "rejection", detail, nil
 		}
 	}
 
 	// Check for failed/cancelled status in tome
 	if t.Status == "failed" || t.Status == "cancelled" {
-		return "abandonment", fmt.Sprintf("Quest %s with status: %s", t.QuestName, t.Status)
+		return "abandonment", fmt.Sprintf("Quest %s with status: %s", t.QuestName, t.Status), nil
 	}
 
-	return "", ""
+	return "", "", nil
 }
 
 func inferPhase(t *tome.QuestTome) string {
@@ -247,13 +256,21 @@ func inferModules(files []string) []string {
 }
 
 func matchesFilters(a *Autopsy, opts ScanOptions) bool {
-	// File path prefix match
+	// File match: exact match, directory containment, or same directory
 	for _, queryFile := range opts.Files {
 		for _, autopsyFile := range a.Files {
-			if strings.HasPrefix(autopsyFile, queryFile) || strings.HasPrefix(queryFile, autopsyFile) {
+			// Exact match
+			if queryFile == autopsyFile {
 				return true
 			}
-			// Also match if they share a directory prefix (skip root-level files)
+			// Directory containment (query is a dir prefix of autopsy file or vice versa)
+			if strings.HasSuffix(queryFile, "/") && strings.HasPrefix(autopsyFile, queryFile) {
+				return true
+			}
+			if strings.HasSuffix(autopsyFile, "/") && strings.HasPrefix(queryFile, autopsyFile) {
+				return true
+			}
+			// Same directory (skip root-level files)
 			queryDir := filepath.Dir(queryFile)
 			aDir := filepath.Dir(autopsyFile)
 			if queryDir != "." && aDir != "." && queryDir == aDir {
@@ -296,8 +313,9 @@ func loadAutopsy(path string) (*Autopsy, error) {
 }
 
 func sanitize(s string) string {
-	s = strings.ReplaceAll(s, " ", "-")
-	s = strings.ReplaceAll(s, "/", "-")
+	for _, c := range []string{" ", "/", "\\", ":", "*", "?", "\"", "<", ">", "|"} {
+		s = strings.ReplaceAll(s, c, "-")
+	}
 	if len(s) > 40 {
 		s = s[:40]
 	}
