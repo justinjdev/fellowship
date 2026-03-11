@@ -59,13 +59,28 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 
 	staticFS, _ := iofs.Sub(staticFiles, "static")
 	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
-	s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
+	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/ws" {
 			http.NotFound(w, r)
 			return
 		}
+
+		path := strings.TrimPrefix(r.URL.Path, "/")
+		if path == "" {
+			path = "index.html"
+		}
+		if f, err := staticFS.Open(path); err == nil {
+			f.Close()
+			http.FileServer(http.FS(staticFS)).ServeHTTP(w, r)
+			return
+		}
+
 		data, _ := staticFiles.ReadFile("static/index.html")
-		w.Header().Set("Content-Type", "text/html")
+		if data == nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(data)
 	})
 	return s
