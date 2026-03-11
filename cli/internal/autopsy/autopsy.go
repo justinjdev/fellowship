@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -52,6 +53,9 @@ var validTriggers = map[string]bool{
 
 // Create validates input, fills in version/timestamp, and writes to the autopsies directory.
 func Create(repoRoot string, input *CreateInput) (string, error) {
+	if input == nil {
+		return "", fmt.Errorf("input is required")
+	}
 	if input.Quest == "" {
 		return "", fmt.Errorf("quest is required")
 	}
@@ -92,7 +96,9 @@ func Create(repoRoot string, input *CreateInput) (string, error) {
 	}
 
 	randBytes := make([]byte, 4)
-	rand.Read(randBytes)
+	if _, err := rand.Read(randBytes); err != nil {
+		return "", fmt.Errorf("generating autopsy filename suffix: %w", err)
+	}
 	filename := fmt.Sprintf("%s-%s-%x.json", now.Format("20060102T150405"), sanitize(input.Quest), randBytes)
 	path := filepath.Join(dir, filename)
 
@@ -141,18 +147,17 @@ func Scan(repoRoot string, opts ScanOptions, expiryDays int) ([]Autopsy, error) 
 		path := filepath.Join(dir, entry.Name())
 		a, err := loadAutopsy(path)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "fellowship: skipping corrupt autopsy %s: %v\n", entry.Name(), err)
-			continue
+			return nil, fmt.Errorf("reading autopsy %s: %w", entry.Name(), err)
 		}
 
-		// Prune expired or unparseable timestamps
 		ts, err := time.Parse(time.RFC3339, a.Timestamp)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "fellowship: skipping autopsy %s with bad timestamp: %v\n", entry.Name(), err)
-			continue
+			return nil, fmt.Errorf("parsing autopsy timestamp for %s: %w", entry.Name(), err)
 		}
 		if ts.Before(cutoff) {
-			os.Remove(path)
+			if err := os.Remove(path); err != nil {
+				return nil, fmt.Errorf("pruning expired autopsy %s: %w", entry.Name(), err)
+			}
 			continue
 		}
 
@@ -252,6 +257,7 @@ func inferModules(files []string) []string {
 	for m := range seen {
 		modules = append(modules, m)
 	}
+	sort.Strings(modules)
 	return modules
 }
 

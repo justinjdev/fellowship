@@ -100,6 +100,14 @@ func TestCreate_MissingWhatFailed(t *testing.T) {
 	}
 }
 
+func TestCreate_NilInput(t *testing.T) {
+	repo := setupTestRepo(t)
+	_, err := Create(repo, nil)
+	if err == nil {
+		t.Error("expected error for nil input")
+	}
+}
+
 func TestCreate_NilSlicesDefaultToEmpty(t *testing.T) {
 	repo := setupTestRepo(t)
 	path, err := Create(repo, &CreateInput{
@@ -282,9 +290,14 @@ func TestInfer_FromRespawns(t *testing.T) {
 		t.Fatalf("Infer failed: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading autopsy file: %v", err)
+	}
 	var a Autopsy
-	json.Unmarshal(data, &a)
+	if err := json.Unmarshal(data, &a); err != nil {
+		t.Fatalf("parsing autopsy: %v", err)
+	}
 
 	if a.Trigger != "recovery" {
 		t.Errorf("trigger = %q, want recovery", a.Trigger)
@@ -331,9 +344,14 @@ func TestInfer_FromRejection(t *testing.T) {
 		t.Fatalf("Infer failed: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading autopsy file: %v", err)
+	}
 	var a Autopsy
-	json.Unmarshal(data, &a)
+	if err := json.Unmarshal(data, &a); err != nil {
+		t.Fatalf("parsing autopsy: %v", err)
+	}
 
 	if a.Trigger != "rejection" {
 		t.Errorf("trigger = %q, want rejection", a.Trigger)
@@ -367,9 +385,14 @@ func TestInfer_FromAbandonment(t *testing.T) {
 		t.Fatalf("Infer failed: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading autopsy file: %v", err)
+	}
 	var a Autopsy
-	json.Unmarshal(data, &a)
+	if err := json.Unmarshal(data, &a); err != nil {
+		t.Fatalf("parsing autopsy: %v", err)
+	}
 
 	if a.Trigger != "abandonment" {
 		t.Errorf("trigger = %q, want abandonment", a.Trigger)
@@ -420,19 +443,16 @@ func TestMatchesFilters_FilePrefix(t *testing.T) {
 }
 
 func TestInferModules(t *testing.T) {
+	// All files start with "src", so we expect a single "src" module
 	modules := inferModules([]string{"src/auth/jwt.go", "src/auth/session.go", "src/billing/charge.go"})
-	if len(modules) != 1 {
-		// Both start with "src"
-		t.Logf("modules = %v", modules)
+	if len(modules) != 1 || modules[0] != "src" {
+		t.Errorf("expected [src], got %v", modules)
 	}
 
+	// Different top-level dirs produce separate modules, sorted
 	modules = inferModules([]string{"auth/jwt.go", "billing/charge.go"})
-	seen := map[string]bool{}
-	for _, m := range modules {
-		seen[m] = true
-	}
-	if !seen["auth"] || !seen["billing"] {
-		t.Errorf("expected auth and billing modules, got %v", modules)
+	if len(modules) != 2 || modules[0] != "auth" || modules[1] != "billing" {
+		t.Errorf("expected [auth billing], got %v", modules)
 	}
 }
 
