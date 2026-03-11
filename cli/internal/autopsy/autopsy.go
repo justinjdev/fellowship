@@ -306,25 +306,3 @@ func sanitize(s string) string {
 
 // DefaultExpiryDays is the default autopsy TTL when not configured.
 const DefaultExpiryDays = 90
-
-// ReadExpiryDays reads the autopsy.expiryDays config from ~/.claude/fellowship.json.
-// Returns DefaultExpiryDays if not configured.
-func ReadExpiryDays() int {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return DefaultExpiryDays
-	}
-	data, err := os.ReadFile(filepath.Join(home, ".claude", "fellowship.json"))
-	if err != nil {
-		return DefaultExpiryDays
-	}
-	var cfg struct {
-		Autopsy struct {
-			ExpiryDays int `json:"expiryDays"`
-		} `json:"autopsy"`
-	}
-	if json.Unmarshal(data, &cfg) != nil || cfg.Autopsy.ExpiryDays <= 0 {
-		return DefaultExpiryDays
-	}
-	return cfg.Autopsy.ExpiryDays
-}

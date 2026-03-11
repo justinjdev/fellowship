@@ -120,7 +120,7 @@ func TestGateGuard_HeldTakesPriorityOverGatePending(t *testing.T) {
 	}
 }
 
-func TestGateGuard_AllowsAllFellowshipCommandsWhenPending(t *testing.T) {
+func TestGateGuard_AllowsAllowlistedFellowshipCommandsWhenPending(t *testing.T) {
 	s := &state.State{Phase: "Research", GatePending: true}
 	for _, cmd := range []string{
 		"fellowship gate reject",
@@ -131,13 +131,34 @@ func TestGateGuard_AllowsAllFellowshipCommandsWhenPending(t *testing.T) {
 		"fellowship autopsy infer --dir /tmp/worktree",
 		"fellowship errand list --dir .",
 		"fellowship status --json",
+		"fellowship eagles --json",
+		"fellowship tome show",
+		"fellowship herald --json",
+		"fellowship version",
 		"~/.claude/fellowship/bin/fellowship gate reject",
 		"/usr/local/bin/fellowship eagles",
 	} {
 		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
 		result := GateGuard(s, input)
 		if result.Block {
-			t.Errorf("fellowship command should be allowed through gate_pending, cmd=%q got: %s", cmd, result.Message)
+			t.Errorf("allowlisted fellowship command should be allowed through gate_pending, cmd=%q got: %s", cmd, result.Message)
+		}
+	}
+}
+
+func TestGateGuard_BlocksNonAllowlistedFellowshipCommandsWhenPending(t *testing.T) {
+	s := &state.State{Phase: "Research", GatePending: true}
+	for _, cmd := range []string{
+		"fellowship state update-quest --name quest-1 --status completed",
+		"fellowship hold --dir /tmp/worktree",
+		"fellowship unhold --dir /tmp/worktree",
+		"fellowship dashboard",
+		"fellowship company approve foo",
+	} {
+		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
+		result := GateGuard(s, input)
+		if !result.Block {
+			t.Errorf("non-allowlisted fellowship command should be blocked during gate_pending, cmd=%q", cmd)
 		}
 	}
 }

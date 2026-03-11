@@ -49,9 +49,9 @@ func GateGuard(s *state.State, input *HookInput) HookResult {
 	return HookResult{}
 }
 
-// isFellowshipEscapeCommand returns true for any fellowship CLI command.
-// Fellowship commands operate on state files, not source code, so they should
-// always be allowed through even when gate_pending is true.
+// isFellowshipEscapeCommand returns true for fellowship CLI commands that are
+// safe to execute even when gate_pending is true. These are commands that
+// operate on state/metadata files, not source code.
 //
 // Shell metacharacters are rejected to prevent bypass abuse (e.g., chaining
 // a destructive command after fellowship via "&&" or ";").
@@ -68,6 +68,21 @@ func isFellowshipEscapeCommand(command string) bool {
 	}
 	// Accept bare "fellowship" or any path ending in "/fellowship".
 	bin := fields[0]
-	return bin == "fellowship" || strings.HasSuffix(bin, "/fellowship")
+	if bin != "fellowship" && !strings.HasSuffix(bin, "/fellowship") {
+		return false
+	}
+	// Allowlist of subcommands safe to run during gate_pending.
+	allowed := map[string]bool{
+		"gate":    true, // approve/reject gates
+		"init":    true, // reset state file
+		"autopsy": true, // write/read failure records
+		"errand":  true, // read/update errand status
+		"status":  true, // read-only status scan
+		"eagles":  true, // read-only health scan
+		"tome":    true, // read-only quest history
+		"herald":  true, // read-only event log
+		"version": true, // print version
+	}
+	return allowed[fields[1]]
 }
 

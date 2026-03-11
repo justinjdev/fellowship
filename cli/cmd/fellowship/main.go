@@ -827,7 +827,7 @@ func runAutopsyScan(args []string) int {
 		opts.Tags = strings.Split(*tags, ",")
 	}
 
-	expiryDays := autopsy.ReadExpiryDays()
+	expiryDays := datadir.AutopsyExpiryDays(autopsy.DefaultExpiryDays)
 	matches, err := autopsy.Scan(root, opts, expiryDays)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)

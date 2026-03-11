@@ -439,21 +439,3 @@ func TestSanitize(t *testing.T) {
 	}
 }
 
-func TestReadExpiryDays_Default(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	if got := ReadExpiryDays(); got != DefaultExpiryDays {
-		t.Errorf("ReadExpiryDays = %d, want %d", got, DefaultExpiryDays)
-	}
-}
-
-func TestReadExpiryDays_Custom(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	os.MkdirAll(filepath.Join(home, ".claude"), 0755)
-	data := []byte(`{"autopsy":{"expiryDays":30}}`)
-	os.WriteFile(filepath.Join(home, ".claude", "fellowship.json"), data, 0644)
-
-	if got := ReadExpiryDays(); got != 30 {
-		t.Errorf("ReadExpiryDays = %d, want 30", got)
-	}
-}
