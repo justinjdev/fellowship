@@ -26,6 +26,7 @@ type Server struct {
 	mux          *http.ServeMux
 	db           *db.DB
 	pollInterval int
+	hub          *Hub
 }
 
 func NewServer(d *db.DB, pollInterval int) *Server {
@@ -33,7 +34,9 @@ func NewServer(d *db.DB, pollInterval int) *Server {
 		mux:          http.NewServeMux(),
 		db:           d,
 		pollInterval: pollInterval,
+		hub:          NewHub(),
 	}
+	s.mux.HandleFunc("GET /ws", s.hub.HandleWS)
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
 	s.mux.HandleFunc("GET /api/eagles", s.handleEagles)
 	s.mux.HandleFunc("GET /api/herald", s.handleHerald)
@@ -150,6 +153,9 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: result.Name, Action: "approved"})
+	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: result.Name})
+
 	// Best-effort herald announcements after tx commits.
 	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		now := time.Now().UTC().Format(time.RFC3339)
@@ -226,6 +232,9 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: result.Name, Action: "rejected"})
+	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: result.Name})
+
 	// Best-effort herald announcement after tx commits.
 	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		herald.Announce(conn, herald.Tiding{
@@ -275,7 +284,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("company not found: %s", name)
 		}
 
-		approved, errs := batchApproveCompany(conn, *target, fs)
+		approved, errs := batchApproveCompany(conn, *target, fs, s.hub)
 		resp.Approved = approved
 		if resp.Approved == nil {
 			resp.Approved = []string{}
@@ -299,7 +308,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 }
 
 // batchApproveCompany approves all pending gates within a company.
-func batchApproveCompany(conn *db.Conn, c CompanyEntry, fs *FellowshipState) (approved []string, errs []error) {
+func batchApproveCompany(conn *db.Conn, c CompanyEntry, fs *FellowshipState, hub *Hub) (approved []string, errs []error) {
 	for _, qName := range c.Quests {
 		// Find worktree from fellowship quests
 		var wt string
@@ -348,6 +357,11 @@ func batchApproveCompany(conn *db.Conn, c CompanyEntry, fs *FellowshipState) (ap
 			Timestamp: now, Quest: qName, Type: herald.PhaseTransition,
 			Phase: nextPhase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, nextPhase),
 		})
+
+		if hub != nil {
+			hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: qName, Action: "approved"})
+			hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: qName})
+		}
 
 		_ = wt // worktree used for context but not needed for DB operations
 		approved = append(approved, qName)
