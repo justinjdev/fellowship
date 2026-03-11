@@ -118,9 +118,24 @@ func Scan(path string, files []string, topics []string) ([]Entry, error) {
 	return result, nil
 }
 
-// Clear removes the bulletin file.
+// Clear truncates the bulletin file in place under an exclusive lock,
+// ensuring concurrent Post calls are not lost to an unlinked inode.
 func Clear(path string) error {
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("opening bulletin file: %w", err)
+	}
+	defer f.Close()
+
+	if err := filelock.Lock(f.Fd()); err != nil {
+		return fmt.Errorf("locking bulletin file: %w", err)
+	}
+	defer filelock.Unlock(f.Fd())
+
+	if err := f.Truncate(0); err != nil {
 		return fmt.Errorf("clearing bulletin: %w", err)
 	}
 	return nil
@@ -174,11 +189,31 @@ func matchesFiles(entryFiles []string, filterFiles []string) bool {
 		return false
 	}
 	for _, ef := range entryFiles {
+		ef = normalizePath(ef)
 		for _, ff := range filterFiles {
-			if strings.HasPrefix(ef, ff) || strings.HasPrefix(ff, ef) {
+			ff = normalizePath(ff)
+			if pathContains(ef, ff) || pathContains(ff, ef) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// normalizePath trims whitespace, normalizes separators, and removes trailing slashes.
+func normalizePath(p string) string {
+	p = strings.TrimSpace(p)
+	p = strings.ReplaceAll(p, "\\", "/")
+	p = strings.TrimSuffix(p, "/")
+	return p
+}
+
+// pathContains checks if child equals parent or is nested under parent
+// using path-boundary matching (separator-aware), preventing false matches
+// like "src/auth" matching "src/authz/login.go".
+func pathContains(child, parent string) bool {
+	if child == parent {
+		return true
+	}
+	return strings.HasPrefix(child, parent+"/")
 }

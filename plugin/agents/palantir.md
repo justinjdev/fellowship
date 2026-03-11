@@ -64,11 +64,11 @@ Verify quest worktrees aren't in a broken state:
 
 ### 5. Cross-Reference Bulletin Board
 
-Read `.fellowship/bulletin.jsonl` in the **main repo root** for new discoveries posted by quests. For each entry:
+Read the bulletin board using `fellowship bulletin list --json` for new discoveries posted by quests. For each entry:
 1. Compare the entry's `topic` and `files` against active quest task descriptions. A bulletin entry is relevant to a quest if:
    - Any bulletin file overlaps with files in the quest's worktree diff (compare against the fellowship's configured base branch, not a hardcoded branch name)
    - The topic keyword appears in the quest's task description (substring match)
-2. **Deduplication:** Before sending a `BULLETIN` alert, check `.fellowship/palantir-alerts.jsonl` for an existing alert with the same source quest, target quest, topic, and discovery. Skip entries that have already been alerted.
+2. **Deduplication:** Before sending a `BULLETIN` alert, check the palantir alerts log (in the fellowship data directory at `palantir-alerts.jsonl`) for an existing alert with the same source quest, target quest, topic, and discovery. Skip entries that have already been alerted.
 3. If a discovery is relevant to a quest that is **past Research phase**, alert Gandalf with a recommendation to relay the discovery to the affected quest
 4. Skip entries posted by the quest itself — only cross-reference against *other* quests
 
@@ -106,14 +106,24 @@ When you detect an issue, send a message to the lead using `SendMessage`:
 
 ### Alert Persistence
 
-After sending each alert via `SendMessage`, persist it to the fellowship-level alert log so it's available for retrospective analysis. Use Bash to append a JSON line to `.fellowship/palantir-alerts.jsonl` in the **main repo root** (not per-worktree).
+After sending each alert via `SendMessage`, persist it to the fellowship-level alert log so it's available for retrospective analysis. Use Bash to append a JSON line to the palantir alerts log in the fellowship data directory (not per-worktree). Resolve the data directory path with `fellowship bulletin path` or use the same directory as the bulletin file.
 
 Use `jq` to safely encode the alert as JSON (avoids broken JSONL from quotes or special characters in the detail text):
 
+For non-bulletin alerts:
 ```bash
 jq -nc --arg type "<type>" --arg detail "<alert message>" --arg quests "<quest_names>" \
   '{timestamp: (now | strftime("%Y-%m-%dT%H:%M:%SZ")), type: $type, quests: ($quests | split(",")), detail: $detail}' \
-  >> <git_root>/.fellowship/palantir-alerts.jsonl
+  >> <data_dir>/palantir-alerts.jsonl
+```
+
+For `bulletin` alerts, include the deduplication fields so repeat checks can skip already-alerted entries:
+```bash
+jq -nc --arg type "bulletin" --arg detail "<alert message>" \
+  --arg source_quest "<source>" --arg target_quest "<target>" \
+  --arg topic "<topic>" --arg discovery "<discovery>" \
+  '{timestamp: (now | strftime("%Y-%m-%dT%H:%M:%SZ")), type: $type, source_quest: $source_quest, target_quest: $target_quest, topic: $topic, discovery: $discovery, detail: $detail}' \
+  >> <data_dir>/palantir-alerts.jsonl
 ```
 
 Where `<type>` is one of: `stuck`, `drift`, `conflict`, `health`, `bulletin`. Apply this logging step after every alert in all five categories.

@@ -144,6 +144,26 @@ func TestScanByFiles(t *testing.T) {
 	}
 }
 
+func TestScanByFilesPathBoundary(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bulletin.jsonl")
+
+	Post(path, Entry{Quest: "q1", Topic: "auth", Files: []string{"src/auth/jwt.go"}, Discovery: "d1"})
+	Post(path, Entry{Quest: "q2", Topic: "authz", Files: []string{"src/authz/login.go"}, Discovery: "d2"})
+
+	// "src/auth" should match "src/auth/jwt.go" but NOT "src/authz/login.go"
+	entries, err := Scan(path, []string{"src/auth"}, nil)
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry (path boundary match), got %d", len(entries))
+	}
+	if entries[0].Quest != "q1" {
+		t.Errorf("expected quest q1, got %s", entries[0].Quest)
+	}
+}
+
 func TestScanBothFilters(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bulletin.jsonl")
