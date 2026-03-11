@@ -58,23 +58,28 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 	s.mux.HandleFunc("POST /api/config", s.handleConfigWrite)
 
 	staticFS, _ := iofs.Sub(staticFiles, "static")
-	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	fileServer := http.FileServer(http.FS(staticFS))
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/ws" {
 			http.NotFound(w, r)
 			return
 		}
 
+		// Try to serve static file first
 		path := strings.TrimPrefix(r.URL.Path, "/")
 		if path == "" {
 			path = "index.html"
 		}
 		if f, err := staticFS.Open(path); err == nil {
+			stat, statErr := f.Stat()
 			f.Close()
-			http.FileServer(http.FS(staticFS)).ServeHTTP(w, r)
-			return
+			if statErr == nil && !stat.IsDir() {
+				fileServer.ServeHTTP(w, r)
+				return
+			}
 		}
 
+		// SPA fallback: serve index.html for client-side routes
 		data, _ := staticFiles.ReadFile("static/index.html")
 		if data == nil {
 			http.NotFound(w, r)
