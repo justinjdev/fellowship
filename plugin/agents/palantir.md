@@ -65,7 +65,7 @@ Verify quest worktrees aren't in a broken state:
 ### 5. Cross-Reference Bulletin Board
 
 Read the bulletin board using `fellowship bulletin list --json` for new discoveries posted by quests. For each entry:
-1. Compare the entry's `topic` and `files` against active quest task descriptions. A bulletin entry is relevant to a quest if:
+1. Compare the entry's `topic` and `files` against active quest context. A bulletin entry is relevant to a quest if **either** of the following is true:
    - Any bulletin file overlaps with files in the quest's worktree diff (compare against the fellowship's configured base branch, not a hardcoded branch name)
    - The topic keyword appears in the quest's task description (substring match)
 2. **Deduplication:** Before sending a `BULLETIN` alert, check the palantir alerts log (in the fellowship data directory at `palantir-alerts.jsonl`) for an existing alert with the same source quest, target quest, topic, and discovery. Skip entries that have already been alerted.

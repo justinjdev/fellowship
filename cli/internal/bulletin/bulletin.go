@@ -127,7 +127,7 @@ func Scan(path string, files []string, topics []string) ([]Entry, error) {
 // Clear truncates the bulletin file in place under an exclusive lock,
 // ensuring concurrent Post calls are not lost to an unlinked inode.
 func Clear(path string) error {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
+	f, err := os.OpenFile(path, os.O_RDWR, 0644)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
