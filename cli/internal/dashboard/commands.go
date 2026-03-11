@@ -3,6 +3,7 @@ package dashboard
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 )
 
 type SpawnQuestRequest struct {
@@ -40,7 +41,7 @@ func (s *Server) handleSpawnQuest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.hub.Broadcast(WSEvent{Type: "command-queued", CommandID: cmd.ID})
+	s.hub.Broadcast(WSEvent{Type: "command-queued", CommandID: cmd.ID, Timestamp: time.Now().Unix()})
 	json.NewEncoder(w).Encode(QueuedResponse{Queued: true, CommandID: cmd.ID})
 }
 
@@ -60,7 +61,7 @@ func (s *Server) handleSpawnScout(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.hub.Broadcast(WSEvent{Type: "command-queued", CommandID: cmd.ID})
+	s.hub.Broadcast(WSEvent{Type: "command-queued", CommandID: cmd.ID, Timestamp: time.Now().Unix()})
 	json.NewEncoder(w).Encode(QueuedResponse{Queued: true, CommandID: cmd.ID})
 }
 
@@ -80,7 +81,7 @@ func (s *Server) handleKillQuest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.hub.Broadcast(WSEvent{Type: "command-queued", CommandID: cmd.ID})
+	s.hub.Broadcast(WSEvent{Type: "command-queued", CommandID: cmd.ID, Timestamp: time.Now().Unix()})
 	json.NewEncoder(w).Encode(QueuedResponse{Queued: true, CommandID: cmd.ID})
 }
 
@@ -100,7 +101,7 @@ func (s *Server) handleRestartQuest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.hub.Broadcast(WSEvent{Type: "command-queued", CommandID: cmd.ID})
+	s.hub.Broadcast(WSEvent{Type: "command-queued", CommandID: cmd.ID, Timestamp: time.Now().Unix()})
 	json.NewEncoder(w).Encode(QueuedResponse{Queued: true, CommandID: cmd.ID})
 }
 
