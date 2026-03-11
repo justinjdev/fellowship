@@ -187,18 +187,20 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: result.Name, Action: "approved"})
-	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: result.Name})
+	now := time.Now().UTC()
+	ts := now.Unix()
+	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: result.Name, Action: "approved", Timestamp: ts})
+	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: result.Name, Timestamp: ts})
 
 	// Best-effort herald announcements after tx commits.
 	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
-		now := time.Now().UTC().Format(time.RFC3339)
+		nowStr := now.Format(time.RFC3339)
 		herald.Announce(conn, herald.Tiding{
-			Timestamp: now, Quest: result.Name, Type: herald.GateApproved,
+			Timestamp: nowStr, Quest: result.Name, Type: herald.GateApproved,
 			Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
 		})
 		herald.Announce(conn, herald.Tiding{
-			Timestamp: now, Quest: result.Name, Type: herald.PhaseTransition,
+			Timestamp: nowStr, Quest: result.Name, Type: herald.PhaseTransition,
 			Phase: result.Phase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, result.Phase),
 		})
 		return nil
@@ -266,13 +268,14 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: result.Name, Action: "rejected"})
-	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: result.Name})
+	rejectTS := time.Now().UTC()
+	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: result.Name, Action: "rejected", Timestamp: rejectTS.Unix()})
+	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: result.Name, Timestamp: rejectTS.Unix()})
 
 	// Best-effort herald announcement after tx commits.
 	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		herald.Announce(conn, herald.Tiding{
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Timestamp: rejectTS.Format(time.RFC3339),
 			Quest:     result.Name, Type: herald.GateRejected,
 			Phase: result.Phase, Detail: fmt.Sprintf("Gate rejected for %s", result.Phase),
 		})
@@ -393,8 +396,9 @@ func batchApproveCompany(conn *db.Conn, c CompanyEntry, fs *FellowshipState, hub
 		})
 
 		if hub != nil {
-			hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: qName, Action: "approved"})
-			hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: qName})
+			batchTS := time.Now().Unix()
+			hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: qName, Action: "approved", Timestamp: batchTS})
+			hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: qName, Timestamp: batchTS})
 		}
 
 		_ = wt // worktree used for context but not needed for DB operations
