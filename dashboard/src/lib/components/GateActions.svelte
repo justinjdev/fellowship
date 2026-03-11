@@ -5,6 +5,7 @@
 	let loading = $state(false);
 
 	async function approve() {
+		if (loading) return;
 		loading = true;
 		try {
 			await approveGate(worktree);
@@ -14,6 +15,7 @@
 	}
 
 	async function reject() {
+		if (loading) return;
 		loading = true;
 		try {
 			await rejectGate(worktree);

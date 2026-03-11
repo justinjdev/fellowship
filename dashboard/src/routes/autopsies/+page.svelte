@@ -7,6 +7,7 @@
 	let searchText = $state('');
 	let expandedIndex = $state<number | null>(null);
 	let loading = $state(true);
+	let loadError = $state(false);
 
 	let filtered = $derived(
 		autopsies.filter((a) => {
@@ -39,7 +40,7 @@
 		try {
 			autopsies = (await fetchAutopsies()) as Autopsy[];
 		} catch {
-			// Failed to load autopsies
+			loadError = true;
 		} finally {
 			loading = false;
 		}
@@ -64,6 +65,8 @@
 	<div class="list-scroll">
 		{#if loading}
 			<div class="empty-state">Loading autopsies...</div>
+		{:else if loadError}
+			<div class="empty-state error">Failed to load autopsies. Is the server running?</div>
 		{:else if filtered.length === 0}
 			<div class="empty-state">No autopsies found.</div>
 		{:else}
@@ -320,5 +323,9 @@
 		padding: var(--space-2xl);
 		color: var(--text-muted);
 		font-size: 13px;
+	}
+
+	.empty-state.error {
+		color: var(--accent-red);
 	}
 </style>
