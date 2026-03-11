@@ -51,6 +51,11 @@ func NewServer(d *db.DB, pollInterval int) *Server {
 	s.mux.HandleFunc("POST /api/quest/restart", s.handleRestartQuest)
 	s.mux.HandleFunc("POST /api/scout/spawn", s.handleSpawnScout)
 	s.mux.HandleFunc("GET /api/commands", s.handleCommands)
+	s.mux.HandleFunc("GET /api/autopsies/", s.handleAutopsies)
+	s.mux.HandleFunc("GET /api/autopsies", s.handleAutopsies)
+	s.mux.HandleFunc("GET /api/tome/", s.handleTome)
+	s.mux.HandleFunc("GET /api/config", s.handleConfigRead)
+	s.mux.HandleFunc("POST /api/config", s.handleConfigWrite)
 
 	staticFS, _ := iofs.Sub(staticFiles, "static")
 	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
