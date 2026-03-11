@@ -106,8 +106,16 @@ func Create(repoRoot string, input *CreateInput) (string, error) {
 	}
 	data = append(data, '\n')
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		return "", fmt.Errorf("creating autopsy file: %w", err)
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
 		return "", fmt.Errorf("writing autopsy: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return "", fmt.Errorf("closing autopsy file: %w", err)
 	}
 	return path, nil
 }
