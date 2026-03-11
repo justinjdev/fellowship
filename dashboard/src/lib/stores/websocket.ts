@@ -36,29 +36,33 @@ function getWSUrl(): string {
 function connect() {
 	if (ws?.readyState === WebSocket.OPEN) return;
 
+	let socket: WebSocket;
 	try {
-		ws = new WebSocket(getWSUrl());
+		socket = new WebSocket(getWSUrl());
 	} catch {
 		scheduleReconnect();
 		return;
 	}
+	ws = socket;
 
-	ws.onopen = () => {
+	socket.onopen = () => {
+		if (ws !== socket) return;
 		connected.set(true);
 		reconnectDelay = 1000;
 	};
 
-	ws.onclose = () => {
+	socket.onclose = () => {
+		if (ws !== socket) return;
 		connected.set(false);
 		ws = null;
 		if (shouldReconnect) scheduleReconnect();
 	};
 
-	ws.onerror = () => {
-		ws?.close();
+	socket.onerror = () => {
+		socket.close();
 	};
 
-	ws.onmessage = (event) => {
+	socket.onmessage = (event) => {
 		try {
 			const data: WSEvent = JSON.parse(event.data);
 			lastEvent.set(data);

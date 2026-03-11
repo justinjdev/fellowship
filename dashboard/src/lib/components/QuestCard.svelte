@@ -1,12 +1,18 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import PhaseTimeline from './PhaseTimeline.svelte';
 	import GateActions from './GateActions.svelte';
 	import type { QuestStatus, QuestHealth } from '$lib/types';
 
 	let { quest, health }: { quest: QuestStatus; health?: QuestHealth } = $props();
+
+	function navigateToQuest() {
+		goto(`/quest/${encodeURIComponent(quest.name)}`);
+	}
 </script>
 
-<a href="/quest/{encodeURIComponent(quest.name)}" class="quest-card" class:gate-pending={quest.gate_pending}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="quest-card" class:gate-pending={quest.gate_pending} onclick={navigateToQuest} onkeydown={(e) => e.key === 'Enter' && navigateToQuest()} role="link" tabindex="0">
 	<div class="card-header">
 		<span class="quest-name">{quest.name}</span>
 		{#if health}
@@ -24,11 +30,11 @@
 	</div>
 
 	{#if quest.gate_pending}
-		<div class="gate-row" onclick={(e) => e.preventDefault()}>
+		<div class="gate-row" onclick={(e) => e.stopPropagation()}>
 			<GateActions worktree={quest.worktree} />
 		</div>
 	{/if}
-</a>
+</div>
 
 <style>
 	.quest-card {
@@ -39,14 +45,12 @@
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
-		text-decoration: none;
-		color: inherit;
+		cursor: pointer;
 		transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 	}
 
 	.quest-card:hover {
 		border-color: var(--border-hover);
-		text-decoration: none;
 	}
 
 	.quest-card.gate-pending {

@@ -4,10 +4,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
+
+var queueMu sync.Mutex
 
 type CommandAction string
 
@@ -60,7 +64,7 @@ func LoadCommandQueue(gitRoot string) (*CommandQueue, error) {
 	}
 	var q CommandQueue
 	if err := json.Unmarshal(data, &q); err != nil {
-		return &CommandQueue{}, nil
+		return nil, fmt.Errorf("corrupt command queue %s: %w", path, err)
 	}
 	return &q, nil
 }
@@ -82,6 +86,9 @@ func SaveCommandQueue(gitRoot string, q *CommandQueue) error {
 }
 
 func EnqueueCommand(gitRoot string, action CommandAction, params json.RawMessage) (*Command, error) {
+	queueMu.Lock()
+	defer queueMu.Unlock()
+
 	q, err := LoadCommandQueue(gitRoot)
 	if err != nil {
 		return nil, err

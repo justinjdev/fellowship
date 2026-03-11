@@ -1,1 +1,0 @@
-import"../chunks/DsnmJJEf.js";import{i as t}from"../chunks/D9Ae_xmU.js";import{p as a,o as p,b as r}from"../chunks/CnZUc5Q9.js";import{g as m}from"../chunks/D4lNzUeh.js";function f(n,o){a(o,!1),p(()=>{m("/command",{replaceState:!0})}),t(),r()}export{f as component};

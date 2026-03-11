@@ -14,8 +14,11 @@
 		if (!status) return;
 
 		const names = status.quests.map((q) => q.name);
-		const results = await Promise.all(names.map((n) => fetchTome(n)));
-		tomes = results.filter((t): t is QuestTome => t != null) as QuestTome[];
+		const results = await Promise.allSettled(names.map((n) => fetchTome(n)));
+		tomes = results
+			.filter((r): r is PromiseFulfilledResult<unknown> => r.status === 'fulfilled')
+			.map((r) => r.value)
+			.filter((t): t is QuestTome => t != null) as QuestTome[];
 		loading = false;
 	}
 

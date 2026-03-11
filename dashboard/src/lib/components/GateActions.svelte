@@ -6,14 +6,20 @@
 
 	async function approve() {
 		loading = true;
-		await approveGate(worktree);
-		loading = false;
+		try {
+			await approveGate(worktree);
+		} finally {
+			loading = false;
+		}
 	}
 
 	async function reject() {
 		loading = true;
-		await rejectGate(worktree);
-		loading = false;
+		try {
+			await rejectGate(worktree);
+		} finally {
+			loading = false;
+		}
 	}
 </script>
 
