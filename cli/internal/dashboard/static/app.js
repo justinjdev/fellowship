@@ -452,11 +452,14 @@
   async function fetchAndRenderBulletin() {
     try {
       var res = await fetch("/api/bulletin");
-      if (!res.ok) return;
+      if (!res.ok) {
+        renderBulletin([]);
+        return;
+      }
       var entries = await res.json();
       renderBulletin(entries);
     } catch (err) {
-      // silently ignore
+      renderBulletin([]);
     }
   }
 
@@ -495,7 +498,8 @@
 
         var timeStr = e.ts;
         try {
-          timeStr = new Date(e.ts).toLocaleTimeString();
+          var d = new Date(e.ts);
+          if (!isNaN(d.getTime())) timeStr = d.toLocaleTimeString();
         } catch (err) {}
 
         var filesStr = "";

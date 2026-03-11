@@ -1623,6 +1623,10 @@ func loadErrandFile(dir string) (*errand.QuestErrandList, string, error) {
 }
 
 func runBulletin(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: fellowship bulletin <post|scan|list|clear>")
+		return 1
+	}
 	switch args[0] {
 	case "post":
 		return runBulletinPost(args[1:])

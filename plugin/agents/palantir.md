@@ -65,7 +65,9 @@ Verify quest worktrees aren't in a broken state:
 ### 5. Cross-Reference Bulletin Board
 
 Read `.fellowship/bulletin.jsonl` in the **main repo root** for new discoveries posted by quests. For each entry:
-1. Compare the entry's `topic` and `files` against active quest task descriptions
+1. Compare the entry's `topic` and `files` against active quest task descriptions. A bulletin entry is relevant to a quest if:
+   - Any bulletin file overlaps with files in the quest's worktree diff (use `git -C {worktree} diff --name-only main`)
+   - The topic keyword appears in the quest's task description (substring match)
 2. If a discovery is relevant to a quest that is **past Research phase**, alert Gandalf with a recommendation to relay the discovery to the affected quest
 3. Skip entries posted by the quest itself — only cross-reference against *other* quests
 
@@ -113,7 +115,7 @@ jq -nc --arg type "<type>" --arg detail "<alert message>" --arg quests "<quest_n
   >> <git_root>/.fellowship/palantir-alerts.jsonl
 ```
 
-Where `<type>` is one of: `stuck`, `drift`, `conflict`, `health`, `bulletin`. Apply this logging step after every alert in all four categories.
+Where `<type>` is one of: `stuck`, `drift`, `conflict`, `health`, `bulletin`. Apply this logging step after every alert in all five categories.
 
 ### 7. Respond to Shutdown
 

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 )
 
 func TestPostAndLoad(t *testing.T) {
@@ -252,7 +254,7 @@ func TestBulletinPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := filepath.Join("/repo", ".fellowship", "bulletin.jsonl")
+	expected := filepath.Join("/repo", datadir.Name(), "bulletin.jsonl")
 	if path != expected {
 		t.Errorf("expected %s, got %s", expected, path)
 	}
