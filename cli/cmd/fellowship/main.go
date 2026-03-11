@@ -1635,7 +1635,7 @@ func runBulletin(args []string) int {
 	case "list":
 		return runBulletinList(args[1:])
 	case "clear":
-		return runBulletinClear()
+		return runBulletinClear(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown bulletin command: %s\n", args[0])
 		return 1
@@ -1655,10 +1655,7 @@ func runBulletinPost(args []string) int {
 		return 1
 	}
 
-	var fileList []string
-	if *files != "" {
-		fileList = strings.Split(*files, ",")
-	}
+	fileList := splitCSV(*files)
 
 	path, err := bulletin.BulletinPath("")
 	if err != nil {
@@ -1687,13 +1684,8 @@ func runBulletinScan(args []string) int {
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Parse(args)
 
-	var fileList, topicList []string
-	if *files != "" {
-		fileList = strings.Split(*files, ",")
-	}
-	if *topics != "" {
-		topicList = strings.Split(*topics, ",")
-	}
+	fileList := splitCSV(*files)
+	topicList := splitCSV(*topics)
 
 	path, err := bulletin.BulletinPath("")
 	if err != nil {
@@ -1774,7 +1766,14 @@ func runBulletinList(args []string) int {
 	return 0
 }
 
-func runBulletinClear() int {
+func runBulletinClear(args []string) int {
+	fs := flag.NewFlagSet("bulletin clear", flag.ExitOnError)
+	fs.Parse(args)
+	if fs.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "usage: fellowship bulletin clear")
+		return 1
+	}
+
 	path, err := bulletin.BulletinPath("")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -1786,6 +1785,22 @@ func runBulletinClear() int {
 	}
 	fmt.Println("Bulletin cleared.")
 	return 0
+}
+
+// splitCSV splits a comma-separated string, trimming whitespace and removing empty segments.
+func splitCSV(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func gitRootOrCwd() string {

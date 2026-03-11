@@ -2,9 +2,11 @@ package bulletin
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
@@ -239,6 +241,40 @@ func TestMainRepoRootFuncOverride(t *testing.T) {
 	}
 	if root != "/fake/repo" {
 		t.Errorf("expected /fake/repo, got %s", root)
+	}
+}
+
+func TestPostConcurrent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bulletin.jsonl")
+
+	const writers = 16
+	var wg sync.WaitGroup
+	wg.Add(writers)
+
+	for i := 0; i < writers; i++ {
+		i := i
+		go func() {
+			defer wg.Done()
+			if err := Post(path, Entry{
+				Quest:     fmt.Sprintf("q-%d", i),
+				Topic:     "auth",
+				Files:     []string{fmt.Sprintf("src/auth/%d.go", i)},
+				Discovery: "concurrent write",
+			}); err != nil {
+				t.Errorf("Post(%d): %v", i, err)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	entries, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(entries) != writers {
+		t.Fatalf("expected %d entries, got %d", writers, len(entries))
 	}
 }
 

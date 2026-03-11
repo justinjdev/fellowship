@@ -66,10 +66,11 @@ Verify quest worktrees aren't in a broken state:
 
 Read `.fellowship/bulletin.jsonl` in the **main repo root** for new discoveries posted by quests. For each entry:
 1. Compare the entry's `topic` and `files` against active quest task descriptions. A bulletin entry is relevant to a quest if:
-   - Any bulletin file overlaps with files in the quest's worktree diff (use `git -C {worktree} diff --name-only main`)
+   - Any bulletin file overlaps with files in the quest's worktree diff (compare against the fellowship's configured base branch, not a hardcoded branch name)
    - The topic keyword appears in the quest's task description (substring match)
-2. If a discovery is relevant to a quest that is **past Research phase**, alert Gandalf with a recommendation to relay the discovery to the affected quest
-3. Skip entries posted by the quest itself — only cross-reference against *other* quests
+2. **Deduplication:** Before sending a `BULLETIN` alert, check `.fellowship/palantir-alerts.jsonl` for an existing alert with the same source quest, target quest, topic, and discovery. Skip entries that have already been alerted.
+3. If a discovery is relevant to a quest that is **past Research phase**, alert Gandalf with a recommendation to relay the discovery to the affected quest
+4. Skip entries posted by the quest itself — only cross-reference against *other* quests
 
 Use `fellowship bulletin list --json` to read all entries.
 

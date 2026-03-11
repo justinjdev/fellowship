@@ -90,6 +90,10 @@ func Load(path string) ([]Entry, error) {
 // An entry matches if any of its files have a prefix in the files list, or if its
 // topic matches any of the given topics. Both filters are case-insensitive.
 // If both files and topics are empty, all entries are returned.
+//
+// File matching is bidirectional: filter "src/auth/" matches entry file
+// "src/auth/jwt.go", and filter "src/auth/jwt.go" also matches entry file
+// "src/auth/". This allows both directory-level and file-level filters.
 func Scan(path string, files []string, topics []string) ([]Entry, error) {
 	all, err := Load(path)
 	if err != nil {
