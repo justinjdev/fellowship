@@ -183,10 +183,15 @@ The same hard gate requirements apply — validation mode doesn't lower the bar,
 #### Standard Research
 
 **Actions:**
-1. If entering an unfamiliar area, invoke `/gather-lore` to extract conventions from reference files
-2. Use Explore agents (Task tool, subagent_type=Explore) to scan relevant code paths
-3. Read key files identified in the Session Context
-4. Document findings: how the current system works, constraints, edge cases
+1. **Scan autopsies:** If running as a fellowship teammate, scan for prior failure records that may be relevant to this quest:
+   ```bash
+   fellowship autopsy scan --dir <main_repo> --files "<target_files>" --modules "<target_modules>"
+   ```
+   If matches are found, incorporate their warnings into your research findings — these are hard-won lessons from previous quests that failed in the same area.
+2. If entering an unfamiliar area, invoke `/gather-lore` to extract conventions from reference files
+3. Use Explore agents (Task tool, subagent_type=Explore) to scan relevant code paths
+4. Read key files identified in the Session Context
+5. Document findings: how the current system works, constraints, edge cases
 
 **Hard gate — Research must produce:**
 - [ ] Key files identified with specific line ranges
@@ -251,9 +256,13 @@ Trigger recovery when any of these occur:
 Recovery procedure:
 1. **Stop implementing.** Commit what works so far — don't discard partial progress.
 2. **Document what went wrong.** Be specific: which step failed, what was discovered, why the plan doesn't hold.
-3. **Return to Phase 2 (Plan).** Invoke `/lembas` with phase "Implement (partial)" to compact, then re-enter plan mode with the new information. Revise only the affected steps — don't replan from scratch.
-4. **Get user approval** on the revised plan before resuming implementation.
-5. If running as a fellowship teammate, message the lead with the blocker before replanning.
+3. **Write autopsy:** If running as a fellowship teammate, record the failure for future quests:
+   ```bash
+   echo '{"quest":"<quest_name>","task":"<task>","phase":"Implement","trigger":"recovery","files":["<affected_files>"],"modules":["<affected_modules>"],"what_failed":"<specific description>","resolution":"<what you learned or changed>","tags":["<relevant_tags>"]}' | fellowship autopsy create --dir <main_repo>
+   ```
+4. **Return to Phase 2 (Plan).** Invoke `/lembas` with phase "Implement (partial)" to compact, then re-enter plan mode with the new information. Revise only the affected steps — don't replan from scratch.
+5. **Get user approval** on the revised plan before resuming implementation.
+6. If running as a fellowship teammate, message the lead with the blocker before replanning.
 
 **Transition:** Invoke `/lembas` with phase "Implement" before moving to Adversarial Review.
 

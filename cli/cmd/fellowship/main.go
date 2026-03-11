@@ -13,6 +13,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/justinjdev/fellowship/cli/internal/autopsy"
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/company"
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
@@ -73,6 +74,12 @@ func main() {
 		os.Exit(runHold(os.Args[2:]))
 	case "unhold":
 		os.Exit(runUnhold(os.Args[2:]))
+	case "autopsy":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: fellowship autopsy <create|scan|infer>")
+			os.Exit(1)
+		}
+		os.Exit(runAutopsy(os.Args[2:]))
 	case "herald":
 		os.Exit(runHerald(os.Args[2:]))
 	case "dashboard":
@@ -188,6 +195,18 @@ Dashboard:
   dashboard              Start live web dashboard
     --port N             HTTP port (default: 3000)
     --poll N             Poll interval in seconds (default: 5)
+
+Autopsy (failure memory):
+  autopsy create         Write a structured failure record (reads JSON from stdin)
+    --dir DIR            Git repo root (default: auto-detect)
+  autopsy scan           Find autopsies matching files, modules, or tags
+    --dir DIR            Git repo root (default: auto-detect)
+    --files f1,f2        Comma-separated file paths to match
+    --modules m1,m2      Comma-separated module names to match
+    --tags t1,t2         Comma-separated tags to match
+  autopsy infer          Reconstruct autopsy from worktree signals (tome, herald)
+    --dir DIR            Quest worktree directory (required)
+    --repo DIR           Git repo root for storing autopsy (default: auto-detect)
 
 Other:
   version                Print version`)
@@ -742,6 +761,106 @@ func runDashboard(args []string) int {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
+	return 0
+}
+
+func runAutopsy(args []string) int {
+	switch args[0] {
+	case "create":
+		return runAutopsyCreate(args[1:])
+	case "scan":
+		return runAutopsyScan(args[1:])
+	case "infer":
+		return runAutopsyInfer(args[1:])
+	default:
+		fmt.Fprintf(os.Stderr, "unknown autopsy command: %s\n", args[0])
+		return 1
+	}
+}
+
+func runAutopsyCreate(args []string) int {
+	fs := flag.NewFlagSet("autopsy create", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	fs.Parse(args)
+
+	root := *dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+
+	var input autopsy.CreateInput
+	if err := json.NewDecoder(os.Stdin).Decode(&input); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: reading JSON from stdin: %v\n", err)
+		return 1
+	}
+
+	path, err := autopsy.Create(root, &input)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Autopsy written to %s\n", path)
+	return 0
+}
+
+func runAutopsyScan(args []string) int {
+	fs := flag.NewFlagSet("autopsy scan", flag.ExitOnError)
+	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
+	files := fs.String("files", "", "Comma-separated file paths to match")
+	modules := fs.String("modules", "", "Comma-separated module names to match")
+	tags := fs.String("tags", "", "Comma-separated tags to match")
+	fs.Parse(args)
+
+	root := *dir
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+
+	opts := autopsy.ScanOptions{}
+	if *files != "" {
+		opts.Files = strings.Split(*files, ",")
+	}
+	if *modules != "" {
+		opts.Modules = strings.Split(*modules, ",")
+	}
+	if *tags != "" {
+		opts.Tags = strings.Split(*tags, ",")
+	}
+
+	expiryDays := autopsy.ReadExpiryDays()
+	matches, err := autopsy.Scan(root, opts, expiryDays)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	data, _ := json.MarshalIndent(matches, "", "  ")
+	fmt.Println(string(data))
+	return 0
+}
+
+func runAutopsyInfer(args []string) int {
+	fs := flag.NewFlagSet("autopsy infer", flag.ExitOnError)
+	dir := fs.String("dir", "", "Quest worktree directory (required)")
+	repo := fs.String("repo", "", "Git repo root for storing autopsy (default: auto-detect)")
+	fs.Parse(args)
+
+	if *dir == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship autopsy infer --dir <worktree> [--repo DIR]")
+		return 1
+	}
+
+	root := *repo
+	if root == "" {
+		root = gitRootOrCwd()
+	}
+
+	path, err := autopsy.Infer(*dir, root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Inferred autopsy written to %s\n", path)
 	return 0
 }
 

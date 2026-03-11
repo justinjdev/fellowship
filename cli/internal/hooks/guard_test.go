@@ -120,27 +120,25 @@ func TestGateGuard_HeldTakesPriorityOverGatePending(t *testing.T) {
 	}
 }
 
-func TestGateGuard_AllowsFellowshipGateRejectWhenPending(t *testing.T) {
+func TestGateGuard_AllowsAllFellowshipCommandsWhenPending(t *testing.T) {
 	s := &state.State{Phase: "Research", GatePending: true}
 	for _, cmd := range []string{
-		"~/.claude/fellowship/bin/fellowship gate reject",
 		"fellowship gate reject",
-		"/usr/local/bin/fellowship gate reject",
+		"fellowship gate approve",
+		"fellowship init",
+		"fellowship autopsy create --dir /tmp/repo",
+		"fellowship autopsy scan --dir /tmp/repo --modules auth",
+		"fellowship autopsy infer --dir /tmp/worktree",
+		"fellowship errand list --dir .",
+		"fellowship status --json",
+		"~/.claude/fellowship/bin/fellowship gate reject",
+		"/usr/local/bin/fellowship eagles",
 	} {
 		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
 		result := GateGuard(s, input)
 		if result.Block {
-			t.Errorf("fellowship gate reject should be allowed through gate_pending, cmd=%q got: %s", cmd, result.Message)
+			t.Errorf("fellowship command should be allowed through gate_pending, cmd=%q got: %s", cmd, result.Message)
 		}
-	}
-}
-
-func TestGateGuard_AllowsFellowshipInitWhenPending(t *testing.T) {
-	s := &state.State{Phase: "Implement", GatePending: true}
-	input := &HookInput{ToolInput: ToolInput{Command: "~/.claude/fellowship/bin/fellowship init"}}
-	result := GateGuard(s, input)
-	if result.Block {
-		t.Errorf("fellowship init should be allowed through gate_pending: %s", result.Message)
 	}
 }
 

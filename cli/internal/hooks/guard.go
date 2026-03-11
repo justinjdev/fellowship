@@ -49,13 +49,12 @@ func GateGuard(s *state.State, input *HookInput) HookResult {
 	return HookResult{}
 }
 
-// isFellowshipEscapeCommand returns true for fellowship CLI commands that must
-// be allowed through even when gate_pending is true — specifically the commands
-// needed to unstick a blocked session without requiring user intervention.
+// isFellowshipEscapeCommand returns true for any fellowship CLI command.
+// Fellowship commands operate on state files, not source code, so they should
+// always be allowed through even when gate_pending is true.
 //
-// The command is tokenized and matched exactly against the fellowship binary
-// plus the allowed subcommands (gate reject, gate approve, init). Shell
-// metacharacters are rejected to prevent bypass abuse.
+// Shell metacharacters are rejected to prevent bypass abuse (e.g., chaining
+// a destructive command after fellowship via "&&" or ";").
 func isFellowshipEscapeCommand(command string) bool {
 	trimmed := strings.TrimSpace(command)
 	if trimmed == "" ||
@@ -69,13 +68,6 @@ func isFellowshipEscapeCommand(command string) bool {
 	}
 	// Accept bare "fellowship" or any path ending in "/fellowship".
 	bin := fields[0]
-	if bin != "fellowship" && !strings.HasSuffix(bin, "/fellowship") {
-		return false
-	}
-	if len(fields) >= 3 && fields[1] == "gate" &&
-		(fields[2] == "reject" || fields[2] == "approve") {
-		return true
-	}
-	return fields[1] == "init"
+	return bin == "fellowship" || strings.HasSuffix(bin, "/fellowship")
 }
 

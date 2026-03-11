@@ -39,6 +39,8 @@ For each quest worktree listed in `fellowship-state.json`:
 
 5. **Palantir alerts:** Read `palantir-alerts.jsonl` from the resolved data directory at the git root if it exists. Each line is a JSON object with `timestamp`, `type` (stuck/drift/conflict/health), `quests`, and `detail`.
 
+6. **Autopsies:** Scan the `autopsies/` subdirectory within the resolved data directory. Each `.json` file is a structured failure record with `quest`, `phase`, `trigger`, `files`, `modules`, `what_failed`, and `resolution` fields. Collect all entries.
+
 ### Step 3: Analyze
 
 Compute the following from collected data:
@@ -60,6 +62,11 @@ Compute the following from collected data:
 - Count by type (stuck, drift, conflict, health)
 - Which quests were flagged most frequently
 
+**Autopsy patterns:**
+- Count autopsies by trigger (recovery, rejection, abandonment)
+- Modules/files with multiple autopsies (hot spots for failure)
+- Common tags across autopsies (recurring themes)
+
 ### Step 4: Present Results
 
 Output the analysis in this format:
@@ -70,6 +77,7 @@ Fellowship Retrospective: {fellowship_name}
 Quests: {completed} completed, {failed} failed
 Gates: {total} total, {rejected} rejected ({rejection_details})
 Palantir alerts: {alert_summary}
+Autopsies: {autopsy_count} ({trigger_breakdown})
 
 Observations:
 - {observation_1}
@@ -87,6 +95,8 @@ Recommendations:
 - "quest-ui-login spent longest in Research — task may have been under-specified"
 - "No warden violations — conventions well-established"
 - "2 file conflict alerts — consider splitting shared files across quests"
+- "auth module has 4 autopsies — consider documenting its quirks in CLAUDE.md"
+- "3 recovery autopsies in Implement — plans may need more detail"
 
 **Recommendation examples:**
 - Auto-approve phases with 0% rejection rate

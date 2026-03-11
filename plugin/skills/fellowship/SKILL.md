@@ -260,7 +260,11 @@ Keep it brief — one line, not a monologue. Functional information always comes
 
 ## Edge Cases
 
-- **Quest fails:** Report to user with context (which phase, what went wrong). Offer to respawn. Worktree is preserved.
+- **Quest fails:** Report to user with context (which phase, what went wrong). Before respawning, write an autopsy to preserve failure knowledge for future quests:
+  ```bash
+  fellowship autopsy infer --dir <worktree_path> --repo <main_repo>
+  ```
+  This reconstructs a best-effort failure record from the quest's tome, herald, and eagles data. Then offer to respawn. Worktree is preserved.
   - **Respawn procedure:** Spawn a new teammate with the same task description, but add to the spawn prompt: `"You are resuming a failed quest. Your working directory is already set to the existing worktree at {worktree_path}. Skip worktree creation in quest Phase 0 — you're already isolated. Check .fellowship/checkpoint.md for a checkpoint from the previous attempt."` Set the new teammate's working directory to the failed quest's worktree path.
 - **Direct teammate access:** Through Gandalf ("tell quest-2 to skip the logger refactor") or direct via Shift+Down to message the teammate.
 - **Session death:** Worktrees survive but coordination is lost. To resume: start a new fellowship, use respawn procedure for each incomplete quest. Each worktree's `.fellowship/checkpoint.md` has the last known state. For manual recovery: `~/.claude/fellowship/bin/fellowship gate reject --dir <worktree>`
