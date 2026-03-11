@@ -62,7 +62,16 @@ Verify quest worktrees aren't in a broken state:
 - `git -C {worktree_path} status` — clean working tree? unmerged files?
 - Check for uncommitted changes piling up (sign of a quest not committing incrementally)
 
-### 5. Alert the Lead
+### 5. Cross-Reference Bulletin Board
+
+Read `.fellowship/bulletin.jsonl` in the **main repo root** for new discoveries posted by quests. For each entry:
+1. Compare the entry's `topic` and `files` against active quest task descriptions
+2. If a discovery is relevant to a quest that is **past Research phase**, alert Gandalf with a recommendation to relay the discovery to the affected quest
+3. Skip entries posted by the quest itself — only cross-reference against *other* quests
+
+Use `fellowship bulletin list --json` to read all entries.
+
+### 6. Alert the Lead
 
 When you detect an issue, send a message to the lead using `SendMessage`:
 
@@ -89,6 +98,9 @@ When you detect an issue, send a message to the lead using `SendMessage`:
 **HEALTH** — worktree issue:
 > "Quest {name} worktree has {issue}: {details}."
 
+**BULLETIN** — relevant discovery missed:
+> "Bulletin entry from {source_quest} (topic: {topic}) may be relevant to {target_quest} (currently in {phase}): {discovery}"
+
 ### Alert Persistence
 
 After sending each alert via `SendMessage`, persist it to the fellowship-level alert log so it's available for retrospective analysis. Use Bash to append a JSON line to `.fellowship/palantir-alerts.jsonl` in the **main repo root** (not per-worktree).
@@ -101,9 +113,9 @@ jq -nc --arg type "<type>" --arg detail "<alert message>" --arg quests "<quest_n
   >> <git_root>/.fellowship/palantir-alerts.jsonl
 ```
 
-Where `<type>` is one of: `stuck`, `drift`, `conflict`, `health`. Apply this logging step after every alert in all four categories.
+Where `<type>` is one of: `stuck`, `drift`, `conflict`, `health`, `bulletin`. Apply this logging step after every alert in all four categories.
 
-### 6. Respond to Shutdown
+### 7. Respond to Shutdown
 
 When you receive a shutdown request from the lead, respond immediately:
 

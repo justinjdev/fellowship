@@ -188,6 +188,7 @@ The same hard gate requirements apply — validation mode doesn't lower the bar,
    fellowship autopsy scan --dir <main_repo> --files "<target_files>" --modules "<target_modules>"
    ```
    If matches are found, incorporate their warnings into your research findings — these are hard-won lessons from previous quests that failed in the same area.
+2. **Scan bulletin board:** Run `fellowship bulletin scan --files "<target_files>" --topics "<relevant_topics>"` to check for sibling quest discoveries. Incorporate any relevant findings into your research.
 2. If entering an unfamiliar area, invoke `/gather-lore` to extract conventions from reference files
 3. Use Explore agents (Task tool, subagent_type=Explore) to scan relevant code paths
 4. Read key files identified in the Session Context
@@ -245,6 +246,7 @@ Goal: Execute the plan with small, verifiable changes and tight feedback loops. 
 - Small changes. One function, one test, one commit. Not a big-bang change.
 - Use conventional commits for all git commits (e.g., `feat:`, `fix:`, `docs:`, `refactor:`).
 - Verify as you go. Don't batch all testing to the end.
+- **Post discoveries to the bulletin board** when you find something likely relevant to sibling quests. Run `fellowship bulletin post --quest "<quest_name>" --topic "<topic>" --files "<affected_files>" --discovery "<description>"`. Post refactors, API changes, infrastructure shifts, gotchas, and deprecations. Do NOT post phase progress, gate submissions, or file edit intentions.
 
 **Recovery — when implementation hits a wall:**
 
