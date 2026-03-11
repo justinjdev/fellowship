@@ -155,16 +155,18 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: st.QuestName, Action: "approved"})
-	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: st.QuestName})
+	now := time.Now().UTC()
+	ts := now.Unix()
+	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: st.QuestName, Action: "approved", Timestamp: ts})
+	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: st.QuestName, Timestamp: ts})
 
-	now := time.Now().UTC().Format(time.RFC3339)
+	nowStr := now.Format(time.RFC3339)
 	herald.Announce(req.Dir, herald.Tiding{
-		Timestamp: now, Quest: st.QuestName, Type: herald.GateApproved,
+		Timestamp: nowStr, Quest: st.QuestName, Type: herald.GateApproved,
 		Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
 	})
 	herald.Announce(req.Dir, herald.Tiding{
-		Timestamp: now, Quest: st.QuestName, Type: herald.PhaseTransition,
+		Timestamp: nowStr, Quest: st.QuestName, Type: herald.PhaseTransition,
 		Phase: st.Phase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, st.Phase),
 	})
 
@@ -212,11 +214,12 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: st.QuestName, Action: "rejected"})
-	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: st.QuestName})
+	rejectTS := time.Now().UTC()
+	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: st.QuestName, Action: "rejected", Timestamp: rejectTS.Unix()})
+	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: st.QuestName, Timestamp: rejectTS.Unix()})
 
 	herald.Announce(req.Dir, herald.Tiding{
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Timestamp: rejectTS.Format(time.RFC3339),
 		Quest: st.QuestName, Type: herald.GateRejected,
 		Phase: st.Phase, Detail: fmt.Sprintf("Gate rejected for %s", st.Phase),
 	})
@@ -335,8 +338,9 @@ func batchApproveCompany(c CompanyEntry, fs *FellowshipState, hub *Hub) (approve
 		})
 
 		if hub != nil {
-			hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: qName, Action: "approved"})
-			hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: qName})
+			batchTS := time.Now().Unix()
+			hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: qName, Action: "approved", Timestamp: batchTS})
+			hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: qName, Timestamp: batchTS})
 		}
 
 		approved = append(approved, qName)
