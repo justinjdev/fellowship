@@ -26,6 +26,7 @@ type Server struct {
 	mux          *http.ServeMux
 	gitRoot      string
 	pollInterval int
+	hub          *Hub
 }
 
 func NewServer(gitRoot string, pollInterval int) *Server {
@@ -33,7 +34,9 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 		mux:          http.NewServeMux(),
 		gitRoot:      gitRoot,
 		pollInterval: pollInterval,
+		hub:          NewHub(),
 	}
+	s.mux.HandleFunc("GET /ws", s.hub.HandleWS)
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
 	s.mux.HandleFunc("GET /api/eagles", s.handleEagles)
 	s.mux.HandleFunc("GET /api/herald", s.handleHerald)
@@ -118,6 +121,9 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: st.QuestName, Action: "approved"})
+	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: st.QuestName})
+
 	now := time.Now().UTC().Format(time.RFC3339)
 	herald.Announce(req.Dir, herald.Tiding{
 		Timestamp: now, Quest: st.QuestName, Type: herald.GateApproved,
@@ -172,6 +178,9 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: st.QuestName, Action: "rejected"})
+	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: st.QuestName})
+
 	herald.Announce(req.Dir, herald.Tiding{
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Quest: st.QuestName, Type: herald.GateRejected,
@@ -219,7 +228,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	approved, errs := batchApproveCompany(*target, fs)
+	approved, errs := batchApproveCompany(*target, fs, s.hub)
 
 	type companyApproveResponse struct {
 		Approved []string `json:"approved"`
@@ -239,7 +248,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 }
 
 // batchApproveCompany approves all pending gates within a company.
-func batchApproveCompany(c CompanyEntry, fs *FellowshipState) (approved []string, errs []error) {
+func batchApproveCompany(c CompanyEntry, fs *FellowshipState, hub *Hub) (approved []string, errs []error) {
 	questWorktree := make(map[string]string)
 	for _, q := range fs.Quests {
 		questWorktree[q.Name] = q.Worktree
@@ -290,6 +299,11 @@ func batchApproveCompany(c CompanyEntry, fs *FellowshipState) (approved []string
 			Timestamp: now, Quest: qName, Type: herald.PhaseTransition,
 			Phase: nextPhase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, nextPhase),
 		})
+
+		if hub != nil {
+			hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: qName, Action: "approved"})
+			hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: qName})
+		}
 
 		approved = append(approved, qName)
 	}
