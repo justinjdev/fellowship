@@ -23,7 +23,7 @@ type WSEvent struct {
 }
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true }, // localhost only
+	CheckOrigin: func(r *http.Request) bool { return true }, // allow all origins (dashboard is localhost-only by design)
 }
 
 // Hub manages WebSocket connections and broadcasts events.
@@ -62,6 +62,7 @@ func (h *Hub) Broadcast(event WSEvent) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for conn := range h.conns {
+		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 			delete(h.conns, conn)
 			conn.Close()

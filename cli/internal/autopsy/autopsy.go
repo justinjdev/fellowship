@@ -96,10 +96,8 @@ func Create(repoRoot string, input *CreateInput) (string, error) {
 	}
 
 	randBytes := make([]byte, 4)
-	if _, err := rand.Read(randBytes); err != nil {
-		return "", fmt.Errorf("generating autopsy filename suffix: %w", err)
-	}
-	filename := fmt.Sprintf("%s-%s-%x.json", now.Format("20060102T150405"), sanitize(input.Quest), randBytes)
+	rand.Read(randBytes)
+	filename := fmt.Sprintf("%s-%s-%d-%x.json", now.Format("20060102T150405"), sanitize(input.Quest), now.UnixNano(), randBytes)
 	path := filepath.Join(dir, filename)
 
 	data, err := json.MarshalIndent(a, "", "  ")

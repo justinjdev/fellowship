@@ -19,7 +19,7 @@ func (s *Server) handleAutopsies(w http.ResponseWriter, r *http.Request) {
 	suffix := strings.TrimPrefix(r.URL.Path, "/api/autopsies")
 	suffix = strings.TrimPrefix(suffix, "/")
 	if suffix != "" {
-		filePath := filepath.Join(s.gitRoot, ".fellowship", "autopsies", suffix)
+		filePath := filepath.Join(s.gitRoot, datadir.Name(), "autopsies", suffix)
 		data, err := os.ReadFile(filePath)
 		if err != nil {
 			http.Error(w, "autopsy not found", http.StatusNotFound)
@@ -30,7 +30,7 @@ func (s *Server) handleAutopsies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	autopsyDir := filepath.Join(s.gitRoot, ".fellowship", "autopsies")
+	autopsyDir := filepath.Join(s.gitRoot, datadir.Name(), "autopsies")
 	entries, err := os.ReadDir(autopsyDir)
 	if err != nil {
 		json.NewEncoder(w).Encode([]interface{}{})
@@ -149,7 +149,10 @@ func (s *Server) handleConfigWrite(w http.ResponseWriter, r *http.Request) {
 
 	existing := make(map[string]interface{})
 	if data, err := os.ReadFile(configPath); err == nil {
-		json.Unmarshal(data, &existing)
+		if err := json.Unmarshal(data, &existing); err != nil {
+			http.Error(w, "existing config file contains invalid JSON", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	existing[req.Key] = req.Value

@@ -15,7 +15,9 @@
 	};
 
 	function formatTime(ts: string): string {
-		const diff = Date.now() - new Date(ts).getTime();
+		const date = new Date(ts);
+		if (isNaN(date.getTime())) return '?';
+		const diff = Date.now() - date.getTime();
 		const mins = Math.floor(diff / 60000);
 		if (mins < 1) return 'now';
 		if (mins < 60) return `${mins}m`;

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { onMount } from 'svelte';
 	import { dashboardStatus, questHealths } from '$lib/stores/quests';
 	import { fetchErrands, fetchTome } from '$lib/api';
 	import PhaseTimeline from '$lib/components/PhaseTimeline.svelte';
@@ -21,14 +20,17 @@
 
 	const phases = ['Onboard', 'Research', 'Plan', 'Implement', 'Review', 'Complete'];
 
-	onMount(async () => {
-		if (quest) {
-			const [e, t] = await Promise.all([
+	$effect(() => {
+		if (quest && !tomeData) {
+			Promise.all([
 				fetchErrands(quest.worktree),
 				fetchTome(questName),
-			]);
-			errandList = e as QuestErrandList;
-			tomeData = t as QuestTome;
+			]).then(([e, t]) => {
+				errandList = e as QuestErrandList;
+				tomeData = t as QuestTome;
+			}).catch(() => {
+				// Failed to load quest data
+			});
 		}
 	});
 

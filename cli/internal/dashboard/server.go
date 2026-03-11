@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	iofs "io/fs"
+	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -57,7 +58,10 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 	s.mux.HandleFunc("GET /api/config", s.handleConfigRead)
 	s.mux.HandleFunc("POST /api/config", s.handleConfigWrite)
 
-	staticFS, _ := iofs.Sub(staticFiles, "static")
+	staticFS, err := iofs.Sub(staticFiles, "static")
+	if err != nil {
+		log.Fatalf("dashboard: failed to load static assets: %v", err)
+	}
 	fileServer := http.FileServer(http.FS(staticFS))
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/ws" {
