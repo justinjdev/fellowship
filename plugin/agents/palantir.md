@@ -106,7 +106,7 @@ When you detect an issue, send a message to the lead using `SendMessage`:
 
 ### Alert Persistence
 
-After sending each alert via `SendMessage`, persist it to the fellowship-level alert log so it's available for retrospective analysis. Use Bash to append a JSON line to the palantir alerts log in the fellowship data directory (not per-worktree). Resolve the data directory path with `fellowship bulletin path` or use the same directory as the bulletin file.
+After sending each alert via `SendMessage`, persist it to the fellowship-level alert log so it's available for retrospective analysis. Use Bash to append a JSON line to the palantir alerts log in the fellowship data directory (not per-worktree). The alert log lives alongside the bulletin file at `<repo_root>/.fellowship/palantir-alerts.jsonl` (where `.fellowship` is the default data directory name, configurable via `dataDir` in `~/.claude/fellowship.json`).
 
 Use `jq` to safely encode the alert as JSON (avoids broken JSONL from quotes or special characters in the detail text):
 

@@ -56,7 +56,8 @@ func Post(path string, entry Entry) error {
 	return nil
 }
 
-// Load reads all entries from the bulletin JSONL file.
+// Load reads all entries from the bulletin JSONL file under a shared lock
+// to avoid observing partially written lines from concurrent Post/Clear calls.
 func Load(path string) ([]Entry, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -66,6 +67,11 @@ func Load(path string) ([]Entry, error) {
 		return nil, fmt.Errorf("opening bulletin file: %w", err)
 	}
 	defer f.Close()
+
+	if err := filelock.Lock(f.Fd()); err != nil {
+		return nil, fmt.Errorf("locking bulletin file for read: %w", err)
+	}
+	defer filelock.Unlock(f.Fd())
 
 	var entries []Entry
 	scanner := bufio.NewScanner(f)
