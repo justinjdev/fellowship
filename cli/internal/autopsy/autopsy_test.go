@@ -14,6 +14,7 @@ import (
 
 func setupTestRepo(t *testing.T) string {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir()) // Pin HOME so datadir.Name() returns default
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, datadir.DefaultName, autopsyDir), 0755)
 	return dir
@@ -249,6 +250,7 @@ func TestScan_EmptyDirectory(t *testing.T) {
 }
 
 func TestInfer_FromRespawns(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	worktree := t.TempDir()
 	repo := t.TempDir()
 	os.MkdirAll(filepath.Join(repo, datadir.DefaultName, autopsyDir), 0755)
@@ -291,6 +293,7 @@ func TestInfer_FromRespawns(t *testing.T) {
 }
 
 func TestInfer_FromRejection(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	worktree := t.TempDir()
 	repo := t.TempDir()
 	os.MkdirAll(filepath.Join(repo, datadir.DefaultName, autopsyDir), 0755)
@@ -336,6 +339,7 @@ func TestInfer_FromRejection(t *testing.T) {
 }
 
 func TestInfer_FromAbandonment(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	worktree := t.TempDir()
 	repo := t.TempDir()
 	os.MkdirAll(filepath.Join(repo, datadir.DefaultName, autopsyDir), 0755)
@@ -368,6 +372,7 @@ func TestInfer_FromAbandonment(t *testing.T) {
 }
 
 func TestInfer_NoFailureSignals(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	worktree := t.TempDir()
 	repo := t.TempDir()
 

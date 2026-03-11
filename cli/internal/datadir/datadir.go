@@ -15,6 +15,9 @@ const DefaultName = ".fellowship"
 // cfg holds the subset of fellowship config the CLI cares about.
 type cfg struct {
 	DataDir string `json:"dataDir"`
+	Autopsy struct {
+		ExpiryDays int `json:"expiryDays"`
+	} `json:"autopsy"`
 }
 
 var (
@@ -102,20 +105,8 @@ func gitRoot() (string, error) {
 // AutopsyExpiryDays reads autopsy.expiryDays from ~/.claude/fellowship.json.
 // Returns the provided defaultDays if not configured or on any error.
 func AutopsyExpiryDays(defaultDays int) int {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return defaultDays
-	}
-	data, err := os.ReadFile(filepath.Join(home, ".claude", "fellowship.json"))
-	if err != nil {
-		return defaultDays
-	}
-	var c struct {
-		Autopsy struct {
-			ExpiryDays int `json:"expiryDays"`
-		} `json:"autopsy"`
-	}
-	if json.Unmarshal(data, &c) != nil || c.Autopsy.ExpiryDays <= 0 {
+	c := readUserConfig()
+	if c.Autopsy.ExpiryDays <= 0 {
 		return defaultDays
 	}
 	return c.Autopsy.ExpiryDays
