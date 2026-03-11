@@ -2,7 +2,10 @@ module github.com/justinjdev/fellowship/cli
 
 go 1.25.5
 
-require zombiezen.com/go/sqlite v1.4.2
+require (
+	github.com/gorilla/websocket v1.5.3
+	zombiezen.com/go/sqlite v1.4.2
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
