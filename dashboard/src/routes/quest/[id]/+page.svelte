@@ -20,8 +20,11 @@
 
 	const phases = ['Onboard', 'Research', 'Plan', 'Implement', 'Review', 'Complete'];
 
+	let dataLoaded = $state(false);
+
 	$effect(() => {
-		if (quest && !tomeData) {
+		if (quest && !dataLoaded) {
+			dataLoaded = true;
 			Promise.all([
 				fetchErrands(quest.worktree),
 				fetchTome(questName),
@@ -30,6 +33,7 @@
 				tomeData = t as QuestTome;
 			}).catch(() => {
 				// Failed to load quest data
+				dataLoaded = false;
 			});
 		}
 	});

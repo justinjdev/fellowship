@@ -79,10 +79,15 @@
 	}
 
 	onMount(async () => {
-		const config = await fetchConfig();
-		globalConfig = (config.global as Record<string, unknown>) ?? {};
-		projectConfig = (config.project as Record<string, unknown>) ?? {};
-		loading = false;
+		try {
+			const config = await fetchConfig();
+			globalConfig = (config.global as Record<string, unknown>) ?? {};
+			projectConfig = (config.project as Record<string, unknown>) ?? {};
+		} catch {
+			// Config load failed — show empty state
+		} finally {
+			loading = false;
+		}
 	});
 </script>
 

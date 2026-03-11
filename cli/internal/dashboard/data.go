@@ -102,12 +102,14 @@ func (s *Server) handleConfigRead(w http.ResponseWriter, r *http.Request) {
 		"project": nil,
 	}
 
-	home, _ := os.UserHomeDir()
-	globalPath := filepath.Join(home, ".claude", "fellowship.json")
-	if data, err := os.ReadFile(globalPath); err == nil {
-		var global interface{}
-		if json.Unmarshal(data, &global) == nil {
-			result["global"] = global
+	home, homeErr := os.UserHomeDir()
+	if homeErr == nil {
+		globalPath := filepath.Join(home, ".claude", "fellowship.json")
+		if data, err := os.ReadFile(globalPath); err == nil {
+			var global interface{}
+			if json.Unmarshal(data, &global) == nil {
+				result["global"] = global
+			}
 		}
 	}
 
@@ -138,7 +140,11 @@ func (s *Server) handleConfigWrite(w http.ResponseWriter, r *http.Request) {
 	var configPath string
 	switch req.Scope {
 	case "global":
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			http.Error(w, "cannot determine home directory", http.StatusInternalServerError)
+			return
+		}
 		configPath = filepath.Join(home, ".claude", "fellowship.json")
 	case "project":
 		configPath = filepath.Join(s.gitRoot, ".fellowship", "config.json")

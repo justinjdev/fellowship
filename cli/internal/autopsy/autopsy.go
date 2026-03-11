@@ -153,7 +153,9 @@ func Scan(repoRoot string, opts ScanOptions, expiryDays int) ([]Autopsy, error) 
 			return nil, fmt.Errorf("parsing autopsy timestamp for %s: %w", entry.Name(), err)
 		}
 		if ts.Before(cutoff) {
-			os.Remove(path) // best-effort cleanup; don't abort scan on failure
+			if err := os.Remove(path); err != nil {
+				fmt.Fprintf(os.Stderr, "fellowship: failed to prune expired autopsy %s: %v\n", entry.Name(), err)
+			}
 			continue
 		}
 
