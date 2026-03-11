@@ -253,10 +253,10 @@ func matchesFilters(a *Autopsy, opts ScanOptions) bool {
 			if strings.HasPrefix(autopsyFile, queryFile) || strings.HasPrefix(queryFile, autopsyFile) {
 				return true
 			}
-			// Also match if they share a directory prefix
+			// Also match if they share a directory prefix (skip root-level files)
 			queryDir := filepath.Dir(queryFile)
-			autopsyDir := filepath.Dir(autopsyFile)
-			if queryDir == autopsyDir {
+			aDir := filepath.Dir(autopsyFile)
+			if queryDir != "." && aDir != "." && queryDir == aDir {
 				return true
 			}
 		}
