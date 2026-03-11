@@ -138,11 +138,17 @@ func Scan(repoRoot string, opts ScanOptions, expiryDays int) ([]Autopsy, error) 
 		path := filepath.Join(dir, entry.Name())
 		a, err := loadAutopsy(path)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: skipping corrupt autopsy %s: %v\n", entry.Name(), err)
 			continue
 		}
 
-		// Prune expired
-		if ts, err := time.Parse(time.RFC3339, a.Timestamp); err == nil && ts.Before(cutoff) {
+		// Prune expired or unparseable timestamps
+		ts, err := time.Parse(time.RFC3339, a.Timestamp)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: skipping autopsy %s with bad timestamp: %v\n", entry.Name(), err)
+			continue
+		}
+		if ts.Before(cutoff) {
 			os.Remove(path)
 			continue
 		}
