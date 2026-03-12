@@ -111,14 +111,15 @@ func (s *Server) handleConfigRead(w http.ResponseWriter, r *http.Request) {
 		"project": nil,
 	}
 
-	home, _ := os.UserHomeDir()
-	globalPath := filepath.Join(home, ".claude", "fellowship.json")
-	if data, err := os.ReadFile(globalPath); err == nil {
-		var global interface{}
-		if json.Unmarshal(data, &global) == nil {
-			result["global"] = global
+	if home, err := os.UserHomeDir(); err == nil {
+		globalPath := filepath.Join(home, ".claude", "fellowship.json")
+		if data, err := os.ReadFile(globalPath); err == nil {
+			var global interface{}
+			if json.Unmarshal(data, &global) == nil {
+				result["global"] = global
+			}
 		}
-	}
+	} // silently skip global config if home directory unavailable
 
 	projectPath := filepath.Join(s.gitRoot, ".fellowship", "config.json")
 	if data, err := os.ReadFile(projectPath); err == nil {
