@@ -8,10 +8,12 @@
 
 	let tomes = $state<QuestTome[]>([]);
 	let loading = $state(true);
+	let dataLoaded = $state(false);
 
 	async function loadTomes() {
 		const status = $dashboardStatus;
 		if (!status) return;
+		dataLoaded = true;
 
 		const names = status.quests.map((q) => q.name);
 		const results = await Promise.allSettled(names.map((n) => fetchTome(n)));
@@ -29,7 +31,7 @@
 		startPolling();
 
 		unsub = dashboardStatus.subscribe((status) => {
-			if (status) loadTomes();
+			if (status && !dataLoaded) loadTomes();
 		});
 	});
 
