@@ -14,6 +14,7 @@ export async function fetchTidings() {
 let unsubscribe: (() => void) | null = null;
 
 export function startHeraldPolling() {
+	if (unsubscribe) return;
 	fetchTidings();
 	unsubscribe = lastEvent.subscribe((event) => {
 		if (!event) return;
@@ -25,4 +26,5 @@ export function startHeraldPolling() {
 
 export function stopHeraldPolling() {
 	unsubscribe?.();
+	unsubscribe = null;
 }

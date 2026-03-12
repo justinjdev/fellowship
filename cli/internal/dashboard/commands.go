@@ -42,6 +42,7 @@ func (s *Server) handleSpawnQuest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.hub.Broadcast(WSEvent{Type: "command-queued", CommandID: cmd.ID, Timestamp: time.Now().Unix()})
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(QueuedResponse{Queued: true, CommandID: cmd.ID})
 }
 
@@ -62,6 +63,7 @@ func (s *Server) handleSpawnScout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.hub.Broadcast(WSEvent{Type: "command-queued", CommandID: cmd.ID, Timestamp: time.Now().Unix()})
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(QueuedResponse{Queued: true, CommandID: cmd.ID})
 }
 
@@ -82,6 +84,7 @@ func (s *Server) handleKillQuest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.hub.Broadcast(WSEvent{Type: "command-queued", CommandID: cmd.ID, Timestamp: time.Now().Unix()})
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(QueuedResponse{Queued: true, CommandID: cmd.ID})
 }
 
@@ -102,6 +105,7 @@ func (s *Server) handleRestartQuest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.hub.Broadcast(WSEvent{Type: "command-queued", CommandID: cmd.ID, Timestamp: time.Now().Unix()})
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(QueuedResponse{Queued: true, CommandID: cmd.ID})
 }
 
@@ -111,5 +115,6 @@ func (s *Server) handleCommands(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(q.Commands)
 }

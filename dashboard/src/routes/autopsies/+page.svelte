@@ -13,7 +13,7 @@
 		autopsies.filter((a) => {
 			if (!searchText) return true;
 			const q = searchText.toLowerCase();
-			const haystack = `${a.quest} ${a.task} ${a.what_failed} ${a.trigger} ${a.tags.join(' ')}`.toLowerCase();
+			const haystack = `${a.quest} ${a.task} ${a.what_failed} ${a.trigger} ${(a.tags ?? []).join(' ')}`.toLowerCase();
 			return haystack.includes(q);
 		})
 	);
