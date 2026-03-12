@@ -37,7 +37,7 @@ For each quest worktree listed in `fellowship-state.json`:
    - `git -C {worktree} log --oneline | wc -l` — commit count
    - `git -C {worktree} diff --stat "$(git -C {worktree} rev-list --max-parents=0 HEAD | tail -n1)"..HEAD 2>/dev/null || echo "0 files changed"` — change summary
 
-5. **Palantir alerts:** Read `palantir-alerts.jsonl` from the resolved data directory at the git root if it exists. Each line is a JSON object with `timestamp`, `type` (stuck/drift/conflict/health), `quests`, and `detail`.
+5. **Palantir alerts:** Read `palantir-alerts.jsonl` from the resolved data directory at the git root if it exists. Each line is a JSON object with `timestamp`, `type` (stuck/drift/conflict/health/bulletin), and `detail`. Standard alerts include `quests`; bulletin alerts include `source_quest`, `target_quest`, `topic`, and `discovery` instead.
 
 6. **Autopsies:** Scan the `autopsies/` subdirectory within the resolved data directory. Each `.json` file is a structured failure record with `quest`, `phase`, `trigger`, `files`, `modules`, `what_failed`, and `resolution` fields. Collect all entries.
 
@@ -59,7 +59,7 @@ Compute the following from collected data:
 - Check tome gate history for any rejection reasons mentioning convention or warden issues
 
 **Palantir alert summary:**
-- Count by type (stuck, drift, conflict, health)
+- Count by type (stuck, drift, conflict, health, bulletin)
 - Which quests were flagged most frequently
 
 **Autopsy patterns:**
