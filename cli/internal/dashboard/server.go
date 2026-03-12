@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/justinjdev/fellowship/cli/internal/bulletin"
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/eagles"
 	"github.com/justinjdev/fellowship/cli/internal/errand"
@@ -41,6 +42,7 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 	s.mux.HandleFunc("POST /api/gate/reject", s.handleGateReject)
 	s.mux.HandleFunc("POST /api/company/", s.handleCompanyApprove)
 	s.mux.HandleFunc("GET /api/errand/", s.handleErrand)
+	s.mux.HandleFunc("GET /api/bulletin", s.handleBulletin)
 
 	staticFS, _ := iofs.Sub(staticFiles, "static")
 	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
@@ -371,6 +373,20 @@ func (s *Server) handleProblems(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(problems)
+}
+
+func (s *Server) handleBulletin(w http.ResponseWriter, r *http.Request) {
+	bulletinPath := filepath.Join(s.gitRoot, datadir.Name(), "bulletin.jsonl")
+	entries, err := bulletin.Load(bulletinPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if entries == nil {
+		entries = []bulletin.Entry{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(entries)
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {

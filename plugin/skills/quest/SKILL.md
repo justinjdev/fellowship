@@ -188,10 +188,15 @@ The same hard gate requirements apply — validation mode doesn't lower the bar,
    fellowship autopsy scan --dir <main_repo> --files "<target_files>" --modules "<target_modules>"
    ```
    If matches are found, incorporate their warnings into your research findings — these are hard-won lessons from previous quests that failed in the same area.
-2. If entering an unfamiliar area, invoke `/gather-lore` to extract conventions from reference files
-3. Use Explore agents (Task tool, subagent_type=Explore) to scan relevant code paths
-4. Read key files identified in the Session Context
-5. Document findings: how the current system works, constraints, edge cases
+2. **Scan bulletin board:** Run `fellowship bulletin scan` with whatever filters you already know:
+   - `--topics "<relevant_topics>"` if you know the domain/problem area
+   - `--files "<target_files>"` once likely files are known
+   - both flags together when both are available
+   Incorporate any relevant findings into your research.
+3. If entering an unfamiliar area, invoke `/gather-lore` to extract conventions from reference files
+4. Use Explore agents (Task tool, subagent_type=Explore) to scan relevant code paths
+5. Read key files identified in the Session Context
+6. Document findings: how the current system works, constraints, edge cases
 
 **Hard gate — Research must produce:**
 - [ ] Key files identified with specific line ranges
@@ -245,6 +250,7 @@ Goal: Execute the plan with small, verifiable changes and tight feedback loops. 
 - Small changes. One function, one test, one commit. Not a big-bang change.
 - Use conventional commits for all git commits (e.g., `feat:`, `fix:`, `docs:`, `refactor:`).
 - Verify as you go. Don't batch all testing to the end.
+- **Post discoveries to the bulletin board** when you find something likely relevant to sibling quests (during both Research and Implement). Run `fellowship bulletin post --quest "<quest_name>" --topic "<topic>" --files "<affected_files>" --discovery "<description>"`. Post refactors, API changes, infrastructure shifts, gotchas, deprecations, and research findings about shared code. Do NOT post phase progress, gate submissions, or file edit intentions.
 
 **Recovery — when implementation hits a wall:**
 

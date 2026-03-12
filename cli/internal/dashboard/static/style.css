@@ -423,6 +423,71 @@ main {
     font-weight: 600;
 }
 
+/* ── Bulletin Board ────────────────────────────── */
+
+#bulletin-section {
+    max-width: 720px;
+    margin: 2rem auto 0;
+    display: none;
+}
+
+#bulletin-section h2 {
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gold-dim);
+    letter-spacing: 0.06em;
+    margin-bottom: 0.5rem;
+}
+
+.bulletin-topic-group {
+    margin-bottom: 0.75rem;
+}
+
+.bulletin-topic-header {
+    font-family: var(--font-heading);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid rgba(200, 168, 78, 0.25);
+    margin-bottom: 0.25rem;
+}
+
+.bulletin-item {
+    padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid rgba(58, 48, 40, 0.5);
+    border-left: 3px solid var(--gold-dim);
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.bulletin-time {
+    color: var(--text-secondary);
+    margin-right: 0.3rem;
+}
+
+.bulletin-quest {
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    margin-right: 0.3rem;
+}
+
+.bulletin-discovery {
+    color: var(--text-primary);
+}
+
+.bulletin-files {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    margin-top: 0.1rem;
+}
+
 /* ── Event Stream ──────────────────────────────── */
 
 #event-stream-section {

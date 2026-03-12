@@ -15,6 +15,7 @@
       eaglesData = await fetchEagles();
       render(data);
       await fetchAndRenderTidings();
+      await fetchAndRenderBulletin();
       await fetchAndRenderProblems();
       const interval = (data.poll_interval || 5) * 1000;
       pollTimer = setInterval(poll, interval);
@@ -50,6 +51,7 @@
       detectChanges(data);
       render(data);
       await fetchAndRenderTidings();
+      await fetchAndRenderBulletin();
       await fetchAndRenderProblems();
     } catch (err) {
       addActivity("Poll error: " + err.message);
@@ -443,6 +445,78 @@
     } catch (err) {
       container.innerHTML = "<p>Failed to load errands.</p>";
     }
+  }
+
+  // ── Bulletin Board ───────────────────────────────
+
+  async function fetchAndRenderBulletin() {
+    try {
+      var res = await fetch("/api/bulletin");
+      if (!res.ok) {
+        renderBulletin([]);
+        return;
+      }
+      var entries = await res.json();
+      renderBulletin(entries);
+    } catch (err) {
+      renderBulletin([]);
+    }
+  }
+
+  function renderBulletin(entries) {
+    var container = document.getElementById("bulletin-entries");
+    var section = document.getElementById("bulletin-section");
+    if (!container || !section) return;
+
+    if (!entries || entries.length === 0) {
+      section.style.display = "none";
+      return;
+    }
+    section.style.display = "block";
+    container.innerHTML = "";
+
+    // Group by topic
+    var byTopic = {};
+    entries.forEach(function (e) {
+      var topic = e.topic || "general";
+      if (!byTopic[topic]) byTopic[topic] = [];
+      byTopic[topic].push(e);
+    });
+
+    Object.keys(byTopic).forEach(function (topic) {
+      var group = document.createElement("div");
+      group.className = "bulletin-topic-group";
+
+      var header = document.createElement("div");
+      header.className = "bulletin-topic-header";
+      header.textContent = topic;
+      group.appendChild(header);
+
+      byTopic[topic].forEach(function (e) {
+        var item = document.createElement("div");
+        item.className = "bulletin-item";
+
+        var timeStr = e.ts;
+        try {
+          var d = new Date(e.ts);
+          if (!isNaN(d.getTime())) timeStr = d.toLocaleTimeString();
+        } catch (err) {}
+
+        var filesStr = "";
+        if (e.files && e.files.length > 0) {
+          filesStr = ' <span class="bulletin-files">' + escapeHTML(e.files.join(", ")) + "</span>";
+        }
+
+        item.innerHTML =
+          '<span class="bulletin-time">' + escapeHTML(timeStr) + "</span> " +
+          '<span class="bulletin-quest">' + escapeHTML(e.quest || "") + "</span> " +
+          '<span class="bulletin-discovery">' + escapeHTML(e.discovery || "") + "</span>" +
+          filesStr;
+        group.appendChild(item);
+      });
+
+      container.appendChild(group);
+    });
   }
 
   // ── Event Stream ─────────────────────────────────

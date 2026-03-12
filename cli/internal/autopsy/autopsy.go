@@ -155,9 +155,7 @@ func Scan(repoRoot string, opts ScanOptions, expiryDays int) ([]Autopsy, error) 
 			return nil, fmt.Errorf("parsing autopsy timestamp for %s: %w", entry.Name(), err)
 		}
 		if ts.Before(cutoff) {
-			if err := os.Remove(path); err != nil {
-				return nil, fmt.Errorf("pruning expired autopsy %s: %w", entry.Name(), err)
-			}
+			os.Remove(path) // best-effort cleanup; don't abort scan on failure
 			continue
 		}
 

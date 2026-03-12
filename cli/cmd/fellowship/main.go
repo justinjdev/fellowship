@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/autopsy"
+	"github.com/justinjdev/fellowship/cli/internal/bulletin"
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/company"
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
@@ -62,6 +63,12 @@ func main() {
 		os.Exit(runTome(os.Args[2:]))
 	case "eagles":
 		os.Exit(runEagles(os.Args[2:]))
+	case "bulletin":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: fellowship bulletin <post|scan|list|clear>")
+			os.Exit(1)
+		}
+		os.Exit(runBulletin(os.Args[2:]))
 	case "errand":
 		os.Exit(runErrand(os.Args[2:]))
 	case "state":
@@ -184,6 +191,20 @@ Errands (persistent work items):
     <id> <status>        Item ID and new status (positional args)
   errand show            Show full errand file as JSON
     --dir PATH           Worktree directory
+
+Bulletin (cross-quest knowledge sharing):
+  bulletin post          Post a discovery to the shared bulletin board
+    --quest NAME         Quest name (required)
+    --topic TOPIC        Topic tag (required)
+    --files FILE,FILE    Comma-separated relevant file paths
+    --discovery "TEXT"   Discovery description (required)
+  bulletin scan          Scan bulletin for relevant entries
+    --files FILE,FILE    Comma-separated file paths to match
+    --topics T1,T2       Comma-separated topics to match
+    --json               Output as JSON
+  bulletin list          Show all bulletin entries
+    --json               Output as JSON
+  bulletin clear         Clear the bulletin board
 
 Herald (activity tidings):
   herald                 Show recent quest tidings
@@ -1599,6 +1620,187 @@ func loadErrandFile(dir string) (*errand.QuestErrandList, string, error) {
 		return nil, "", err
 	}
 	return h, errandPath, nil
+}
+
+func runBulletin(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: fellowship bulletin <post|scan|list|clear>")
+		return 1
+	}
+	switch args[0] {
+	case "post":
+		return runBulletinPost(args[1:])
+	case "scan":
+		return runBulletinScan(args[1:])
+	case "list":
+		return runBulletinList(args[1:])
+	case "clear":
+		return runBulletinClear(args[1:])
+	default:
+		fmt.Fprintf(os.Stderr, "unknown bulletin command: %s\n", args[0])
+		return 1
+	}
+}
+
+func runBulletinPost(args []string) int {
+	fs := flag.NewFlagSet("bulletin post", flag.ExitOnError)
+	quest := fs.String("quest", "", "Quest name")
+	topic := fs.String("topic", "", "Topic tag")
+	files := fs.String("files", "", "Comma-separated file paths")
+	discovery := fs.String("discovery", "", "Discovery description")
+	fs.Parse(args)
+
+	if *quest == "" || *topic == "" || *discovery == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship bulletin post --quest NAME --topic TOPIC --discovery \"TEXT\" [--files FILE,FILE]")
+		return 1
+	}
+
+	fileList := splitCSV(*files)
+
+	path, err := bulletin.BulletinPath("")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	entry := bulletin.Entry{
+		Quest:     *quest,
+		Topic:     *topic,
+		Files:     fileList,
+		Discovery: *discovery,
+	}
+	if err := bulletin.Post(path, entry); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Posted to bulletin: [%s] %s\n", *topic, *discovery)
+	return 0
+}
+
+func runBulletinScan(args []string) int {
+	fs := flag.NewFlagSet("bulletin scan", flag.ExitOnError)
+	files := fs.String("files", "", "Comma-separated file paths to match")
+	topics := fs.String("topics", "", "Comma-separated topics to match")
+	jsonOut := fs.Bool("json", false, "Output as JSON")
+	fs.Parse(args)
+
+	fileList := splitCSV(*files)
+	topicList := splitCSV(*topics)
+
+	path, err := bulletin.BulletinPath("")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	entries, err := bulletin.Scan(path, fileList, topicList)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	if *jsonOut {
+		data, _ := json.MarshalIndent(entries, "", "  ")
+		fmt.Println(string(data))
+		return 0
+	}
+
+	if len(entries) == 0 {
+		fmt.Println("No matching bulletin entries.")
+		return 0
+	}
+
+	for _, e := range entries {
+		fmt.Printf("[%s] %s (%s): %s\n", e.Topic, e.Quest, strings.Join(e.Files, ", "), e.Discovery)
+	}
+	fmt.Printf("\n%d entries found.\n", len(entries))
+	return 0
+}
+
+func runBulletinList(args []string) int {
+	fs := flag.NewFlagSet("bulletin list", flag.ExitOnError)
+	jsonOut := fs.Bool("json", false, "Output as JSON")
+	fs.Parse(args)
+
+	path, err := bulletin.BulletinPath("")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	entries, err := bulletin.Load(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	if *jsonOut {
+		if entries == nil {
+			entries = []bulletin.Entry{}
+		}
+		data, _ := json.MarshalIndent(entries, "", "  ")
+		fmt.Println(string(data))
+		return 0
+	}
+
+	if len(entries) == 0 {
+		fmt.Println("No bulletin entries.")
+		return 0
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "TIME\tQUEST\tTOPIC\tDISCOVERY")
+	for _, e := range entries {
+		ts := e.Timestamp
+		if len(ts) > 19 {
+			ts = ts[:19]
+		}
+		disc := e.Discovery
+		if len(disc) > 60 {
+			disc = disc[:57] + "..."
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ts, e.Quest, e.Topic, disc)
+	}
+	w.Flush()
+	fmt.Printf("\n%d entries total.\n", len(entries))
+	return 0
+}
+
+func runBulletinClear(args []string) int {
+	fs := flag.NewFlagSet("bulletin clear", flag.ExitOnError)
+	fs.Parse(args)
+	if fs.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "usage: fellowship bulletin clear")
+		return 1
+	}
+
+	path, err := bulletin.BulletinPath("")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	if err := bulletin.Clear(path); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Println("Bulletin cleared.")
+	return 0
+}
+
+// splitCSV splits a comma-separated string, trimming whitespace and removing empty segments.
+func splitCSV(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func gitRootOrCwd() string {
