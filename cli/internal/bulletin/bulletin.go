@@ -75,6 +75,7 @@ func Load(path string) ([]Entry, error) {
 
 	var entries []Entry
 	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024) // 1MB max line
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
