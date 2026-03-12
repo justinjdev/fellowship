@@ -75,8 +75,9 @@ func isFellowshipEscapeCommand(command string) bool {
 	allowed := map[string]bool{
 		"gate":    true, // approve/reject gates
 		"init":    true, // reset state file
-		"autopsy": true, // write/read failure records
-		"errand":  true, // read/update errand status
+		"autopsy":  true, // write/read failure records
+		"bulletin": true, // read/write shared discovery board
+		"errand":   true, // read/update errand status
 		"status":  true, // read-only status scan
 		"eagles":  true, // read-only health scan
 		"tome":    true, // read-only quest history
