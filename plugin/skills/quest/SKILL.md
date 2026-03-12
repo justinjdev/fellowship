@@ -193,10 +193,10 @@ The same hard gate requirements apply — validation mode doesn't lower the bar,
    - `--files "<target_files>"` once likely files are known
    - both flags together when both are available
    Incorporate any relevant findings into your research.
-2. If entering an unfamiliar area, invoke `/gather-lore` to extract conventions from reference files
-3. Use Explore agents (Task tool, subagent_type=Explore) to scan relevant code paths
-4. Read key files identified in the Session Context
-5. Document findings: how the current system works, constraints, edge cases
+3. If entering an unfamiliar area, invoke `/gather-lore` to extract conventions from reference files
+4. Use Explore agents (Task tool, subagent_type=Explore) to scan relevant code paths
+5. Read key files identified in the Session Context
+6. Document findings: how the current system works, constraints, edge cases
 
 **Hard gate — Research must produce:**
 - [ ] Key files identified with specific line ranges

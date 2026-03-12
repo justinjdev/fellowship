@@ -56,7 +56,7 @@ func Post(path string, entry Entry) error {
 	return nil
 }
 
-// Load reads all entries from the bulletin JSONL file under a shared lock
+// Load reads all entries from the bulletin JSONL file under an exclusive lock
 // to avoid observing partially written lines from concurrent Post/Clear calls.
 func Load(path string) ([]Entry, error) {
 	f, err := os.Open(path)
