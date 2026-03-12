@@ -111,8 +111,7 @@ func (s *Server) handleConfigRead(w http.ResponseWriter, r *http.Request) {
 		"project": nil,
 	}
 
-	home, homeErr := os.UserHomeDir()
-	if homeErr == nil {
+	if home, err := os.UserHomeDir(); err == nil {
 		globalPath := filepath.Join(home, ".claude", "fellowship.json")
 		if data, err := os.ReadFile(globalPath); err == nil {
 			var global interface{}
@@ -120,7 +119,7 @@ func (s *Server) handleConfigRead(w http.ResponseWriter, r *http.Request) {
 				result["global"] = global
 			}
 		}
-	}
+	} // silently skip global config if home directory unavailable
 
 	projectPath := filepath.Join(s.gitRoot, ".fellowship", "config.json")
 	if data, err := os.ReadFile(projectPath); err == nil {

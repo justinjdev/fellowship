@@ -166,12 +166,10 @@
 			onClose();
 		} else if (e.key === 'ArrowDown') {
 			e.preventDefault();
-			const items = flatItems();
-			if (items.length > 0) selectedIndex = (selectedIndex + 1) % items.length;
+			if (filtered.length > 0) selectedIndex = (selectedIndex + 1) % filtered.length;
 		} else if (e.key === 'ArrowUp') {
 			e.preventDefault();
-			const items = flatItems();
-			if (items.length > 0) selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+			if (filtered.length > 0) selectedIndex = (selectedIndex - 1 + filtered.length) % filtered.length;
 		} else if (e.key === 'Enter') {
 			e.preventDefault();
 			executeSelected();

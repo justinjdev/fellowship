@@ -15,13 +15,20 @@
 		phase_transition: true,
 	});
 
-	const eventTypes = ['gate_submitted', 'gate_approved', 'gate_rejected', 'phase_transition'] as const;
+	const eventTypes = [
+		'gate_submitted', 'gate_approved', 'gate_rejected', 'phase_transition',
+		'lembas_completed', 'metadata_updated', 'quest_held', 'quest_unheld',
+	] as const;
 
 	const eventTypeLabels: Record<string, string> = {
 		gate_submitted: 'Gate Submitted',
 		gate_approved: 'Gate Approved',
 		gate_rejected: 'Gate Rejected',
 		phase_transition: 'Phase Transition',
+		lembas_completed: 'Lembas Completed',
+		metadata_updated: 'Metadata Updated',
+		quest_held: 'Quest Held',
+		quest_unheld: 'Quest Unheld',
 	};
 
 	let allTidings: Tiding[] = $derived($tidings);
