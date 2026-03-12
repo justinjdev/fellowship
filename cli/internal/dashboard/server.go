@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	iofs "io/fs"
+	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,7 @@ type Server struct {
 	mux          *http.ServeMux
 	gitRoot      string
 	pollInterval int
+	hub          *Hub
 }
 
 func NewServer(gitRoot string, pollInterval int) *Server {
@@ -33,7 +35,9 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 		mux:          http.NewServeMux(),
 		gitRoot:      gitRoot,
 		pollInterval: pollInterval,
+		hub:          NewHub(),
 	}
+	s.mux.HandleFunc("GET /ws", s.hub.HandleWS)
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
 	s.mux.HandleFunc("GET /api/eagles", s.handleEagles)
 	s.mux.HandleFunc("GET /api/herald", s.handleHerald)
@@ -43,16 +47,49 @@ func NewServer(gitRoot string, pollInterval int) *Server {
 	s.mux.HandleFunc("POST /api/company/", s.handleCompanyApprove)
 	s.mux.HandleFunc("GET /api/errand/", s.handleErrand)
 	s.mux.HandleFunc("GET /api/bulletin", s.handleBulletin)
+	s.mux.HandleFunc("POST /api/quest/spawn", s.handleSpawnQuest)
+	s.mux.HandleFunc("POST /api/quest/kill", s.handleKillQuest)
+	s.mux.HandleFunc("POST /api/quest/restart", s.handleRestartQuest)
+	s.mux.HandleFunc("POST /api/scout/spawn", s.handleSpawnScout)
+	s.mux.HandleFunc("GET /api/commands", s.handleCommands)
+	s.mux.HandleFunc("GET /api/autopsies/", s.handleAutopsies)
+	s.mux.HandleFunc("GET /api/autopsies", s.handleAutopsies)
+	s.mux.HandleFunc("GET /api/tome/", s.handleTome)
+	s.mux.HandleFunc("GET /api/config", s.handleConfigRead)
+	s.mux.HandleFunc("POST /api/config", s.handleConfigWrite)
 
-	staticFS, _ := iofs.Sub(staticFiles, "static")
-	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
-	s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
+	staticFS, err := iofs.Sub(staticFiles, "static")
+	if err != nil {
+		log.Fatalf("dashboard: failed to load static assets: %v", err)
+	}
+	fileServer := http.FileServer(http.FS(staticFS))
+	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/ws" {
 			http.NotFound(w, r)
 			return
 		}
+
+		// Try to serve static file first
+		path := strings.TrimPrefix(r.URL.Path, "/")
+		if path == "" {
+			path = "index.html"
+		}
+		if f, err := staticFS.Open(path); err == nil {
+			stat, statErr := f.Stat()
+			f.Close()
+			if statErr == nil && !stat.IsDir() {
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		// SPA fallback: serve index.html for client-side routes
 		data, _ := staticFiles.ReadFile("static/index.html")
-		w.Header().Set("Content-Type", "text/html")
+		if data == nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(data)
 	})
 	return s
@@ -118,13 +155,18 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
+	ts := now.Unix()
+	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: st.QuestName, Action: "approved", Timestamp: ts})
+	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: st.QuestName, Timestamp: ts})
+
+	nowStr := now.Format(time.RFC3339)
 	herald.Announce(req.Dir, herald.Tiding{
-		Timestamp: now, Quest: st.QuestName, Type: herald.GateApproved,
+		Timestamp: nowStr, Quest: st.QuestName, Type: herald.GateApproved,
 		Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
 	})
 	herald.Announce(req.Dir, herald.Tiding{
-		Timestamp: now, Quest: st.QuestName, Type: herald.PhaseTransition,
+		Timestamp: nowStr, Quest: st.QuestName, Type: herald.PhaseTransition,
 		Phase: st.Phase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, st.Phase),
 	})
 
@@ -172,8 +214,12 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rejectTS := time.Now().UTC()
+	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: st.QuestName, Action: "rejected", Timestamp: rejectTS.Unix()})
+	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: st.QuestName, Timestamp: rejectTS.Unix()})
+
 	herald.Announce(req.Dir, herald.Tiding{
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Timestamp: rejectTS.Format(time.RFC3339),
 		Quest: st.QuestName, Type: herald.GateRejected,
 		Phase: st.Phase, Detail: fmt.Sprintf("Gate rejected for %s", st.Phase),
 	})
@@ -219,7 +265,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	approved, errs := batchApproveCompany(*target, fs)
+	approved, errs := batchApproveCompany(*target, fs, s.hub)
 
 	type companyApproveResponse struct {
 		Approved []string `json:"approved"`
@@ -239,7 +285,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 }
 
 // batchApproveCompany approves all pending gates within a company.
-func batchApproveCompany(c CompanyEntry, fs *FellowshipState) (approved []string, errs []error) {
+func batchApproveCompany(c CompanyEntry, fs *FellowshipState, hub *Hub) (approved []string, errs []error) {
 	questWorktree := make(map[string]string)
 	for _, q := range fs.Quests {
 		questWorktree[q.Name] = q.Worktree
@@ -290,6 +336,12 @@ func batchApproveCompany(c CompanyEntry, fs *FellowshipState) (approved []string
 			Timestamp: now, Quest: qName, Type: herald.PhaseTransition,
 			Phase: nextPhase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, nextPhase),
 		})
+
+		if hub != nil {
+			batchTS := time.Now().Unix()
+			hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: qName, Action: "approved", Timestamp: batchTS})
+			hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: qName, Timestamp: batchTS})
+		}
 
 		approved = append(approved, qName)
 	}

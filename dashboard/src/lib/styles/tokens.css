@@ -1,0 +1,60 @@
+:root {
+	/* Backgrounds */
+	--bg-base: #0c0f14;
+	--bg-surface: #10131a;
+	--bg-raised: #14171e;
+	--bg-overlay: rgba(0, 0, 0, 0.6);
+
+	/* Borders */
+	--border: #15181f;
+	--border-hover: #1e222d;
+	--border-active: #2a2e38;
+
+	/* Text */
+	--text-primary: #e8ecf2;
+	--text-secondary: #c4c9d4;
+	--text-muted: #4a5060;
+	--text-faint: #3a3f4d;
+
+	/* Accent */
+	--accent-gold: #d4a843;
+	--accent-gold-dim: #d4a84333;
+	--accent-gold-glow: rgba(212, 168, 67, 0.08);
+	--accent-green: #2ea043;
+	--accent-green-dim: #1a3a24;
+	--accent-green-text: #3fb950;
+	--accent-red: #f85149;
+	--accent-red-dim: #3a1a1a;
+	--accent-blue: #5b9fc1;
+	--accent-blue-dim: #1a2a3a;
+	--accent-purple: #8b5ec4;
+	--accent-purple-dim: #2a1a3a;
+
+	/* Typography */
+	--font-brand: 'Cinzel', serif;
+	--font-heading: 'Outfit', sans-serif;
+	--font-body: 'DM Sans', sans-serif;
+	--font-mono: 'JetBrains Mono', monospace;
+
+	/* Spacing */
+	--space-xs: 4px;
+	--space-sm: 8px;
+	--space-md: 16px;
+	--space-lg: 24px;
+	--space-xl: 32px;
+	--space-2xl: 48px;
+
+	/* Radius */
+	--radius-sm: 4px;
+	--radius-md: 6px;
+	--radius-lg: 8px;
+	--radius-xl: 12px;
+
+	/* Transitions */
+	--transition-fast: 150ms ease;
+	--transition-normal: 250ms ease;
+
+	/* Sidebar */
+	--sidebar-width-collapsed: 56px;
+	--sidebar-width-expanded: 220px;
+}

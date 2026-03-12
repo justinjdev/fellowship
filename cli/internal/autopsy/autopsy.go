@@ -96,10 +96,8 @@ func Create(repoRoot string, input *CreateInput) (string, error) {
 	}
 
 	randBytes := make([]byte, 4)
-	if _, err := rand.Read(randBytes); err != nil {
-		return "", fmt.Errorf("generating autopsy filename suffix: %w", err)
-	}
-	filename := fmt.Sprintf("%s-%s-%x.json", now.Format("20060102T150405"), sanitize(input.Quest), randBytes)
+	rand.Read(randBytes)
+	filename := fmt.Sprintf("%s-%s-%d-%x.json", now.Format("20060102T150405"), sanitize(input.Quest), now.UnixNano(), randBytes)
 	path := filepath.Join(dir, filename)
 
 	data, err := json.MarshalIndent(a, "", "  ")
@@ -108,8 +106,16 @@ func Create(repoRoot string, input *CreateInput) (string, error) {
 	}
 	data = append(data, '\n')
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		return "", fmt.Errorf("creating autopsy file: %w", err)
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
 		return "", fmt.Errorf("writing autopsy: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return "", fmt.Errorf("closing autopsy file: %w", err)
 	}
 	return path, nil
 }
@@ -155,7 +161,9 @@ func Scan(repoRoot string, opts ScanOptions, expiryDays int) ([]Autopsy, error) 
 			return nil, fmt.Errorf("parsing autopsy timestamp for %s: %w", entry.Name(), err)
 		}
 		if ts.Before(cutoff) {
-			os.Remove(path) // best-effort cleanup; don't abort scan on failure
+			if err := os.Remove(path); err != nil {
+				fmt.Fprintf(os.Stderr, "fellowship: failed to prune expired autopsy %s: %v\n", entry.Name(), err)
+			}
 			continue
 		}
 
