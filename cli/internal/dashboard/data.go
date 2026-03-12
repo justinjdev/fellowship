@@ -19,6 +19,11 @@ func (s *Server) handleAutopsies(w http.ResponseWriter, r *http.Request) {
 	suffix := strings.TrimPrefix(r.URL.Path, "/api/autopsies")
 	suffix = strings.TrimPrefix(suffix, "/")
 	if suffix != "" {
+		// Sanitize: only allow base filenames to prevent directory traversal
+		if suffix != filepath.Base(suffix) || strings.Contains(suffix, "..") {
+			http.Error(w, "invalid filename", http.StatusBadRequest)
+			return
+		}
 		filePath := filepath.Join(s.gitRoot, datadir.Name(), "autopsies", suffix)
 		data, err := os.ReadFile(filePath)
 		if err != nil {
@@ -161,7 +166,11 @@ func (s *Server) handleConfigWrite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	data, _ := json.MarshalIndent(existing, "", "  ")
+	data, err := json.MarshalIndent(existing, "", "  ")
+	if err != nil {
+		http.Error(w, "failed to marshal config: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 	tmp := configPath + ".tmp"
 	if err := os.WriteFile(tmp, data, 0644); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

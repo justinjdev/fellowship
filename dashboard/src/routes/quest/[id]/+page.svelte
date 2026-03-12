@@ -20,8 +20,13 @@
 
 	const phases = ['Onboard', 'Research', 'Plan', 'Implement', 'Review', 'Complete'];
 
+	let dataLoaded = $state(false);
+
+	let loadFailed = $state(false);
+
 	$effect(() => {
-		if (quest && !tomeData) {
+		if (quest && !dataLoaded && !loadFailed) {
+			dataLoaded = true;
 			Promise.all([
 				fetchErrands(quest.worktree),
 				fetchTome(questName),
@@ -29,7 +34,8 @@
 				errandList = e as QuestErrandList;
 				tomeData = t as QuestTome;
 			}).catch(() => {
-				// Failed to load quest data
+				dataLoaded = false;
+				loadFailed = true;
 			});
 		}
 	});
@@ -37,6 +43,7 @@
 	function phaseStatus(p: string): 'done' | 'current' | 'pending' {
 		if (!quest) return 'pending';
 		const ci = phases.indexOf(quest.phase);
+		if (ci === -1) return 'pending';
 		const pi = phases.indexOf(p);
 		if (pi < ci) return 'done';
 		if (pi === ci) return 'current';
@@ -126,7 +133,7 @@
 					<div class="meta-title">Metadata</div>
 					<div class="meta-row">
 						<span>Branch</span>
-						<span class="meta-value mono">{quest.worktree.split('/').pop()}</span>
+						<span class="meta-value mono">{quest.worktree.replace(/\\/g, '/').split('/').pop()}</span>
 					</div>
 					<div class="meta-row">
 						<span>Worktree</span>
