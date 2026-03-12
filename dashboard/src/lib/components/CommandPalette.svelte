@@ -167,11 +167,11 @@
 		} else if (e.key === 'ArrowDown') {
 			e.preventDefault();
 			const items = flatItems();
-			selectedIndex = (selectedIndex + 1) % items.length;
+			if (items.length > 0) selectedIndex = (selectedIndex + 1) % items.length;
 		} else if (e.key === 'ArrowUp') {
 			e.preventDefault();
 			const items = flatItems();
-			selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+			if (items.length > 0) selectedIndex = (selectedIndex - 1 + items.length) % items.length;
 		} else if (e.key === 'Enter') {
 			e.preventDefault();
 			executeSelected();
