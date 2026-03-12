@@ -138,7 +138,7 @@
 					<div class="meta-title">Metadata</div>
 					<div class="meta-row">
 						<span>Branch</span>
-						<span class="meta-value mono">{quest.worktree.replace(/\\/g, '/').split('/').pop()}</span>
+						<span class="meta-value mono">{quest.worktree.replace(/\\/g, '/').split('/').pop() || quest.worktree}</span>
 					</div>
 					<div class="meta-row">
 						<span>Worktree</span>

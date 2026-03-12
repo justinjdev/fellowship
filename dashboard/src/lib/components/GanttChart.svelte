@@ -50,11 +50,13 @@
 		for (const q of quests) {
 			for (const p of q.phases_completed) {
 				const t = new Date(p.timestamp).getTime();
-				if (t < globalMin) globalMin = t;
-				if (t > globalMax) globalMax = t;
+				if (!isNaN(t)) {
+					if (t < globalMin) globalMin = t;
+					if (t > globalMax) globalMax = t;
+				}
 			}
 			const created = new Date(q.created_at).getTime();
-			if (created < globalMin) globalMin = created;
+			if (!isNaN(created) && created < globalMin) globalMin = created;
 		}
 
 		if (globalMax <= globalMin) globalMax = globalMin + 1;
