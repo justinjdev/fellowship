@@ -103,7 +103,7 @@
 			: actions
 	);
 
-	let grouped = $derived(() => {
+	let grouped = $derived.by(() => {
 		const groups: { category: string; items: Action[] }[] = [];
 		const seen = new Set<string>();
 		for (const action of filtered) {
@@ -139,7 +139,7 @@
 			} else if (inputMode === 'restart-quest') {
 				await restartQuest(taskInput.trim());
 			}
-		inputMode = null;
+			inputMode = null;
 			taskInput = '';
 			onClose();
 		} catch {
@@ -230,7 +230,7 @@
 				type="text"
 			/>
 			<div class="action-list">
-				{#each grouped() as group}
+				{#each grouped as group}
 					<div class="category-header">{group.category}</div>
 					{#each group.items as item}
 						{@const idx = filtered.indexOf(item)}

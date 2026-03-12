@@ -38,6 +38,7 @@ func (s *Server) handleAutopsies(w http.ResponseWriter, r *http.Request) {
 	autopsyDir := filepath.Join(s.gitRoot, datadir.Name(), "autopsies")
 	entries, err := os.ReadDir(autopsyDir)
 	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]interface{}{})
 		return
 	}
@@ -58,6 +59,7 @@ func (s *Server) handleAutopsies(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(records, func(i, j int) bool {
 		return records[i].Timestamp > records[j].Timestamp
 	})
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(records)
 }
 
@@ -71,7 +73,7 @@ func (s *Server) handleTome(w http.ResponseWriter, r *http.Request) {
 
 	status, err := DiscoverQuests(s.gitRoot)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to discover quests", http.StatusInternalServerError)
 		return
 	}
 	var worktree string
@@ -89,6 +91,7 @@ func (s *Server) handleTome(w http.ResponseWriter, r *http.Request) {
 	tomePath := filepath.Join(worktree, datadir.Name(), "quest-tome.json")
 	t, err := tome.Load(tomePath)
 	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"quest_name":       questName,
 			"phases_completed": []interface{}{},
@@ -97,6 +100,7 @@ func (s *Server) handleTome(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(t)
 }
 
@@ -124,6 +128,7 @@ func (s *Server) handleConfigRead(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
 
@@ -163,23 +168,25 @@ func (s *Server) handleConfigWrite(w http.ResponseWriter, r *http.Request) {
 	existing[req.Key] = req.Value
 
 	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to create config directory", http.StatusInternalServerError)
 		return
 	}
 	data, err := json.MarshalIndent(existing, "", "  ")
 	if err != nil {
-		http.Error(w, "failed to marshal config: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to marshal config", http.StatusInternalServerError)
 		return
 	}
 	tmp := configPath + ".tmp"
 	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to write config", http.StatusInternalServerError)
 		return
 	}
 	if err := os.Rename(tmp, configPath); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		os.Remove(tmp) // best-effort cleanup
+		http.Error(w, "failed to save config", http.StatusInternalServerError)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }

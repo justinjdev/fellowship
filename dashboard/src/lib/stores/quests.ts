@@ -46,6 +46,7 @@ export async function refreshAll() {
 let unsubscribe: (() => void) | null = null;
 
 export function startPolling() {
+	if (unsubscribe) return;
 	refreshAll();
 	unsubscribe = lastEvent.subscribe((event) => {
 		if (!event) return;
@@ -67,4 +68,5 @@ export function startPolling() {
 
 export function stopPolling() {
 	unsubscribe?.();
+	unsubscribe = null;
 }

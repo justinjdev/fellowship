@@ -24,18 +24,23 @@
 
 	let loadFailed = $state(false);
 
+	let loading = $state(false);
+
 	$effect(() => {
-		if (quest && !dataLoaded && !loadFailed) {
-			dataLoaded = true;
+		if (quest && !dataLoaded && !loadFailed && !loading) {
+			loading = true;
+			const currentWorktree = quest.worktree;
 			Promise.all([
-				fetchErrands(quest.worktree),
+				fetchErrands(currentWorktree),
 				fetchTome(questName),
 			]).then(([e, t]) => {
 				errandList = e as QuestErrandList;
 				tomeData = t as QuestTome;
+				dataLoaded = true;
 			}).catch(() => {
-				dataLoaded = false;
 				loadFailed = true;
+			}).finally(() => {
+				loading = false;
 			});
 		}
 	});
