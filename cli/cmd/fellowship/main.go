@@ -43,9 +43,11 @@ func main() {
 		fmt.Println(version)
 		return
 	case "migrate":
-		// TODO: implement migration command
-		fmt.Fprintln(os.Stderr, "fellowship: migrate command not yet implemented")
-		os.Exit(1)
+		if err := runMigrate(); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: migrate: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	// Open DB for all other commands.
@@ -1952,4 +1954,41 @@ func jsonFilesExist(fromDir string) bool {
 		}
 	}
 	return false
+}
+
+// runMigrate resolves the main repo, opens a DB, and migrates JSON files.
+func runMigrate() error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("getwd: %w", err)
+	}
+	mainRepo, err := resolveMainRepoFromCwd(cwd)
+	if err != nil {
+		return err
+	}
+	d, err := db.Open(cwd)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return db.MigrateJSON(d, mainRepo)
+}
+
+// resolveMainRepoFromCwd finds the main repo root from cwd using git.
+func resolveMainRepoFromCwd(cwd string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--git-common-dir")
+	cmd.Dir = cwd
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse: %w", err)
+	}
+	gitCommon := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(gitCommon) {
+		gitCommon = filepath.Join(cwd, gitCommon)
+	}
+	gitCommon = filepath.Clean(gitCommon)
+	if filepath.Base(gitCommon) == ".git" {
+		return filepath.Dir(gitCommon), nil
+	}
+	return filepath.Dir(gitCommon), nil
 }

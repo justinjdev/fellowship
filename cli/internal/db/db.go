@@ -35,7 +35,7 @@ func Open(fromDir string) (*DB, error) {
 func OpenPath(dbPath string) (*DB, error) {
 	pool, err := sqlitex.NewPool(dbPath, sqlitex.PoolOptions{
 		PoolSize: 1,
-		Flags:    sqlite.OpenReadWrite | sqlite.OpenCreate | sqlite.OpenWAL | sqlite.OpenNoMutex,
+		Flags:    sqlite.OpenReadWrite | sqlite.OpenCreate | sqlite.OpenWAL,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("db: open %s: %w", dbPath, err)
@@ -64,7 +64,7 @@ func OpenPath(dbPath string) (*DB, error) {
 func OpenMemory() (*DB, error) {
 	pool, err := sqlitex.NewPool("file::memory:?mode=memory", sqlitex.PoolOptions{
 		PoolSize: 1,
-		Flags:    sqlite.OpenReadWrite | sqlite.OpenCreate | sqlite.OpenMemory | sqlite.OpenNoMutex,
+		Flags:    sqlite.OpenReadWrite | sqlite.OpenCreate | sqlite.OpenMemory,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("db: open memory: %w", err)
