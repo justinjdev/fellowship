@@ -255,6 +255,41 @@ func TestWorktreeGuard_AllowsNonCDCommands(t *testing.T) {
 	}
 }
 
+func TestWorktreeGuard_BlocksWorktreeRoot(t *testing.T) {
+	for _, cmd := range []string{
+		"cd .claude/worktrees",
+		"cd /home/user/repo/.claude/worktrees",
+		"pushd .claude/worktrees",
+	} {
+		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
+		result := WorktreeGuard(input)
+		if !result.Block {
+			t.Errorf("should block cd into worktree root, cmd=%q", cmd)
+		}
+	}
+}
+
+func TestWorktreeGuard_BlocksQuotedTarget(t *testing.T) {
+	for _, cmd := range []string{
+		`cd ".claude/worktrees/quest-1"`,
+		`cd '.claude/worktrees/quest-1'`,
+	} {
+		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
+		result := WorktreeGuard(input)
+		if !result.Block {
+			t.Errorf("should block quoted cd into worktree, cmd=%q", cmd)
+		}
+	}
+}
+
+func TestWorktreeGuard_BlocksTrailingSemicolon(t *testing.T) {
+	input := &HookInput{ToolInput: ToolInput{Command: "cd .claude/worktrees/quest-1;"}}
+	result := WorktreeGuard(input)
+	if !result.Block {
+		t.Errorf("should block cd with trailing semicolon")
+	}
+}
+
 func TestWorktreeGuard_AllowsEmptyCommand(t *testing.T) {
 	input := &HookInput{ToolInput: ToolInput{Command: ""}}
 	result := WorktreeGuard(input)

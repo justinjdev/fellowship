@@ -85,7 +85,8 @@ func isWorktreeCD(command string) bool {
 		return false
 	}
 
-	target := fields[1]
+	target := strings.Trim(fields[1], `"'`)
+	target = strings.TrimSuffix(target, ";")
 	if !isWorktreePath(target) {
 		return false
 	}
@@ -98,11 +99,13 @@ func isWorktreeCD(command string) bool {
 	return true
 }
 
-// isWorktreePath checks if a path leads into the worktree directory.
+// isWorktreePath checks if a path leads into or is the worktree directory.
 func isWorktreePath(path string) bool {
-	normalized := filepath.ToSlash(filepath.Clean(path))
-	return strings.Contains(normalized, "/.claude/worktrees/") ||
-		strings.HasPrefix(normalized, ".claude/worktrees/")
+	normalized := strings.TrimSuffix(filepath.ToSlash(filepath.Clean(path)), "/")
+	return normalized == ".claude/worktrees" ||
+		strings.HasPrefix(normalized, ".claude/worktrees/") ||
+		strings.HasSuffix(normalized, "/.claude/worktrees") ||
+		strings.Contains(normalized, "/.claude/worktrees/")
 }
 
 // isFellowshipEscapeCommand returns true for fellowship CLI commands that are

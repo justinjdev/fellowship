@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -51,10 +52,12 @@ func gatherFilesTouched(dir string) string {
 }
 
 func gatherDiffStats(dir string) string {
-	cmd := exec.Command("git", "diff", "--stat")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "diff", "--stat")
 	cmd.Dir = dir
 	out, err := cmd.Output()
-	if err != nil {
+	if err != nil || ctx.Err() != nil {
 		return ""
 	}
 	return parseDiffStats(string(out))
