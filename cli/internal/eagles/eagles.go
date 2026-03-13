@@ -8,8 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"zombiezen.com/go/sqlite"
+	"zombiezen.com/go/sqlite/sqlitex"
+
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
+	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
+	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -45,9 +50,9 @@ type EaglesReport struct {
 
 // Options configures the eagles scan.
 type Options struct {
-	GateThreshold  time.Duration // how long a gate can be pending before "stalled"
-	ZombieTimeout  time.Duration // how long since last file change before "zombie"
-	Now            time.Time     // injectable clock for testing
+	GateThreshold time.Duration // how long a gate can be pending before "stalled"
+	ZombieTimeout time.Duration // how long since last file change before "zombie"
+	Now           time.Time     // injectable clock for testing
 }
 
 // DefaultOptions returns sensible defaults.
@@ -58,15 +63,16 @@ func DefaultOptions() Options {
 	}
 }
 
-// Sweep scans all quest worktrees and classifies their health.
-func Sweep(gitRoot string, opts Options) (*EaglesReport, error) {
+// Sweep scans all quests in the database and classifies their health.
+func Sweep(conn *db.Conn, opts Options) (*EaglesReport, error) {
 	if opts.Now.IsZero() {
 		opts.Now = time.Now()
 	}
 
-	worktrees, err := gitutil.ListWorktrees(gitRoot)
+	// Load all quest states from quest_state table.
+	states, err := listAllQuests(conn)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("eagles: list quests: %w", err)
 	}
 
 	report := &EaglesReport{
@@ -74,102 +80,159 @@ func Sweep(gitRoot string, opts Options) (*EaglesReport, error) {
 		Quests:    []QuestHealth{},
 	}
 
-	for _, wt := range worktrees {
-		qh, err := classifyQuest(wt, opts)
-		if err != nil {
-			// Skip worktrees without quest state
-			continue
-		}
+	for _, s := range states {
+		qh := classifyQuest(conn, s, opts)
 		if qh.Health != Working && qh.Health != Complete {
 			report.Problems++
 		}
-		report.Quests = append(report.Quests, *qh)
+		report.Quests = append(report.Quests, qh)
 	}
 
 	return report, nil
 }
 
-// classifyQuest examines a single worktree and returns its health.
-func classifyQuest(worktree string, opts Options) (*QuestHealth, error) {
-	questStatePath := filepath.Join(worktree, datadir.Name(), "quest-state.json")
-	s, err := state.Load(questStatePath)
+// listAllQuests returns all quest states from the database.
+func listAllQuests(conn *db.Conn) ([]*state.State, error) {
+	var states []*state.State
+	err := sqlitex.Execute(conn,
+		`SELECT quest_name, task_id, team_name, phase,
+			gate_pending, gate_id, lembas_completed, metadata_updated,
+			held, held_reason, auto_approve
+			FROM quest_state ORDER BY quest_name`,
+		&sqlitex.ExecOptions{
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				s := &state.State{
+					QuestName:       stmt.ColumnText(0),
+					TaskID:          stmt.ColumnText(1),
+					TeamName:        stmt.ColumnText(2),
+					Phase:           stmt.ColumnText(3),
+					GatePending:     stmt.ColumnInt(4) != 0,
+					LembasCompleted: stmt.ColumnInt(6) != 0,
+					MetadataUpdated: stmt.ColumnInt(7) != 0,
+					Held:            stmt.ColumnInt(8) != 0,
+				}
+				if stmt.ColumnType(5) != sqlite.TypeNull {
+					gid := stmt.ColumnText(5)
+					s.GateID = &gid
+				}
+				if stmt.ColumnType(9) != sqlite.TypeNull {
+					hr := stmt.ColumnText(9)
+					s.HeldReason = &hr
+				}
+				if aa := stmt.ColumnText(10); aa != "" {
+					json.Unmarshal([]byte(aa), &s.AutoApproveGates)
+				}
+				states = append(states, s)
+				return nil
+			},
+		})
 	if err != nil {
 		return nil, err
 	}
-
-	hasCheckpoint := gitutil.FileExists(filepath.Join(worktree, datadir.Name(), "checkpoint.md"))
-	lastActivity := latestModTime(worktree)
-
-	qh := &QuestHealth{
-		Name:          s.QuestName,
-		Worktree:      worktree,
-		Phase:         s.Phase,
-		HasCheckpoint: hasCheckpoint,
-		LastActivity:  lastActivity.UTC().Format(time.RFC3339),
-	}
-
-	// Classify health
-	switch {
-	case s.Phase == "Complete":
-		qh.Health = Complete
-		qh.Action = "none"
-
-	case s.GatePending && s.GateID != nil:
-		pendingSec := gitutil.GateAge(*s.GateID, opts.Now)
-		qh.GatePendingSec = pendingSec
-		if time.Duration(pendingSec)*time.Second >= opts.GateThreshold {
-			qh.Health = Stalled
-			qh.Action = "nudge"
-		} else {
-			qh.Health = Working
-			qh.Action = "none"
-		}
-
-	case s.GatePending:
-		// Gate pending but no gate ID — treat as stalled
-		qh.Health = Stalled
-		qh.Action = "nudge"
-
-	case opts.Now.Sub(lastActivity) >= opts.ZombieTimeout && s.Phase != "Onboard":
-		qh.Health = Zombie
-		if hasCheckpoint {
-			qh.Action = "respawn"
-		} else {
-			qh.Action = "nudge"
-		}
-
-	case s.Phase == "Onboard" && s.QuestName == "":
-		qh.Health = Idle
-		qh.Action = "none"
-
-	default:
-		qh.Health = Working
-		qh.Action = "none"
-	}
-
-	return qh, nil
+	return states, nil
 }
 
+// classifyQuest examines a quest's state and herald tidings to determine health.
+func classifyQuest(conn *db.Conn, s *state.State, opts Options) QuestHealth {
+	qh := QuestHealth{
+		Name:   s.QuestName,
+		Phase:  s.Phase,
+		Action: "none",
+	}
 
-// latestModTime walks the worktree (excluding .git, data dir, and node_modules) to find the most
-// recently modified file.
-func latestModTime(worktree string) time.Time {
-	var latest time.Time
-	filepath.Walk(worktree, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
+	// Complete quests are always healthy.
+	if s.Phase == "Complete" {
+		qh.Health = Complete
+		qh.LastActivity = lastActivity(conn, s)
+		return qh
+	}
+
+	// Idle: no quest name assigned (onboarding placeholder).
+	if s.QuestName == "" {
+		qh.Health = Idle
+		qh.LastActivity = lastActivity(conn, s)
+		return qh
+	}
+
+	// Check for stalled gates.
+	if s.GatePending {
+		if s.GateID != nil {
+			age := gitutil.GateAge(*s.GateID, opts.Now)
+			qh.GatePendingSec = age
+			if age >= int(opts.GateThreshold.Seconds()) {
+				qh.Health = Stalled
+				qh.Action = "nudge"
+				qh.LastActivity = lastActivity(conn, s)
+				return qh
+			}
+		} else {
+			// Gate pending with no ID — assume stalled (cannot determine age).
+			qh.Health = Stalled
+			qh.Action = "nudge"
+			qh.LastActivity = lastActivity(conn, s)
+			return qh
 		}
-		// Skip .git, fellowship data dir (internal state), and node_modules directories
-		name := info.Name()
-		if info.IsDir() && (name == ".git" || name == datadir.Name() || name == "node_modules") {
-			return filepath.SkipDir
+	}
+
+	// Check for zombie: use updated_at from quest_state and herald timestamps.
+	lastAct := lastActivity(conn, s)
+	qh.LastActivity = lastAct
+
+	if lastAct != "" {
+		if t, err := time.Parse(time.RFC3339, lastAct); err == nil {
+			if opts.Now.Sub(t) > opts.ZombieTimeout {
+				qh.Health = Zombie
+				qh.HasCheckpoint = hasCheckpoint(conn, s.QuestName)
+				if qh.HasCheckpoint {
+					qh.Action = "respawn"
+				} else {
+					qh.Action = "nudge"
+				}
+				return qh
+			}
 		}
-		if !info.IsDir() && info.ModTime().After(latest) {
-			latest = info.ModTime()
-		}
-		return nil
-	})
-	return latest
+	}
+
+	qh.Health = Working
+	return qh
+}
+
+// lastActivity returns the most recent timestamp from herald tidings for a quest,
+// or falls back to the quest_state updated_at.
+func lastActivity(conn *db.Conn, s *state.State) string {
+	tidings, err := herald.Read(conn, s.QuestName, 1)
+	if err == nil && len(tidings) > 0 {
+		return tidings[0].Timestamp
+	}
+
+	// Fall back to updated_at from quest_state.
+	var updatedAt string
+	sqlitex.Execute(conn,
+		`SELECT updated_at FROM quest_state WHERE quest_name = :name`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":name": s.QuestName},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				updatedAt = stmt.ColumnText(0)
+				return nil
+			},
+		})
+	return updatedAt
+}
+
+// hasCheckpoint checks if the quest has a checkpoint by looking for
+// a lembas_completed herald tiding, which indicates checkpoint creation.
+func hasCheckpoint(conn *db.Conn, questName string) bool {
+	var found bool
+	sqlitex.Execute(conn,
+		`SELECT 1 FROM herald WHERE quest = :name AND type = 'lembas_completed' LIMIT 1`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":name": questName},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				found = true
+				return nil
+			},
+		})
+	return found
 }
 
 // WriteReport writes the eagles report to the data directory in the git root.
@@ -217,4 +280,3 @@ func FormatTable(report *EaglesReport) string {
 	sb.WriteString(fmt.Sprintf("Problems: %d\n", report.Problems))
 	return sb.String()
 }
-

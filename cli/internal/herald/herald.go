@@ -1,16 +1,13 @@
 package herald
 
 import (
-	"bufio"
-	"encoding/json"
-	"os"
-	"path/filepath"
-	"sort"
+	"fmt"
 
-	"github.com/justinjdev/fellowship/cli/internal/datadir"
+	"zombiezen.com/go/sqlite"
+	"zombiezen.com/go/sqlite/sqlitex"
+
+	"github.com/justinjdev/fellowship/cli/internal/db"
 )
-
-const heraldFile = "quest-herald.jsonl"
 
 // TidingType represents the type of a quest tiding.
 type TidingType string
@@ -35,69 +32,94 @@ type Tiding struct {
 	Detail    string     `json:"detail,omitempty"`
 }
 
-// Announce appends a tiding to the herald log file.
-func Announce(dir string, t Tiding) error {
-	dataDirPath := filepath.Join(dir, datadir.Name())
-	if err := os.MkdirAll(dataDirPath, 0755); err != nil {
-		return err
-	}
-	path := filepath.Join(dataDirPath, heraldFile)
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return json.NewEncoder(f).Encode(t)
+// Announce inserts a tiding into the herald table.
+func Announce(conn *db.Conn, t Tiding) error {
+	return sqlitex.Execute(conn,
+		`INSERT INTO herald (timestamp, quest, type, phase, detail) VALUES (?, ?, ?, ?, ?)`,
+		&sqlitex.ExecOptions{
+			Args: []any{t.Timestamp, t.Quest, string(t.Type), t.Phase, t.Detail},
+		},
+	)
 }
 
-// Read returns tidings from a single worktree's herald log.
-// If n > 0, returns at most the last n tidings.
-func Read(dir string, n int) ([]Tiding, error) {
-	path := filepath.Join(dir, datadir.Name(), heraldFile)
-	f, err := os.Open(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []Tiding{}, nil
-		}
-		return nil, err
-	}
-	defer f.Close()
-
+// Read returns tidings for a single quest in ascending order (oldest first).
+// If n > 0, returns the last n tidings.
+func Read(conn *db.Conn, quest string, n int) ([]Tiding, error) {
 	var tidings []Tiding
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		var t Tiding
-		if err := json.Unmarshal(scanner.Bytes(), &t); err != nil {
-			continue
-		}
-		tidings = append(tidings, t)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
+
+	var query string
+	var args []any
+
+	if n > 0 {
+		// Subquery to get last n rows, then re-sort ascending.
+		query = `SELECT timestamp, quest, type, phase, detail
+			FROM (SELECT * FROM herald WHERE quest = ? ORDER BY id DESC LIMIT ?)
+			ORDER BY id ASC`
+		args = []any{quest, n}
+	} else {
+		query = `SELECT timestamp, quest, type, phase, detail FROM herald WHERE quest = ? ORDER BY id ASC`
+		args = []any{quest}
 	}
 
-	if n > 0 && len(tidings) > n {
-		tidings = tidings[len(tidings)-n:]
+	err := sqlitex.Execute(conn, query, &sqlitex.ExecOptions{
+		Args: args,
+		ResultFunc: func(stmt *sqlite.Stmt) error {
+			tidings = append(tidings, Tiding{
+				Timestamp: stmt.ColumnText(0),
+				Quest:     stmt.ColumnText(1),
+				Type:      TidingType(stmt.ColumnText(2)),
+				Phase:     stmt.ColumnText(3),
+				Detail:    stmt.ColumnText(4),
+			})
+			return nil
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("herald: read quest %s: %w", quest, err)
+	}
+
+	if tidings == nil {
+		tidings = []Tiding{}
 	}
 	return tidings, nil
 }
 
-// ReadAll aggregates tidings from multiple worktrees, sorted descending by timestamp.
-// If n > 0, returns at most n tidings.
-func ReadAll(dirs []string, n int) ([]Tiding, error) {
-	var all []Tiding
-	for _, dir := range dirs {
-		tidings, err := Read(dir, 0)
-		if err != nil {
-			continue
-		}
-		all = append(all, tidings...)
+// ReadAll returns tidings across all quests in ascending order (oldest first).
+// If n > 0, returns the last n tidings.
+func ReadAll(conn *db.Conn, n int) ([]Tiding, error) {
+	var tidings []Tiding
+
+	var query string
+	var args []any
+
+	if n > 0 {
+		query = `SELECT timestamp, quest, type, phase, detail
+			FROM (SELECT * FROM herald ORDER BY id DESC LIMIT ?)
+			ORDER BY id ASC`
+		args = []any{n}
+	} else {
+		query = `SELECT timestamp, quest, type, phase, detail FROM herald ORDER BY id ASC`
 	}
-	sort.Slice(all, func(i, j int) bool {
-		return all[i].Timestamp > all[j].Timestamp
+
+	err := sqlitex.Execute(conn, query, &sqlitex.ExecOptions{
+		Args: args,
+		ResultFunc: func(stmt *sqlite.Stmt) error {
+			tidings = append(tidings, Tiding{
+				Timestamp: stmt.ColumnText(0),
+				Quest:     stmt.ColumnText(1),
+				Type:      TidingType(stmt.ColumnText(2)),
+				Phase:     stmt.ColumnText(3),
+				Detail:    stmt.ColumnText(4),
+			})
+			return nil
+		},
 	})
-	if n > 0 && len(all) > n {
-		all = all[:n]
+	if err != nil {
+		return nil, fmt.Errorf("herald: read all: %w", err)
 	}
-	return all, nil
+
+	if tidings == nil {
+		tidings = []Tiding{}
+	}
+	return tidings, nil
 }

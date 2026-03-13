@@ -1,24 +1,21 @@
 package errand
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/justinjdev/fellowship/cli/internal/datadir"
+	"zombiezen.com/go/sqlite"
+	"zombiezen.com/go/sqlite/sqlitex"
 )
 
 type ErrandStatus string
 
 const (
-	Pending ErrandStatus = "pending"
-	Active  ErrandStatus = "active"
-	Done    ErrandStatus = "done"
-	Blocked ErrandStatus = "blocked"
+	Pending    ErrandStatus = "pending"
+	InProgress ErrandStatus = "in_progress"
+	Done       ErrandStatus = "done"
+	Blocked    ErrandStatus = "blocked"
+	Skipped    ErrandStatus = "skipped"
 )
 
 type Errand struct {
@@ -32,133 +29,173 @@ type Errand struct {
 }
 
 type QuestErrandList struct {
-	Version   int      `json:"version"`
 	QuestName string   `json:"quest_name"`
 	Task      string   `json:"task"`
 	Items     []Errand `json:"items"`
-	CreatedAt string   `json:"created_at"`
-	UpdatedAt string   `json:"updated_at"`
-}
-
-func Load(path string) (*QuestErrandList, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading errand file: %w", err)
-	}
-	if len(data) == 0 {
-		return nil, fmt.Errorf("errand file is empty")
-	}
-	var h QuestErrandList
-	if err := json.Unmarshal(data, &h); err != nil {
-		return nil, fmt.Errorf("parsing errand file: %w", err)
-	}
-	return &h, nil
-}
-
-func Save(path string, h *QuestErrandList) error {
-	data, err := json.MarshalIndent(h, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshaling errand: %w", err)
-	}
-	data = append(data, '\n')
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		return fmt.Errorf("writing temp file: %w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
-		return fmt.Errorf("renaming temp file: %w", err)
-	}
-	return nil
-}
-
-func FindErrands(fromDir string) (string, error) {
-	root, err := gitRoot(fromDir)
-	if err != nil {
-		root = fromDir
-	}
-	path := filepath.Join(root, datadir.Name(), "quest-errands.json")
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return "", nil
-	} else if err != nil {
-		return "", err
-	}
-	return path, nil
-}
-
-func AddErrand(h *QuestErrandList, desc string, phase string) string {
-	now := time.Now().UTC().Format(time.RFC3339)
-	id := NextID(h)
-	item := Errand{
-		ID:          id,
-		Description: desc,
-		Status:      Pending,
-		Phase:       phase,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-	}
-	h.Items = append(h.Items, item)
-	h.UpdatedAt = now
-	return id
-}
-
-func UpdateStatus(h *QuestErrandList, id string, status ErrandStatus) error {
-	for i := range h.Items {
-		if h.Items[i].ID == id {
-			h.Items[i].Status = status
-			h.Items[i].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-			h.UpdatedAt = h.Items[i].UpdatedAt
-			return nil
-		}
-	}
-	return fmt.Errorf("errand %q not found", id)
-}
-
-func NextID(h *QuestErrandList) string {
-	max := 0
-	for _, item := range h.Items {
-		var n int
-		if _, err := fmt.Sscanf(item.ID, "w-%d", &n); err == nil && n > max {
-			max = n
-		}
-	}
-	return fmt.Sprintf("w-%03d", max+1)
 }
 
 // ValidStatus checks whether a string is a valid ErrandStatus.
 func ValidStatus(s string) (ErrandStatus, bool) {
 	switch ErrandStatus(s) {
-	case Pending, Active, Done, Blocked:
+	case Pending, InProgress, Done, Blocked, Skipped:
 		return ErrandStatus(s), true
 	default:
 		return "", false
 	}
 }
 
-func Progress(h *QuestErrandList) (done int, total int) {
-	total = len(h.Items)
-	for _, item := range h.Items {
-		if item.Status == Done {
-			done++
-		}
-	}
-	return done, total
+// Init creates the initial errand list metadata for a quest.
+// This is a no-op for DB-backed storage since errands reference quest_state via FK.
+func Init(conn *sqlite.Conn, quest, task string) error {
+	// errands are stored per-row with quest_name FK; nothing to initialize.
+	_ = conn
+	_ = quest
+	_ = task
+	return nil
 }
 
-func PendingErrands(h *QuestErrandList) []Errand {
+// Add inserts a new errand and returns its generated ID (w-NNN).
+func Add(conn *sqlite.Conn, quest, desc, phase string) (string, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Generate next ID using MAX to handle gaps from deletions.
+	var nextNum int
+	err := sqlitex.Execute(conn,
+		`SELECT COALESCE(MAX(CAST(SUBSTR(id, 3) AS INTEGER)), 0) + 1 FROM errands WHERE quest_name = :quest`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":quest": quest},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				nextNum = stmt.ColumnInt(0)
+				return nil
+			},
+		})
+	if err != nil {
+		return "", fmt.Errorf("errand: next id: %w", err)
+	}
+
+	id := fmt.Sprintf("w-%03d", nextNum)
+
+	err = sqlitex.Execute(conn,
+		`INSERT INTO errands (id, quest_name, description, status, phase, created_at, updated_at)
+		 VALUES (:id, :quest, :desc, :status, :phase, :now, :now)`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{
+				":id":     id,
+				":quest":  quest,
+				":desc":   desc,
+				":status": string(Pending),
+				":phase":  phase,
+				":now":    now,
+			},
+		})
+	if err != nil {
+		return "", fmt.Errorf("errand: add: %w", err)
+	}
+
+	return id, nil
+}
+
+// UpdateStatus changes the status of an errand.
+func UpdateStatus(conn *sqlite.Conn, quest, id string, status ErrandStatus) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	err := sqlitex.Execute(conn,
+		`UPDATE errands SET status = :status, updated_at = :now
+		 WHERE quest_name = :quest AND id = :id`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{
+				":status": string(status),
+				":now":    now,
+				":quest":  quest,
+				":id":     id,
+			},
+		})
+	if err != nil {
+		return fmt.Errorf("errand: update status: %w", err)
+	}
+
+	if conn.Changes() == 0 {
+		return fmt.Errorf("errand %q not found in quest %q", id, quest)
+	}
+	return nil
+}
+
+// List returns all errands for a quest, ordered by ID.
+func List(conn *sqlite.Conn, quest string) ([]Errand, error) {
+	var items []Errand
+	err := sqlitex.Execute(conn,
+		`SELECT id, description, status, phase, created_at, updated_at
+		 FROM errands WHERE quest_name = :quest ORDER BY id`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":quest": quest},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				e := Errand{
+					ID:          stmt.ColumnText(0),
+					Description: stmt.ColumnText(1),
+					Status:      ErrandStatus(stmt.ColumnText(2)),
+					Phase:       stmt.ColumnText(3),
+					CreatedAt:   stmt.ColumnText(4),
+					UpdatedAt:   stmt.ColumnText(5),
+				}
+				items = append(items, e)
+				return nil
+			},
+		})
+	if err != nil {
+		return nil, fmt.Errorf("errand: list: %w", err)
+	}
+
+	// Load dependencies for each errand.
+	for i := range items {
+		deps, err := loadDeps(conn, quest, items[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		items[i].DependsOn = deps
+	}
+
+	return items, nil
+}
+
+// Progress returns the count of done errands and total errands for a quest.
+func Progress(conn *sqlite.Conn, quest string) (done, total int, err error) {
+	err = sqlitex.Execute(conn,
+		`SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done
+		 FROM errands WHERE quest_name = :quest`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":quest": quest},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				total = stmt.ColumnInt(0)
+				done = stmt.ColumnInt(1)
+				return nil
+			},
+		})
+	if err != nil {
+		err = fmt.Errorf("errand: progress: %w", err)
+	}
+	return
+}
+
+// PendingErrands returns errands that are pending or blocked but whose
+// dependencies are all done.
+func PendingErrands(conn *sqlite.Conn, quest string) ([]Errand, error) {
+	items, err := List(conn, quest)
+	if err != nil {
+		return nil, err
+	}
+
 	doneSet := make(map[string]bool)
-	for _, item := range h.Items {
+	for _, item := range items {
 		if item.Status == Done {
 			doneSet[item.ID] = true
 		}
 	}
 
 	var result []Errand
-	for _, item := range h.Items {
+	for _, item := range items {
 		if item.Status != Pending && item.Status != Blocked {
 			continue
 		}
-		// Check if all dependencies are done
 		depsOK := true
 		for _, dep := range item.DependsOn {
 			if !doneSet[dep] {
@@ -170,15 +207,23 @@ func PendingErrands(h *QuestErrandList) []Errand {
 			result = append(result, item)
 		}
 	}
-	return result
+	return result, nil
 }
 
-func gitRoot(fromDir string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	cmd.Dir = fromDir
-	out, err := cmd.Output()
+// loadDeps returns the dependency IDs for an errand.
+func loadDeps(conn *sqlite.Conn, quest, errandID string) ([]string, error) {
+	var deps []string
+	err := sqlitex.Execute(conn,
+		`SELECT depends_on FROM errand_deps WHERE quest_name = :quest AND errand_id = :id`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":quest": quest, ":id": errandID},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				deps = append(deps, stmt.ColumnText(0))
+				return nil
+			},
+		})
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("errand: load deps: %w", err)
 	}
-	return strings.TrimSpace(string(out)), nil
+	return deps, nil
 }

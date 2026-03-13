@@ -3,13 +3,21 @@ package hooks
 import (
 	"strings"
 	"testing"
+
+	"github.com/justinjdev/fellowship/cli/internal/db"
 )
 
-func TestGatherEnrichment_EmptyDir(t *testing.T) {
-	// Non-existent directory should return empty string (graceful fallback)
-	result := GatherEnrichment("/nonexistent/path")
-	if result != "" {
-		t.Errorf("expected empty enrichment for missing dir, got: %q", result)
+func TestGatherEnrichment_EmptyDB(t *testing.T) {
+	// With an empty DB and non-existent directory, should return a minimal enrichment block
+	d := db.OpenTest(t)
+	var result string
+	d.WithConn(t.Context(), func(conn *db.Conn) error {
+		result = GatherEnrichment(conn, "nonexistent-quest", "/nonexistent/path")
+		return nil
+	})
+	// Even with no quest data, some fields produce default values (e.g., "none" for files)
+	if result != "" && !strings.Contains(result, "Gate Context") {
+		t.Errorf("expected empty or valid enrichment block, got: %q", result)
 	}
 }
 

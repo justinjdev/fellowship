@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/justinjdev/fellowship/cli/internal/tome"
 	"github.com/justinjdev/fellowship/cli/internal/state"
+	"github.com/justinjdev/fellowship/cli/internal/tome"
+	"zombiezen.com/go/sqlite"
 )
 
 type SubmitResult struct {
@@ -70,14 +71,19 @@ func GateSubmit(s *state.State, input *HookInput) SubmitResult {
 
 // RecordGateSubmitted records a "submitted" gate event in the quest tome.
 // If autoApproved is true, the phase is also recorded as completed.
-func RecordGateSubmitted(tomePath string, phase string, autoApproved bool) {
-	c := tome.LoadOrCreate(tomePath)
-	tome.RecordGate(c, phase, "submitted")
-	if autoApproved {
-		tome.RecordGate(c, phase, "approved")
-		tome.RecordPhase(c, phase)
+func RecordGateSubmitted(conn *sqlite.Conn, questName, phase string, autoApproved bool) error {
+	if err := tome.RecordGate(conn, questName, phase, "submitted", ""); err != nil {
+		return err
 	}
-	tome.Save(tomePath, c)
+	if autoApproved {
+		if err := tome.RecordGate(conn, questName, phase, "approved", ""); err != nil {
+			return err
+		}
+		if err := tome.RecordPhase(conn, questName, phase, 0); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // HookSpecificOutput is the JSON structure Claude Code expects from

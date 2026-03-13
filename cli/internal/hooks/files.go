@@ -4,11 +4,12 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/tome"
+	"zombiezen.com/go/sqlite"
 )
 
 // FileTrack records file paths from Edit/Write tool inputs into the quest tome.
 // Returns true if the tome was modified.
-func FileTrack(s *state.State, input *HookInput, tomePath string) bool {
+func FileTrack(conn *sqlite.Conn, s *state.State, input *HookInput, questName string) bool {
 	filePath := input.ToolInput.FilePath
 	if filePath == "" {
 		filePath = input.ToolInput.NotebookPath
@@ -17,15 +18,9 @@ func FileTrack(s *state.State, input *HookInput, tomePath string) bool {
 		return false
 	}
 
-	c := tome.LoadOrCreate(tomePath)
-	before := len(c.FilesTouched)
-	tome.RecordFiles(c, []string{filePath})
-	if len(c.FilesTouched) == before {
+	// RecordFiles uses INSERT OR IGNORE, so duplicates are silently skipped.
+	if err := tome.RecordFiles(conn, questName, []string{filePath}); err != nil {
 		return false
 	}
-
-	if err := tome.Save(tomePath, c); err != nil {
-		return false
-	}
-	return true
+	return conn.Changes() > 0
 }

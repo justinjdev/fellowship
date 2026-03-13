@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/justinjdev/fellowship/cli/internal/datadir"
+	"zombiezen.com/go/sqlite"
+	"zombiezen.com/go/sqlite/sqlitex"
+
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
+	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
 // CompanyProgress returns aggregate progress for a company.
@@ -66,20 +68,9 @@ func CalculateProgress(company dashboard.CompanyEntry, quests []dashboard.QuestS
 
 // BatchApprove approves all pending gates within a company. It returns the names
 // of quests that were approved and any errors encountered (non-fatal).
-func BatchApprove(company dashboard.CompanyEntry, fellowshipState *dashboard.FellowshipState) (approved []string, errs []error) {
-	questWorktree := make(map[string]string)
-	for _, q := range fellowshipState.Quests {
-		questWorktree[q.Name] = q.Worktree
-	}
-
+func BatchApprove(conn *sqlite.Conn, company dashboard.CompanyEntry) (approved []string, errs []error) {
 	for _, qName := range company.Quests {
-		wt, ok := questWorktree[qName]
-		if !ok || wt == "" {
-			continue
-		}
-
-		statePath := filepath.Join(wt, datadir.Name(), "quest-state.json")
-		st, err := state.Load(statePath)
+		st, err := state.Load(conn, qName)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("loading state for %s: %w", qName, err))
 			continue
@@ -103,20 +94,24 @@ func BatchApprove(company dashboard.CompanyEntry, fellowshipState *dashboard.Fel
 		st.LembasCompleted = false
 		st.MetadataUpdated = false
 
-		if err := state.Save(statePath, st); err != nil {
+		if err := state.Upsert(conn, st); err != nil {
 			errs = append(errs, fmt.Errorf("saving state for %s: %w", qName, err))
 			continue
 		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
-		herald.Announce(wt, herald.Tiding{
+		herald.Announce(conn, herald.Tiding{
 			Timestamp: now, Quest: qName, Type: herald.GateApproved,
 			Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
 		})
-		herald.Announce(wt, herald.Tiding{
+		herald.Announce(conn, herald.Tiding{
 			Timestamp: now, Quest: qName, Type: herald.PhaseTransition,
 			Phase: nextPhase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, nextPhase),
 		})
+
+		// Record gate and phase in tome.
+		tome.RecordGate(conn, qName, prevPhase, "approved", fmt.Sprintf("Batch approved for company %s", company.Name))
+		tome.RecordPhase(conn, qName, prevPhase, 0)
 
 		approved = append(approved, qName)
 	}
@@ -125,18 +120,18 @@ func BatchApprove(company dashboard.CompanyEntry, fellowshipState *dashboard.Fel
 }
 
 // List prints a summary of all companies in the fellowship state.
-func List(statePath string) error {
-	fs, err := dashboard.LoadFellowshipState(statePath)
+func List(conn *sqlite.Conn) error {
+	companies, err := dashboard.ListCompanies(conn)
 	if err != nil {
 		return err
 	}
 
-	if len(fs.Companies) == 0 {
+	if len(companies) == 0 {
 		fmt.Println("No companies defined.")
 		return nil
 	}
 
-	for _, c := range fs.Companies {
+	for _, c := range companies {
 		parts := []string{}
 		if len(c.Quests) > 0 {
 			parts = append(parts, fmt.Sprintf("%d quest(s)", len(c.Quests)))
@@ -155,27 +150,10 @@ func List(statePath string) error {
 }
 
 // Show prints detailed status for a single company.
-func Show(statePath string, name string) error {
-	fs, err := dashboard.LoadFellowshipState(statePath)
+func Show(conn *sqlite.Conn, name string) error {
+	company, err := findCompany(conn, name)
 	if err != nil {
 		return err
-	}
-
-	var company *dashboard.CompanyEntry
-	for i := range fs.Companies {
-		if fs.Companies[i].Name == name {
-			company = &fs.Companies[i]
-			break
-		}
-	}
-	if company == nil {
-		return fmt.Errorf("company %q not found", name)
-	}
-
-	// Load quest statuses
-	questWorktree := make(map[string]string)
-	for _, q := range fs.Quests {
-		questWorktree[q.Name] = q.Worktree
 	}
 
 	fmt.Printf("Company: %s\n", company.Name)
@@ -183,14 +161,7 @@ func Show(statePath string, name string) error {
 
 	if len(company.Quests) > 0 {
 		for _, qName := range company.Quests {
-			wt, ok := questWorktree[qName]
-			if !ok || wt == "" {
-				fmt.Printf("  %-25s (no worktree)\n", qName)
-				continue
-			}
-
-			statePath := filepath.Join(wt, datadir.Name(), "quest-state.json")
-			st, err := state.Load(statePath)
+			st, err := state.Load(conn, qName)
 			if err != nil {
 				fmt.Printf("  %-25s (state unavailable)\n", qName)
 				continue
@@ -215,24 +186,13 @@ func Show(statePath string, name string) error {
 }
 
 // Approve batch-approves all pending gates in a company.
-func Approve(statePath string, name string) error {
-	fs, err := dashboard.LoadFellowshipState(statePath)
+func Approve(conn *sqlite.Conn, name string) error {
+	company, err := findCompany(conn, name)
 	if err != nil {
 		return err
 	}
 
-	var company *dashboard.CompanyEntry
-	for i := range fs.Companies {
-		if fs.Companies[i].Name == name {
-			company = &fs.Companies[i]
-			break
-		}
-	}
-	if company == nil {
-		return fmt.Errorf("company %q not found", name)
-	}
-
-	approved, errs := BatchApprove(*company, fs)
+	approved, errs := BatchApprove(conn, *company)
 
 	for _, e := range errs {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", e)
@@ -269,42 +229,21 @@ func ProgressSummary(progress CompanyProgress) string {
 }
 
 // LoadAndMarshalProgress loads state and returns JSON-serializable progress for a company.
-func LoadAndMarshalProgress(statePath string, name string) ([]byte, error) {
-	fs, err := dashboard.LoadFellowshipState(statePath)
+func LoadAndMarshalProgress(conn *sqlite.Conn, name string) ([]byte, error) {
+	company, err := findCompany(conn, name)
 	if err != nil {
 		return nil, err
 	}
 
-	var company *dashboard.CompanyEntry
-	for i := range fs.Companies {
-		if fs.Companies[i].Name == name {
-			company = &fs.Companies[i]
-			break
-		}
-	}
-	if company == nil {
-		return nil, fmt.Errorf("company %q not found", name)
-	}
-
-	// Build quest statuses
+	// Build quest statuses from DB
 	var quests []dashboard.QuestStatus
-	questWorktree := make(map[string]string)
-	for _, q := range fs.Quests {
-		questWorktree[q.Name] = q.Worktree
-	}
 	for _, qName := range company.Quests {
-		wt, ok := questWorktree[qName]
-		if !ok || wt == "" {
-			continue
-		}
-		sp := filepath.Join(wt, datadir.Name(), "quest-state.json")
-		st, err := state.Load(sp)
+		st, err := state.Load(conn, qName)
 		if err != nil {
 			continue
 		}
 		quests = append(quests, dashboard.QuestStatus{
 			Name:        qName,
-			Worktree:    wt,
 			Phase:       st.Phase,
 			GatePending: st.GatePending,
 		})
@@ -312,4 +251,53 @@ func LoadAndMarshalProgress(statePath string, name string) ([]byte, error) {
 
 	progress := CalculateProgress(*company, quests)
 	return json.Marshal(progress)
+}
+
+// findCompany looks up a company by name from the DB.
+func findCompany(conn *sqlite.Conn, name string) (*dashboard.CompanyEntry, error) {
+	var found bool
+	entry := &dashboard.CompanyEntry{
+		Quests: []string{},
+		Scouts: []string{},
+	}
+
+	err := sqlitex.Execute(conn,
+		`SELECT name FROM companies WHERE name = :name`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":name": name},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				found = true
+				entry.Name = stmt.ColumnText(0)
+				return nil
+			},
+		})
+	if err != nil {
+		return nil, fmt.Errorf("company: lookup %s: %w", name, err)
+	}
+	if !found {
+		return nil, fmt.Errorf("company %q not found", name)
+	}
+
+	// Load members
+	err = sqlitex.Execute(conn,
+		`SELECT member_name, member_type FROM company_members WHERE company_name = :name`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":name": name},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				memberName := stmt.ColumnText(0)
+				memberType := stmt.ColumnText(1)
+				switch memberType {
+				case "quest":
+					entry.Quests = append(entry.Quests, memberName)
+				case "scout":
+					entry.Scouts = append(entry.Scouts, memberName)
+				}
+				return nil
+			},
+		})
+	if err != nil {
+		return nil, fmt.Errorf("company: load members for %s: %w", name, err)
+	}
+
+	return entry, nil
 }

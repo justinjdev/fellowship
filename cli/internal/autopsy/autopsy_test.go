@@ -1,444 +1,520 @@
 package autopsy
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
+	"context"
 	"testing"
-	"time"
 
-	"github.com/justinjdev/fellowship/cli/internal/datadir"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
-	"github.com/justinjdev/fellowship/cli/internal/tome"
+	"github.com/justinjdev/fellowship/cli/internal/db"
+	"zombiezen.com/go/sqlite"
+	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-func setupTestRepo(t *testing.T) string {
-	t.Helper()
-	t.Setenv("HOME", t.TempDir()) // Pin HOME so datadir.Name() returns default
-	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, datadir.DefaultName, autopsyDir), 0755)
-	return dir
+func TestCreateAndScan(t *testing.T) {
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		id, err := Create(conn, &CreateInput{
+			Quest: "q1", Phase: "Implement", Trigger: "recovery",
+			Files: []string{"auth.go"}, Modules: []string{"auth"},
+			WhatFailed: "tests failed", Tags: []string{"flaky"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if id == 0 {
+			t.Error("expected non-zero ID")
+		}
+
+		matches, err := Scan(conn, ScanOptions{Files: []string{"auth.go"}}, 90)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(matches) != 1 {
+			t.Fatalf("expected 1, got %d", len(matches))
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestCreate_ValidInput(t *testing.T) {
-	repo := setupTestRepo(t)
-	input := &CreateInput{
-		Quest:      "quest-1",
-		Task:       "Add auth endpoint",
-		Phase:      "Implement",
-		Trigger:    "recovery",
-		Files:      []string{"src/auth/jwt.go"},
-		Modules:    []string{"auth"},
-		WhatFailed: "Middleware caches tokens",
-		Resolution: "Added cache invalidation",
-		Tags:       []string{"caching"},
-	}
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		id, err := Create(conn, &CreateInput{
+			Quest:      "quest-1",
+			Task:       "Add auth endpoint",
+			Phase:      "Implement",
+			Trigger:    "recovery",
+			Files:      []string{"src/auth/jwt.go"},
+			Modules:    []string{"auth"},
+			WhatFailed: "Middleware caches tokens",
+			Resolution: "Added cache invalidation",
+			Tags:       []string{"caching"},
+		})
+		if err != nil {
+			t.Fatalf("Create failed: %v", err)
+		}
+		if id == 0 {
+			t.Error("expected non-zero ID")
+		}
 
-	path, err := Create(repo, input)
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading autopsy file: %v", err)
-	}
-
-	var a Autopsy
-	if err := json.Unmarshal(data, &a); err != nil {
-		t.Fatalf("parsing autopsy: %v", err)
-	}
-
-	if a.Version != 1 {
-		t.Errorf("version = %d, want 1", a.Version)
-	}
-	if a.Quest != "quest-1" {
-		t.Errorf("quest = %q, want %q", a.Quest, "quest-1")
-	}
-	if a.Trigger != "recovery" {
-		t.Errorf("trigger = %q, want %q", a.Trigger, "recovery")
-	}
-	if a.WhatFailed != "Middleware caches tokens" {
-		t.Errorf("what_failed = %q", a.WhatFailed)
-	}
-	if len(a.Tags) != 1 || a.Tags[0] != "caching" {
-		t.Errorf("tags = %v, want [caching]", a.Tags)
+		// Verify we can scan it back
+		matches, err := Scan(conn, ScanOptions{Tags: []string{"caching"}}, 90)
+		if err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+		if len(matches) != 1 {
+			t.Fatalf("expected 1 match, got %d", len(matches))
+		}
+		a := matches[0]
+		if a.Quest != "quest-1" {
+			t.Errorf("quest = %q, want %q", a.Quest, "quest-1")
+		}
+		if a.Trigger != "recovery" {
+			t.Errorf("trigger = %q, want %q", a.Trigger, "recovery")
+		}
+		if a.WhatFailed != "Middleware caches tokens" {
+			t.Errorf("what_failed = %q", a.WhatFailed)
+		}
+		if len(a.Tags) != 1 || a.Tags[0] != "caching" {
+			t.Errorf("tags = %v, want [caching]", a.Tags)
+		}
+		if len(a.Files) != 1 || a.Files[0] != "src/auth/jwt.go" {
+			t.Errorf("files = %v, want [src/auth/jwt.go]", a.Files)
+		}
+		if len(a.Modules) != 1 || a.Modules[0] != "auth" {
+			t.Errorf("modules = %v, want [auth]", a.Modules)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestCreate_MissingQuest(t *testing.T) {
-	repo := setupTestRepo(t)
-	_, err := Create(repo, &CreateInput{
-		Trigger:    "recovery",
-		WhatFailed: "something",
-	})
-	if err == nil {
-		t.Error("expected error for missing quest")
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		_, err := Create(conn, &CreateInput{
+			Trigger:    "recovery",
+			WhatFailed: "something",
+		})
+		if err == nil {
+			t.Error("expected error for missing quest")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestCreate_InvalidTrigger(t *testing.T) {
-	repo := setupTestRepo(t)
-	_, err := Create(repo, &CreateInput{
-		Quest:      "quest-1",
-		Trigger:    "invalid",
-		WhatFailed: "something",
-	})
-	if err == nil {
-		t.Error("expected error for invalid trigger")
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		_, err := Create(conn, &CreateInput{
+			Quest:      "quest-1",
+			Trigger:    "invalid",
+			WhatFailed: "something",
+		})
+		if err == nil {
+			t.Error("expected error for invalid trigger")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestCreate_MissingWhatFailed(t *testing.T) {
-	repo := setupTestRepo(t)
-	_, err := Create(repo, &CreateInput{
-		Quest:   "quest-1",
-		Trigger: "recovery",
-	})
-	if err == nil {
-		t.Error("expected error for missing what_failed")
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		_, err := Create(conn, &CreateInput{
+			Quest:   "quest-1",
+			Trigger: "recovery",
+		})
+		if err == nil {
+			t.Error("expected error for missing what_failed")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestCreate_NilInput(t *testing.T) {
-	repo := setupTestRepo(t)
-	_, err := Create(repo, nil)
-	if err == nil {
-		t.Error("expected error for nil input")
-	}
-}
-
-func TestCreate_NilSlicesDefaultToEmpty(t *testing.T) {
-	repo := setupTestRepo(t)
-	path, err := Create(repo, &CreateInput{
-		Quest:      "quest-1",
-		Trigger:    "recovery",
-		WhatFailed: "something",
-	})
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading autopsy file: %v", err)
-	}
-	var a Autopsy
-	if err := json.Unmarshal(data, &a); err != nil {
-		t.Fatalf("parsing autopsy: %v", err)
-	}
-
-	if a.Files == nil {
-		t.Error("files should be empty slice, not nil")
-	}
-	if a.Modules == nil {
-		t.Error("modules should be empty slice, not nil")
-	}
-	if a.Tags == nil {
-		t.Error("tags should be empty slice, not nil")
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		_, err := Create(conn, nil)
+		if err == nil {
+			t.Error("expected error for nil input")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestScan_MatchByFile(t *testing.T) {
-	repo := setupTestRepo(t)
-	Create(repo, &CreateInput{
-		Quest:      "quest-1",
-		Trigger:    "recovery",
-		Files:      []string{"src/auth/jwt.go"},
-		WhatFailed: "auth issue",
-	})
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		_, err := Create(conn, &CreateInput{
+			Quest:      "quest-1",
+			Trigger:    "recovery",
+			Files:      []string{"src/auth/jwt.go"},
+			WhatFailed: "auth issue",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	matches, err := Scan(repo, ScanOptions{Files: []string{"src/auth/middleware.go"}}, 90)
-	if err != nil {
-		t.Fatalf("Scan failed: %v", err)
-	}
-	if len(matches) != 1 {
-		t.Errorf("expected 1 match (same directory), got %d", len(matches))
+		// Same directory should match
+		matches, err := Scan(conn, ScanOptions{Files: []string{"src/auth/middleware.go"}}, 90)
+		if err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+		if len(matches) != 1 {
+			t.Errorf("expected 1 match (same directory), got %d", len(matches))
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestScan_MatchByModule(t *testing.T) {
-	repo := setupTestRepo(t)
-	Create(repo, &CreateInput{
-		Quest:      "quest-1",
-		Trigger:    "recovery",
-		Modules:    []string{"auth"},
-		WhatFailed: "auth issue",
-	})
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		_, err := Create(conn, &CreateInput{
+			Quest:      "quest-1",
+			Trigger:    "recovery",
+			Modules:    []string{"auth"},
+			WhatFailed: "auth issue",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	matches, err := Scan(repo, ScanOptions{Modules: []string{"auth"}}, 90)
-	if err != nil {
-		t.Fatalf("Scan failed: %v", err)
-	}
-	if len(matches) != 1 {
-		t.Errorf("expected 1 match, got %d", len(matches))
+		matches, err := Scan(conn, ScanOptions{Modules: []string{"auth"}}, 90)
+		if err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+		if len(matches) != 1 {
+			t.Errorf("expected 1 match, got %d", len(matches))
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestScan_MatchByTag(t *testing.T) {
-	repo := setupTestRepo(t)
-	Create(repo, &CreateInput{
-		Quest:      "quest-1",
-		Trigger:    "recovery",
-		Tags:       []string{"caching", "auth"},
-		WhatFailed: "cache issue",
-	})
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		_, err := Create(conn, &CreateInput{
+			Quest:      "quest-1",
+			Trigger:    "recovery",
+			Tags:       []string{"caching", "auth"},
+			WhatFailed: "cache issue",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	matches, err := Scan(repo, ScanOptions{Tags: []string{"caching"}}, 90)
-	if err != nil {
-		t.Fatalf("Scan failed: %v", err)
-	}
-	if len(matches) != 1 {
-		t.Errorf("expected 1 match, got %d", len(matches))
+		matches, err := Scan(conn, ScanOptions{Tags: []string{"caching"}}, 90)
+		if err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+		if len(matches) != 1 {
+			t.Errorf("expected 1 match, got %d", len(matches))
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestScan_NoMatch(t *testing.T) {
-	repo := setupTestRepo(t)
-	Create(repo, &CreateInput{
-		Quest:      "quest-1",
-		Trigger:    "recovery",
-		Modules:    []string{"auth"},
-		WhatFailed: "auth issue",
-	})
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		_, err := Create(conn, &CreateInput{
+			Quest:      "quest-1",
+			Trigger:    "recovery",
+			Modules:    []string{"auth"},
+			WhatFailed: "auth issue",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	matches, err := Scan(repo, ScanOptions{Modules: []string{"billing"}}, 90)
-	if err != nil {
-		t.Fatalf("Scan failed: %v", err)
-	}
-	if len(matches) != 0 {
-		t.Errorf("expected 0 matches, got %d", len(matches))
-	}
-}
-
-func TestScan_PrunesExpired(t *testing.T) {
-	repo := setupTestRepo(t)
-
-	// Write an autopsy with an old timestamp
-	dir := filepath.Join(repo, datadir.DefaultName, autopsyDir)
-	old := &Autopsy{
-		Version:    1,
-		Timestamp:  time.Now().UTC().AddDate(0, 0, -100).Format(time.RFC3339),
-		Quest:      "old-quest",
-		Trigger:    "recovery",
-		Modules:    []string{"auth"},
-		Files:      []string{},
-		Tags:       []string{},
-		WhatFailed: "old failure",
-	}
-	data, _ := json.MarshalIndent(old, "", "  ")
-	os.WriteFile(filepath.Join(dir, "old-autopsy.json"), data, 0644)
-
-	matches, err := Scan(repo, ScanOptions{Modules: []string{"auth"}}, 90)
-	if err != nil {
-		t.Fatalf("Scan failed: %v", err)
-	}
-	if len(matches) != 0 {
-		t.Errorf("expired autopsy should be pruned, got %d matches", len(matches))
-	}
-
-	// Verify file was deleted
-	if _, err := os.Stat(filepath.Join(dir, "old-autopsy.json")); !os.IsNotExist(err) {
-		t.Error("expired autopsy file should be deleted")
+		matches, err := Scan(conn, ScanOptions{Modules: []string{"billing"}}, 90)
+		if err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+		if len(matches) != 0 {
+			t.Errorf("expected 0 matches, got %d", len(matches))
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestScan_RequiresFilter(t *testing.T) {
-	repo := setupTestRepo(t)
-	_, err := Scan(repo, ScanOptions{}, 90)
-	if err == nil {
-		t.Error("expected error when no filters provided")
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		_, err := Scan(conn, ScanOptions{}, 90)
+		if err == nil {
+			t.Error("expected error when no filters provided")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestScan_EmptyDirectory(t *testing.T) {
-	repo := t.TempDir() // no autopsies dir
-	matches, err := Scan(repo, ScanOptions{Modules: []string{"auth"}}, 90)
-	if err != nil {
-		t.Fatalf("Scan failed: %v", err)
-	}
-	if len(matches) != 0 {
-		t.Errorf("expected 0 matches for empty dir, got %d", len(matches))
+func TestScan_ExcludesExpired(t *testing.T) {
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		// Insert an autopsy with an already-expired expires_at
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO autopsies (timestamp, quest, trigger_type, what_failed, expires_at)
+			 VALUES (datetime('now', '-100 days'), 'old-quest', 'recovery', 'old failure', datetime('now', '-10 days'))`,
+			nil); err != nil {
+			t.Fatal(err)
+		}
+		oldID := conn.LastInsertRowID()
+
+		// Add a module so we can search for it
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO autopsy_modules (autopsy_id, module) VALUES (?, 'auth')`,
+			&sqlitex.ExecOptions{Args: []any{oldID}}); err != nil {
+			t.Fatal(err)
+		}
+
+		matches, err := Scan(conn, ScanOptions{Modules: []string{"auth"}}, 90)
+		if err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+		if len(matches) != 0 {
+			t.Errorf("expired autopsy should be excluded, got %d matches", len(matches))
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestInfer_FromRespawns(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	worktree := t.TempDir()
-	repo := t.TempDir()
-	os.MkdirAll(filepath.Join(repo, datadir.DefaultName, autopsyDir), 0755)
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		// Set up fellowship_quests row
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO fellowship_quests (name, task_description, status, respawns)
+			 VALUES ('quest-respawned', 'Fix login flow', 'active', 2)`, nil); err != nil {
+			t.Fatal(err)
+		}
 
-	// Write a tome with respawns
-	tomeDir := filepath.Join(worktree, datadir.DefaultName)
-	os.MkdirAll(tomeDir, 0755)
-	qt := &tome.QuestTome{
-		Version:   1,
-		QuestName: "quest-respawned",
-		Task:      "Fix login flow",
-		Status:    "active",
-		PhasesCompleted: []tome.PhaseRecord{
-			{Phase: "Implement", CompletedAt: time.Now().UTC().Format(time.RFC3339)},
-		},
-		GateHistory:  []tome.GateEvent{},
-		FilesTouched: []string{"src/auth/login.go", "src/auth/session.go"},
-		Respawns:     2,
-	}
-	tome.Save(filepath.Join(tomeDir, "quest-tome.json"), qt)
+		// Set up quest_state (needed for FK in quest_phases/quest_files)
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO quest_state (quest_name, created_at, updated_at)
+			 VALUES ('quest-respawned', datetime('now'), datetime('now'))`, nil); err != nil {
+			t.Fatal(err)
+		}
 
-	path, err := Infer(worktree, repo)
-	if err != nil {
-		t.Fatalf("Infer failed: %v", err)
-	}
+		// Add phase history
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO quest_phases (quest_name, phase, completed_at)
+			 VALUES ('quest-respawned', 'Implement', datetime('now'))`, nil); err != nil {
+			t.Fatal(err)
+		}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading autopsy file: %v", err)
-	}
-	var a Autopsy
-	if err := json.Unmarshal(data, &a); err != nil {
-		t.Fatalf("parsing autopsy: %v", err)
-	}
+		// Add files touched
+		for _, f := range []string{"src/auth/login.go", "src/auth/session.go"} {
+			if err := sqlitex.Execute(conn,
+				`INSERT INTO quest_files (quest_name, file_path) VALUES ('quest-respawned', ?)`,
+				&sqlitex.ExecOptions{Args: []any{f}}); err != nil {
+				t.Fatal(err)
+			}
+		}
 
-	if a.Trigger != "recovery" {
-		t.Errorf("trigger = %q, want recovery", a.Trigger)
-	}
-	if a.Quest != "quest-respawned" {
-		t.Errorf("quest = %q", a.Quest)
-	}
-	if len(a.Files) != 2 {
-		t.Errorf("files = %v, want 2 files", a.Files)
+		id, err := Infer(conn, "quest-respawned")
+		if err != nil {
+			t.Fatalf("Infer failed: %v", err)
+		}
+		if id == 0 {
+			t.Error("expected non-zero ID")
+		}
+
+		// Verify the autopsy
+		matches, err := Scan(conn, ScanOptions{Files: []string{"src/auth/login.go"}}, 90)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(matches) != 1 {
+			t.Fatalf("expected 1 match, got %d", len(matches))
+		}
+		a := matches[0]
+		if a.Trigger != "recovery" {
+			t.Errorf("trigger = %q, want recovery", a.Trigger)
+		}
+		if a.Quest != "quest-respawned" {
+			t.Errorf("quest = %q", a.Quest)
+		}
+		if len(a.Files) != 2 {
+			t.Errorf("files = %v, want 2 files", a.Files)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestInfer_FromRejection(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	worktree := t.TempDir()
-	repo := t.TempDir()
-	os.MkdirAll(filepath.Join(repo, datadir.DefaultName, autopsyDir), 0755)
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		// Set up fellowship_quests
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO fellowship_quests (name, task_description, status, respawns)
+			 VALUES ('quest-rejected', 'Add billing', 'active', 0)`, nil); err != nil {
+			t.Fatal(err)
+		}
 
-	// Write tome
-	tomeDir := filepath.Join(worktree, datadir.DefaultName)
-	os.MkdirAll(tomeDir, 0755)
-	qt := &tome.QuestTome{
-		Version:         1,
-		QuestName:       "quest-rejected",
-		Task:            "Add billing",
-		Status:          "active",
-		PhasesCompleted: []tome.PhaseRecord{{Phase: "Plan", CompletedAt: time.Now().UTC().Format(time.RFC3339)}},
-		GateHistory:     []tome.GateEvent{},
-		FilesTouched:    []string{"src/billing/charge.go"},
-	}
-	tome.Save(filepath.Join(tomeDir, "quest-tome.json"), qt)
+		// Set up quest_state (for FK)
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO quest_state (quest_name, created_at, updated_at)
+			 VALUES ('quest-rejected', datetime('now'), datetime('now'))`, nil); err != nil {
+			t.Fatal(err)
+		}
 
-	// Write herald with rejection
-	herald.Announce(worktree, herald.Tiding{
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		Quest:     "quest-rejected",
-		Type:      herald.GateRejected,
-		Phase:     "Plan",
-		Detail:    "Plan doesn't account for tax calculation",
-	})
+		// Add gate rejection
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO quest_gates (quest_name, phase, action, timestamp, reason)
+			 VALUES ('quest-rejected', 'Plan', 'rejected', datetime('now'), 'Plan doesn''t account for tax calculation')`, nil); err != nil {
+			t.Fatal(err)
+		}
 
-	path, err := Infer(worktree, repo)
-	if err != nil {
-		t.Fatalf("Infer failed: %v", err)
-	}
+		// Add phase
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO quest_phases (quest_name, phase, completed_at)
+			 VALUES ('quest-rejected', 'Plan', datetime('now'))`, nil); err != nil {
+			t.Fatal(err)
+		}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading autopsy file: %v", err)
-	}
-	var a Autopsy
-	if err := json.Unmarshal(data, &a); err != nil {
-		t.Fatalf("parsing autopsy: %v", err)
-	}
+		// Add files
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO quest_files (quest_name, file_path) VALUES ('quest-rejected', 'src/billing/charge.go')`, nil); err != nil {
+			t.Fatal(err)
+		}
 
-	if a.Trigger != "rejection" {
-		t.Errorf("trigger = %q, want rejection", a.Trigger)
-	}
-	if a.WhatFailed != "Plan doesn't account for tax calculation" {
-		t.Errorf("what_failed = %q", a.WhatFailed)
+		id, err := Infer(conn, "quest-rejected")
+		if err != nil {
+			t.Fatalf("Infer failed: %v", err)
+		}
+		if id == 0 {
+			t.Error("expected non-zero ID")
+		}
+
+		matches, err := Scan(conn, ScanOptions{Files: []string{"src/billing/charge.go"}}, 90)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(matches) != 1 {
+			t.Fatalf("expected 1 match, got %d", len(matches))
+		}
+		if matches[0].Trigger != "rejection" {
+			t.Errorf("trigger = %q, want rejection", matches[0].Trigger)
+		}
+		if matches[0].WhatFailed != "Plan doesn't account for tax calculation" {
+			t.Errorf("what_failed = %q", matches[0].WhatFailed)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestInfer_FromAbandonment(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	worktree := t.TempDir()
-	repo := t.TempDir()
-	os.MkdirAll(filepath.Join(repo, datadir.DefaultName, autopsyDir), 0755)
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO fellowship_quests (name, task_description, status, respawns)
+			 VALUES ('quest-abandoned', 'Migrate DB', 'cancelled', 0)`, nil); err != nil {
+			t.Fatal(err)
+		}
 
-	tomeDir := filepath.Join(worktree, datadir.DefaultName)
-	os.MkdirAll(tomeDir, 0755)
-	qt := &tome.QuestTome{
-		Version:         1,
-		QuestName:       "quest-abandoned",
-		Task:            "Migrate DB",
-		Status:          "cancelled",
-		PhasesCompleted: []tome.PhaseRecord{},
-		GateHistory:     []tome.GateEvent{},
-		FilesTouched:    []string{},
-	}
-	tome.Save(filepath.Join(tomeDir, "quest-tome.json"), qt)
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO quest_state (quest_name, created_at, updated_at)
+			 VALUES ('quest-abandoned', datetime('now'), datetime('now'))`, nil); err != nil {
+			t.Fatal(err)
+		}
 
-	path, err := Infer(worktree, repo)
-	if err != nil {
-		t.Fatalf("Infer failed: %v", err)
-	}
+		id, err := Infer(conn, "quest-abandoned")
+		if err != nil {
+			t.Fatalf("Infer failed: %v", err)
+		}
+		if id == 0 {
+			t.Error("expected non-zero ID")
+		}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading autopsy file: %v", err)
-	}
-	var a Autopsy
-	if err := json.Unmarshal(data, &a); err != nil {
-		t.Fatalf("parsing autopsy: %v", err)
-	}
+		matches, err := Scan(conn, ScanOptions{Modules: []string{"quest-abandoned"}}, 90)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// No files means no modules, so search by the quest name directly
+		// Actually, let's just verify via a tag/module-less scan won't work;
+		// instead query directly
+		_ = matches
 
-	if a.Trigger != "abandonment" {
-		t.Errorf("trigger = %q, want abandonment", a.Trigger)
+		// Verify the autopsy was created by looking at the DB directly
+		var trigger string
+		if err := sqlitex.Execute(conn,
+			`SELECT trigger_type FROM autopsies WHERE id = ?`,
+			&sqlitex.ExecOptions{
+				Args: []any{id},
+				ResultFunc: func(stmt *sqlite.Stmt) error {
+					trigger = stmt.ColumnText(0)
+					return nil
+				},
+			}); err != nil {
+			t.Fatal(err)
+		}
+		if trigger != "abandonment" {
+			t.Errorf("trigger = %q, want abandonment", trigger)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestInfer_NoFailureSignals(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	worktree := t.TempDir()
-	repo := t.TempDir()
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO fellowship_quests (name, task_description, status, respawns)
+			 VALUES ('quest-ok', 'Add feature', 'active', 0)`, nil); err != nil {
+			t.Fatal(err)
+		}
 
-	tomeDir := filepath.Join(worktree, datadir.DefaultName)
-	os.MkdirAll(tomeDir, 0755)
-	qt := &tome.QuestTome{
-		Version:         1,
-		QuestName:       "quest-ok",
-		Task:            "Add feature",
-		Status:          "active",
-		PhasesCompleted: []tome.PhaseRecord{},
-		GateHistory:     []tome.GateEvent{},
-		FilesTouched:    []string{},
-	}
-	tome.Save(filepath.Join(tomeDir, "quest-tome.json"), qt)
-
-	_, err := Infer(worktree, repo)
-	if err == nil {
-		t.Error("expected error when no failure signals found")
+		_, err := Infer(conn, "quest-ok")
+		if err == nil {
+			t.Error("expected error when no failure signals found")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestMatchesFilters_FilePrefix(t *testing.T) {
-	a := &Autopsy{Files: []string{"src/auth/jwt.go"}}
-
-	// Same directory should match
-	if !matchesFilters(a, ScanOptions{Files: []string{"src/auth/middleware.go"}}) {
-		t.Error("same directory should match")
-	}
-
-	// Parent prefix should match
-	if !matchesFilters(a, ScanOptions{Files: []string{"src/auth/"}}) {
-		t.Error("parent prefix should match")
-	}
-
-	// Different directory should not match
-	if matchesFilters(a, ScanOptions{Files: []string{"src/billing/charge.go"}}) {
-		t.Error("different directory should not match")
+func TestInfer_QuestNotFound(t *testing.T) {
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		_, err := Infer(conn, "nonexistent")
+		if err == nil {
+			t.Error("expected error for nonexistent quest")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -455,17 +531,3 @@ func TestInferModules(t *testing.T) {
 		t.Errorf("expected [auth billing], got %v", modules)
 	}
 }
-
-func TestSanitize(t *testing.T) {
-	if got := sanitize("quest with spaces"); got != "quest-with-spaces" {
-		t.Errorf("sanitize spaces: got %q", got)
-	}
-	if got := sanitize("quest/with/slashes"); got != "quest-with-slashes" {
-		t.Errorf("sanitize slashes: got %q", got)
-	}
-	long := "this-is-a-very-long-quest-name-that-exceeds-the-forty-character-limit"
-	if got := sanitize(long); len(got) != 40 {
-		t.Errorf("sanitize long: got length %d, want 40", len(got))
-	}
-}
-

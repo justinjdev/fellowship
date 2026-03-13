@@ -1,6 +1,7 @@
 package eagles
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,63 +9,48 @@ import (
 	"testing"
 	"time"
 
+	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
+	"github.com/justinjdev/fellowship/cli/internal/herald"
+	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
-// writeQuestState creates a quest-state.json in worktree/.fellowship.
-// Pins HOME to a temp dir so datadir.Name() returns the default ".fellowship".
-func writeQuestState(t *testing.T, worktree string, phase string, gatePending bool, gateID *string, questName string) {
+// seedQuest inserts a quest state and optionally herald tidings into the test DB.
+func seedQuest(t *testing.T, d *db.DB, s *state.State) {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
-	dir := filepath.Join(worktree, ".fellowship")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatalf("creating data dir: %v", err)
-	}
-
-	s := map[string]interface{}{
-		"version":            1,
-		"quest_name":         questName,
-		"task_id":            "t1",
-		"team_name":          "team",
-		"phase":              phase,
-		"gate_pending":       gatePending,
-		"gate_id":            gateID,
-		"lembas_completed":   false,
-		"metadata_updated":   false,
-		"auto_approve_gates": []string{},
-	}
-
-	data, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		t.Fatalf("marshaling state: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "quest-state.json"), data, 0644); err != nil {
-		t.Fatalf("writing quest-state.json: %v", err)
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		return state.Upsert(conn, s)
+	}); err != nil {
+		t.Fatalf("seeding quest %s: %v", s.QuestName, err)
 	}
 }
 
-// touchFile creates a file with the given modification time.
-func touchFile(t *testing.T, path string, modTime time.Time) {
+// seedTiding inserts a herald tiding.
+func seedTiding(t *testing.T, d *db.DB, tiding herald.Tiding) {
 	t.Helper()
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatalf("creating dir %s: %v", dir, err)
-	}
-	if err := os.WriteFile(path, []byte("content"), 0644); err != nil {
-		t.Fatalf("writing file %s: %v", path, err)
-	}
-	if err := os.Chtimes(path, modTime, modTime); err != nil {
-		t.Fatalf("changing times for %s: %v", path, err)
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		return herald.Announce(conn, tiding)
+	}); err != nil {
+		t.Fatalf("seeding tiding for %s: %v", tiding.Quest, err)
 	}
 }
 
 func TestClassifyHealthy(t *testing.T) {
-	worktree := t.TempDir()
-	writeQuestState(t, worktree, "Implement", false, nil, "quest-api")
+	d := db.OpenTest(t)
+	now := time.Now().UTC()
 
-	now := time.Now()
-	// Create a recently modified file
-	touchFile(t, filepath.Join(worktree, "src", "main.go"), now.Add(-2*time.Minute))
+	seedQuest(t, d, &state.State{
+		QuestName: "quest-api",
+		TaskID:    "t1",
+		TeamName:  "team",
+		Phase:     "Implement",
+	})
+	seedTiding(t, d, herald.Tiding{
+		Timestamp: now.Add(-2 * time.Minute).Format(time.RFC3339),
+		Quest:     "quest-api",
+		Type:      herald.PhaseTransition,
+		Phase:     "Implement",
+	})
 
 	opts := Options{
 		GateThreshold: 10 * time.Minute,
@@ -72,11 +58,21 @@ func TestClassifyHealthy(t *testing.T) {
 		Now:           now,
 	}
 
-	qh, err := classifyQuest(worktree, opts)
+	var report *EaglesReport
+	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		report, err = Sweep(conn, opts)
+		return err
+	})
 	if err != nil {
-		t.Fatalf("classifyQuest: %v", err)
+		t.Fatalf("Sweep: %v", err)
 	}
 
+	if len(report.Quests) != 1 {
+		t.Fatalf("len(Quests) = %d, want 1", len(report.Quests))
+	}
+
+	qh := report.Quests[0]
 	if qh.Health != Working {
 		t.Errorf("Health = %q, want %q", qh.Health, Working)
 	}
@@ -92,15 +88,21 @@ func TestClassifyHealthy(t *testing.T) {
 }
 
 func TestClassifyStalledWithGateID(t *testing.T) {
-	worktree := t.TempDir()
-	now := time.Now()
+	d := db.OpenTest(t)
+	now := time.Now().UTC()
 
 	// Gate created 20 minutes ago
 	gateTS := now.Add(-20 * time.Minute).Unix()
 	gateID := fmt.Sprintf("gate-Plan-%d", gateTS)
-	writeQuestState(t, worktree, "Plan", true, &gateID, "quest-auth")
 
-	touchFile(t, filepath.Join(worktree, "src", "plan.md"), now.Add(-1*time.Minute))
+	seedQuest(t, d, &state.State{
+		QuestName:   "quest-auth",
+		TaskID:      "t2",
+		TeamName:    "team",
+		Phase:       "Plan",
+		GatePending: true,
+		GateID:      &gateID,
+	})
 
 	opts := Options{
 		GateThreshold: 10 * time.Minute,
@@ -108,11 +110,21 @@ func TestClassifyStalledWithGateID(t *testing.T) {
 		Now:           now,
 	}
 
-	qh, err := classifyQuest(worktree, opts)
+	var report *EaglesReport
+	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		report, err = Sweep(conn, opts)
+		return err
+	})
 	if err != nil {
-		t.Fatalf("classifyQuest: %v", err)
+		t.Fatalf("Sweep: %v", err)
 	}
 
+	if len(report.Quests) != 1 {
+		t.Fatalf("len(Quests) = %d, want 1", len(report.Quests))
+	}
+
+	qh := report.Quests[0]
 	if qh.Health != Stalled {
 		t.Errorf("Health = %q, want %q", qh.Health, Stalled)
 	}
@@ -125,15 +137,27 @@ func TestClassifyStalledWithGateID(t *testing.T) {
 }
 
 func TestClassifyStalledGatePendingWithinThreshold(t *testing.T) {
-	worktree := t.TempDir()
-	now := time.Now()
+	d := db.OpenTest(t)
+	now := time.Now().UTC()
 
 	// Gate created 5 minutes ago — within threshold
 	gateTS := now.Add(-5 * time.Minute).Unix()
 	gateID := fmt.Sprintf("gate-Plan-%d", gateTS)
-	writeQuestState(t, worktree, "Plan", true, &gateID, "quest-fresh")
 
-	touchFile(t, filepath.Join(worktree, "src", "plan.md"), now.Add(-1*time.Minute))
+	seedQuest(t, d, &state.State{
+		QuestName:   "quest-fresh",
+		TaskID:      "t3",
+		TeamName:    "team",
+		Phase:       "Plan",
+		GatePending: true,
+		GateID:      &gateID,
+	})
+	seedTiding(t, d, herald.Tiding{
+		Timestamp: now.Add(-1 * time.Minute).Format(time.RFC3339),
+		Quest:     "quest-fresh",
+		Type:      herald.GateSubmitted,
+		Phase:     "Plan",
+	})
 
 	opts := Options{
 		GateThreshold: 10 * time.Minute,
@@ -141,26 +165,39 @@ func TestClassifyStalledGatePendingWithinThreshold(t *testing.T) {
 		Now:           now,
 	}
 
-	qh, err := classifyQuest(worktree, opts)
+	var report *EaglesReport
+	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		report, err = Sweep(conn, opts)
+		return err
+	})
 	if err != nil {
-		t.Fatalf("classifyQuest: %v", err)
+		t.Fatalf("Sweep: %v", err)
 	}
 
+	qh := report.Quests[0]
 	if qh.Health != Working {
 		t.Errorf("Health = %q, want %q (gate pending within threshold)", qh.Health, Working)
 	}
 }
 
 func TestClassifyZombie(t *testing.T) {
-	worktree := t.TempDir()
-	now := time.Now()
+	d := db.OpenTest(t)
+	now := time.Now().UTC()
 
-	writeQuestState(t, worktree, "Implement", false, nil, "quest-dead")
-
-	// Last file change was 30 minutes ago
-	touchFile(t, filepath.Join(worktree, "src", "old.go"), now.Add(-30*time.Minute))
-	// Set the quest-state.json mod time to be old too
-	os.Chtimes(filepath.Join(worktree, ".fellowship", "quest-state.json"), now.Add(-30*time.Minute), now.Add(-30*time.Minute))
+	seedQuest(t, d, &state.State{
+		QuestName: "quest-dead",
+		TaskID:    "t4",
+		TeamName:  "team",
+		Phase:     "Implement",
+	})
+	// Last activity was 30 minutes ago
+	seedTiding(t, d, herald.Tiding{
+		Timestamp: now.Add(-30 * time.Minute).Format(time.RFC3339),
+		Quest:     "quest-dead",
+		Type:      herald.PhaseTransition,
+		Phase:     "Implement",
+	})
 
 	opts := Options{
 		GateThreshold: 10 * time.Minute,
@@ -168,11 +205,17 @@ func TestClassifyZombie(t *testing.T) {
 		Now:           now,
 	}
 
-	qh, err := classifyQuest(worktree, opts)
+	var report *EaglesReport
+	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		report, err = Sweep(conn, opts)
+		return err
+	})
 	if err != nil {
-		t.Fatalf("classifyQuest: %v", err)
+		t.Fatalf("Sweep: %v", err)
 	}
 
+	qh := report.Quests[0]
 	if qh.Health != Zombie {
 		t.Errorf("Health = %q, want %q", qh.Health, Zombie)
 	}
@@ -182,17 +225,29 @@ func TestClassifyZombie(t *testing.T) {
 }
 
 func TestClassifyZombieWithCheckpoint(t *testing.T) {
-	worktree := t.TempDir()
-	now := time.Now()
+	d := db.OpenTest(t)
+	now := time.Now().UTC()
 
-	writeQuestState(t, worktree, "Implement", false, nil, "quest-resumable")
-
-	// Last file change was 30 minutes ago
-	touchFile(t, filepath.Join(worktree, "src", "old.go"), now.Add(-30*time.Minute))
-	os.Chtimes(filepath.Join(worktree, ".fellowship", "quest-state.json"), now.Add(-30*time.Minute), now.Add(-30*time.Minute))
-
-	// Create checkpoint
-	touchFile(t, filepath.Join(worktree, ".fellowship", "checkpoint.md"), now.Add(-30*time.Minute))
+	seedQuest(t, d, &state.State{
+		QuestName: "quest-resumable",
+		TaskID:    "t5",
+		TeamName:  "team",
+		Phase:     "Implement",
+	})
+	// Last activity was 30 minutes ago
+	seedTiding(t, d, herald.Tiding{
+		Timestamp: now.Add(-30 * time.Minute).Format(time.RFC3339),
+		Quest:     "quest-resumable",
+		Type:      herald.PhaseTransition,
+		Phase:     "Implement",
+	})
+	// Has a lembas_completed checkpoint
+	seedTiding(t, d, herald.Tiding{
+		Timestamp: now.Add(-30 * time.Minute).Format(time.RFC3339),
+		Quest:     "quest-resumable",
+		Type:      herald.LembasCompleted,
+		Phase:     "Implement",
+	})
 
 	opts := Options{
 		GateThreshold: 10 * time.Minute,
@@ -200,11 +255,17 @@ func TestClassifyZombieWithCheckpoint(t *testing.T) {
 		Now:           now,
 	}
 
-	qh, err := classifyQuest(worktree, opts)
+	var report *EaglesReport
+	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		report, err = Sweep(conn, opts)
+		return err
+	})
 	if err != nil {
-		t.Fatalf("classifyQuest: %v", err)
+		t.Fatalf("Sweep: %v", err)
 	}
 
+	qh := report.Quests[0]
 	if qh.Health != Zombie {
 		t.Errorf("Health = %q, want %q", qh.Health, Zombie)
 	}
@@ -217,12 +278,15 @@ func TestClassifyZombieWithCheckpoint(t *testing.T) {
 }
 
 func TestClassifyComplete(t *testing.T) {
-	worktree := t.TempDir()
-	now := time.Now()
+	d := db.OpenTest(t)
+	now := time.Now().UTC()
 
-	writeQuestState(t, worktree, "Complete", false, nil, "quest-done")
-	touchFile(t, filepath.Join(worktree, "src", "done.go"), now.Add(-60*time.Minute))
-	os.Chtimes(filepath.Join(worktree, ".fellowship", "quest-state.json"), now.Add(-60*time.Minute), now.Add(-60*time.Minute))
+	seedQuest(t, d, &state.State{
+		QuestName: "quest-done",
+		TaskID:    "t6",
+		TeamName:  "team",
+		Phase:     "Complete",
+	})
 
 	opts := Options{
 		GateThreshold: 10 * time.Minute,
@@ -230,11 +294,17 @@ func TestClassifyComplete(t *testing.T) {
 		Now:           now,
 	}
 
-	qh, err := classifyQuest(worktree, opts)
+	var report *EaglesReport
+	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		report, err = Sweep(conn, opts)
+		return err
+	})
 	if err != nil {
-		t.Fatalf("classifyQuest: %v", err)
+		t.Fatalf("Sweep: %v", err)
 	}
 
+	qh := report.Quests[0]
 	if qh.Health != Complete {
 		t.Errorf("Health = %q, want %q", qh.Health, Complete)
 	}
@@ -244,11 +314,13 @@ func TestClassifyComplete(t *testing.T) {
 }
 
 func TestClassifyIdle(t *testing.T) {
-	worktree := t.TempDir()
-	now := time.Now()
+	d := db.OpenTest(t)
+	now := time.Now().UTC()
 
-	writeQuestState(t, worktree, "Onboard", false, nil, "")
-	touchFile(t, filepath.Join(worktree, "src", "empty.go"), now.Add(-1*time.Minute))
+	seedQuest(t, d, &state.State{
+		QuestName: "",
+		Phase:     "Onboard",
+	})
 
 	opts := Options{
 		GateThreshold: 10 * time.Minute,
@@ -256,11 +328,20 @@ func TestClassifyIdle(t *testing.T) {
 		Now:           now,
 	}
 
-	qh, err := classifyQuest(worktree, opts)
+	var report *EaglesReport
+	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		report, err = Sweep(conn, opts)
+		return err
+	})
 	if err != nil {
-		t.Fatalf("classifyQuest: %v", err)
+		t.Fatalf("Sweep: %v", err)
 	}
 
+	if len(report.Quests) != 1 {
+		t.Fatalf("len(Quests) = %d, want 1", len(report.Quests))
+	}
+	qh := report.Quests[0]
 	if qh.Health != Idle {
 		t.Errorf("Health = %q, want %q", qh.Health, Idle)
 	}
@@ -270,11 +351,17 @@ func TestClassifyIdle(t *testing.T) {
 }
 
 func TestClassifyStalledNoGateID(t *testing.T) {
-	worktree := t.TempDir()
-	now := time.Now()
+	d := db.OpenTest(t)
+	now := time.Now().UTC()
 
-	writeQuestState(t, worktree, "Review", true, nil, "quest-stuck")
-	touchFile(t, filepath.Join(worktree, "src", "main.go"), now.Add(-1*time.Minute))
+	seedQuest(t, d, &state.State{
+		QuestName:   "quest-stuck",
+		TaskID:      "t7",
+		TeamName:    "team",
+		Phase:       "Review",
+		GatePending: true,
+		GateID:      nil,
+	})
 
 	opts := Options{
 		GateThreshold: 10 * time.Minute,
@@ -282,11 +369,17 @@ func TestClassifyStalledNoGateID(t *testing.T) {
 		Now:           now,
 	}
 
-	qh, err := classifyQuest(worktree, opts)
+	var report *EaglesReport
+	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		report, err = Sweep(conn, opts)
+		return err
+	})
 	if err != nil {
-		t.Fatalf("classifyQuest: %v", err)
+		t.Fatalf("Sweep: %v", err)
 	}
 
+	qh := report.Quests[0]
 	if qh.Health != Stalled {
 		t.Errorf("Health = %q, want %q", qh.Health, Stalled)
 	}
@@ -401,7 +494,6 @@ func TestFormatTable(t *testing.T) {
 		t.Fatal("FormatTable returned empty string")
 	}
 
-	// Check it contains key elements
 	for _, want := range []string{"Fellowship Eagles Report", "quest-api", "Implement", "working", "none", "Problems: 0"} {
 		if !contains(output, want) {
 			t.Errorf("output missing %q", want)
@@ -410,7 +502,6 @@ func TestFormatTable(t *testing.T) {
 }
 
 func TestProblemCount(t *testing.T) {
-	// Manually build a report to verify problem counting
 	report := &EaglesReport{
 		Timestamp: "2025-01-15T10:30:00Z",
 		Quests:    []QuestHealth{},
@@ -437,6 +528,104 @@ func TestProblemCount(t *testing.T) {
 
 	if report.Problems != 3 {
 		t.Errorf("Problems = %d, want 3", report.Problems)
+	}
+}
+
+func TestSweepMultipleQuests(t *testing.T) {
+	d := db.OpenTest(t)
+	now := time.Now().UTC()
+
+	// Seed multiple quests with different states
+	seedQuest(t, d, &state.State{
+		QuestName: "quest-a",
+		Phase:     "Implement",
+	})
+	seedTiding(t, d, herald.Tiding{
+		Timestamp: now.Add(-1 * time.Minute).Format(time.RFC3339),
+		Quest:     "quest-a",
+		Type:      herald.PhaseTransition,
+		Phase:     "Implement",
+	})
+
+	seedQuest(t, d, &state.State{
+		QuestName: "quest-b",
+		Phase:     "Complete",
+	})
+
+	gateID := fmt.Sprintf("gate-Plan-%d", now.Add(-20*time.Minute).Unix())
+	seedQuest(t, d, &state.State{
+		QuestName:   "quest-c",
+		Phase:       "Plan",
+		GatePending: true,
+		GateID:      &gateID,
+	})
+
+	opts := Options{
+		GateThreshold: 10 * time.Minute,
+		ZombieTimeout: 15 * time.Minute,
+		Now:           now,
+	}
+
+	var report *EaglesReport
+	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		report, err = Sweep(conn, opts)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	if len(report.Quests) != 3 {
+		t.Fatalf("len(Quests) = %d, want 3", len(report.Quests))
+	}
+
+	// Find each quest by name
+	healthMap := map[string]HealthState{}
+	for _, q := range report.Quests {
+		healthMap[q.Name] = q.Health
+	}
+
+	if healthMap["quest-a"] != Working {
+		t.Errorf("quest-a: Health = %q, want %q", healthMap["quest-a"], Working)
+	}
+	if healthMap["quest-b"] != Complete {
+		t.Errorf("quest-b: Health = %q, want %q", healthMap["quest-b"], Complete)
+	}
+	if healthMap["quest-c"] != Stalled {
+		t.Errorf("quest-c: Health = %q, want %q", healthMap["quest-c"], Stalled)
+	}
+
+	if report.Problems != 1 {
+		t.Errorf("Problems = %d, want 1", report.Problems)
+	}
+}
+
+func TestSweepEmptyDB(t *testing.T) {
+	d := db.OpenTest(t)
+	now := time.Now().UTC()
+
+	opts := Options{
+		GateThreshold: 10 * time.Minute,
+		ZombieTimeout: 15 * time.Minute,
+		Now:           now,
+	}
+
+	var report *EaglesReport
+	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		report, err = Sweep(conn, opts)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	if len(report.Quests) != 0 {
+		t.Errorf("len(Quests) = %d, want 0", len(report.Quests))
+	}
+	if report.Problems != 0 {
+		t.Errorf("Problems = %d, want 0", report.Problems)
 	}
 }
 

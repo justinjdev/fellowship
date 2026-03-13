@@ -3,8 +3,9 @@ package hooks
 import (
 	"fmt"
 
-	"github.com/justinjdev/fellowship/cli/internal/tome"
 	"github.com/justinjdev/fellowship/cli/internal/state"
+	"github.com/justinjdev/fellowship/cli/internal/tome"
+	"zombiezen.com/go/sqlite"
 )
 
 func CompletionGuard(s *state.State, input *HookInput) HookResult {
@@ -21,8 +22,6 @@ func CompletionGuard(s *state.State, input *HookInput) HookResult {
 }
 
 // MarkTomeCompleted marks the quest tome status as "completed".
-func MarkTomeCompleted(tomePath string) {
-	c := tome.LoadOrCreate(tomePath)
-	c.Status = "completed"
-	tome.Save(tomePath, c)
+func MarkTomeCompleted(conn *sqlite.Conn, questName string) error {
+	return tome.SetStatus(conn, questName, "completed")
 }
