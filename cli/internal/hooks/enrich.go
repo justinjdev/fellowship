@@ -11,40 +11,32 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/tome"
+	"zombiezen.com/go/sqlite"
 )
 
-// GatherEnrichment collects quest metrics from the worktree directory
+// GatherEnrichment collects quest metrics from the DB and worktree directory
 // and returns a formatted enrichment block to append to gate messages.
 // Returns empty string if no data sources are available.
-func GatherEnrichment(dir string) string {
-	errandStr := gatherErrandProgress(dir)
-	filesStr := gatherFilesTouched(dir)
+func GatherEnrichment(conn *sqlite.Conn, questName string, dir string) string {
+	errandStr := gatherErrandProgress(conn, questName)
+	filesStr := gatherFilesTouched(conn, questName)
 	diffStr := gatherDiffStats(dir)
-	durationStr := gatherPhaseDuration(dir)
+	durationStr := gatherPhaseDuration(conn, questName)
 
 	block := buildEnrichmentBlock(errandStr, filesStr, diffStr, durationStr)
 	return block
 }
 
-func gatherErrandProgress(dir string) string {
-	path, err := errand.FindErrands(dir)
-	if err != nil || path == "" {
+func gatherErrandProgress(conn *sqlite.Conn, questName string) string {
+	done, total, err := errand.Progress(conn, questName)
+	if err != nil || total == 0 {
 		return ""
 	}
-	el, err := errand.Load(path)
-	if err != nil {
-		return ""
-	}
-	done, total := errand.Progress(el)
 	return formatErrandProgress(done, total)
 }
 
-func gatherFilesTouched(dir string) string {
-	path, err := tome.FindTome(dir)
-	if err != nil || path == "" {
-		return ""
-	}
-	t, err := tome.Load(path)
+func gatherFilesTouched(conn *sqlite.Conn, questName string) string {
+	t, err := tome.Load(conn, questName)
 	if err != nil {
 		return ""
 	}
@@ -63,8 +55,8 @@ func gatherDiffStats(dir string) string {
 	return parseDiffStats(string(out))
 }
 
-func gatherPhaseDuration(dir string) string {
-	tidings, err := herald.Read(dir, 0)
+func gatherPhaseDuration(conn *sqlite.Conn, questName string) string {
+	tidings, err := herald.Read(conn, questName, 0)
 	if err != nil || len(tidings) == 0 {
 		return ""
 	}
