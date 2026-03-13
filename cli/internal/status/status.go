@@ -129,7 +129,7 @@ func Scan(conn *sqlite.Conn, gitRoot string) (*StatusResult, error) {
 			},
 		})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("status: load quests: %w", err)
 	}
 
 	// Discover merged branches (git operation).

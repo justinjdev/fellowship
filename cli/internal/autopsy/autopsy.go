@@ -142,28 +142,6 @@ func Scan(conn *sqlite.Conn, opts ScanOptions, expiryDays int) ([]Autopsy, error
 	var args []any
 
 	if len(opts.Files) > 0 {
-		filePlaceholders := make([]string, len(opts.Files))
-		for i, f := range opts.Files {
-			filePlaceholders[i] = "?"
-			args = append(args, f)
-		}
-		// Match by exact file path or same directory
-		conditions = append(conditions,
-			fmt.Sprintf(`a.id IN (
-				SELECT af.autopsy_id FROM autopsy_files af
-				WHERE af.file_path IN (%s)
-				   OR EXISTS (
-				      SELECT 1 FROM autopsy_files af2
-				      WHERE af2.autopsy_id = af.autopsy_id
-				      AND af2.file_path != af.file_path
-				   )
-			)`, strings.Join(filePlaceholders, ",")))
-		// Actually, we need directory-level matching. Let's use a simpler approach:
-		// For each query file, match autopsies that have a file in the same directory.
-		conditions = conditions[:len(conditions)-1] // remove the above
-		args = args[:len(args)-len(opts.Files)]     // remove args
-
-		// Use a subquery that checks directory matching
 		var fileCondParts []string
 		for _, f := range opts.Files {
 			// Exact match
@@ -173,14 +151,16 @@ func Scan(conn *sqlite.Conn, opts ScanOptions, expiryDays int) ([]Autopsy, error
 			// Same directory match (for files with directories)
 			dir := filepath.Dir(filepath.ToSlash(f))
 			if dir != "." {
-				args = append(args, dir+"/%")
-				fileCondParts = append(fileCondParts, "af.file_path LIKE ?")
+				escaped := strings.ReplaceAll(strings.ReplaceAll(dir, "%", "\\%"), "_", "\\_")
+				args = append(args, escaped+"/%")
+				fileCondParts = append(fileCondParts, "af.file_path LIKE ? ESCAPE '\\'")
 			}
 
 			// Query file is under a directory prefix in the autopsy
 			if strings.HasSuffix(f, "/") {
-				args = append(args, f+"%")
-				fileCondParts = append(fileCondParts, "af.file_path LIKE ?")
+				escaped := strings.ReplaceAll(strings.ReplaceAll(f, "%", "\\%"), "_", "\\_")
+				args = append(args, escaped+"%")
+				fileCondParts = append(fileCondParts, "af.file_path LIKE ? ESCAPE '\\'")
 			}
 		}
 		conditions = append(conditions,
