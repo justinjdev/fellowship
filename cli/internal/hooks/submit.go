@@ -80,6 +80,42 @@ func RecordGateSubmitted(tomePath string, phase string, autoApproved bool) {
 	tome.Save(tomePath, c)
 }
 
+// HookSpecificOutput is the JSON structure Claude Code expects from
+// PreToolUse hooks when they need to modify tool input.
+type HookSpecificOutput struct {
+	HSO hookSpecificOutputInner `json:"hookSpecificOutput"`
+}
+
+type hookSpecificOutputInner struct {
+	HookEventName            string            `json:"hookEventName"`
+	PermissionDecision       string            `json:"permissionDecision"`
+	PermissionDecisionReason string            `json:"permissionDecisionReason,omitempty"`
+	UpdatedInput             map[string]string `json:"updatedInput,omitempty"`
+}
+
+// NewAllowOutput returns a HookSpecificOutput that allows the tool call
+// with optional input mutation.
+func NewAllowOutput(updatedInput map[string]string) HookSpecificOutput {
+	return HookSpecificOutput{
+		HSO: hookSpecificOutputInner{
+			HookEventName:      "PreToolUse",
+			PermissionDecision: "allow",
+			UpdatedInput:       updatedInput,
+		},
+	}
+}
+
+// NewDenyOutput returns a HookSpecificOutput that blocks the tool call.
+func NewDenyOutput(reason string) HookSpecificOutput {
+	return HookSpecificOutput{
+		HSO: hookSpecificOutputInner{
+			HookEventName:            "PreToolUse",
+			PermissionDecision:       "deny",
+			PermissionDecisionReason: reason,
+		},
+	}
+}
+
 func hasGateMarker(content string) bool {
 	for line := range strings.SplitSeq(content, "\n") {
 		if strings.HasPrefix(line, "[GATE]") {

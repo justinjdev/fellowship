@@ -311,6 +311,7 @@ func runHook(name string) int {
 
 	// Mutating hooks: use WithLock for atomic load→mutate→save.
 	var result hooks.HookResult
+	var gateSubmitEnrich bool
 	if err := state.WithLock(statePath, func(s *state.State) error {
 		questName := s.QuestName
 		if questName == "" {
@@ -323,6 +324,7 @@ func runHook(name string) int {
 			sr := hooks.GateSubmit(s, input)
 			result = hooks.HookResult{Block: sr.Block, Message: sr.Message}
 			if sr.StateChanged && !sr.Block {
+				gateSubmitEnrich = true
 				tomePath := filepath.Join(filepath.Dir(statePath), "quest-tome.json")
 				hooks.RecordGateSubmitted(tomePath, prevPhase, s.Phase != prevPhase)
 				herald.Announce(dir, herald.Tiding{
@@ -374,8 +376,22 @@ func runHook(name string) int {
 	}
 
 	if result.Block {
+		if name == "gate-submit" {
+			out := hooks.NewDenyOutput(result.Message)
+			json.NewEncoder(os.Stdout).Encode(out)
+			return 0 // exit 0 with JSON deny — Claude Code reads the JSON
+		}
 		fmt.Fprintln(os.Stderr, result.Message)
 		return 2
+	}
+
+	if gateSubmitEnrich {
+		enrichment := hooks.GatherEnrichment(dir)
+		if enrichment != "" {
+			enrichedContent := input.ToolInput.Content + enrichment
+			out := hooks.NewAllowOutput(map[string]string{"content": enrichedContent})
+			json.NewEncoder(os.Stdout).Encode(out)
+		}
 	}
 	return 0
 }

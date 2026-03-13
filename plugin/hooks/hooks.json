@@ -29,7 +29,7 @@
           {
             "type": "command",
             "command": "${HOME}/.claude/fellowship/bin/fellowship hook gate-submit",
-            "timeout": 5
+            "timeout": 10
           }
         ]
       },
