@@ -73,7 +73,7 @@ func gatherPhaseDuration(dir string) string {
 		if tidings[i].Type == herald.GateApproved {
 			ts, err := time.Parse(time.RFC3339, tidings[i].Timestamp)
 			if err != nil {
-				return ""
+				continue
 			}
 			dur := time.Since(ts)
 			if dur < time.Minute {
