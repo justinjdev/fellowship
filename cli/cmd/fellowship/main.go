@@ -240,7 +240,18 @@ func runHook(name string) int {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 2
 	}
+	// Lead session (no state file): only the CWD guard applies.
 	if statePath == "" {
+		if name == "gate-guard" {
+			input, err := hooks.ParseInput(os.Stdin)
+			if err != nil {
+				input = &hooks.HookInput{}
+			}
+			if result := hooks.WorktreeGuard(input); result.Block {
+				fmt.Fprintln(os.Stderr, result.Message)
+				return 2
+			}
+		}
 		return 0
 	}
 
