@@ -4,10 +4,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"zombiezen.com/go/sqlite"
+	"zombiezen.com/go/sqlite/sqlitex"
+
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
-	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
-	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
 type QuestInfo struct {
@@ -64,8 +65,18 @@ func ParseMergedBranches(gitOutput string) []string {
 	return result
 }
 
-// Scan discovers fellowship quest state across git worktrees for crash recovery.
-func Scan(gitRoot string) (*StatusResult, error) {
+// questRow holds joined data from fellowship_quests + quest_state.
+type questRow struct {
+	name            string
+	taskDescription string
+	worktree        string
+	branch          string
+	phase           string
+	gatePending     bool
+}
+
+// Scan discovers fellowship quest state from the DB and git worktrees for crash recovery.
+func Scan(conn *sqlite.Conn, gitRoot string) (*StatusResult, error) {
 	result := &StatusResult{
 		Quests:         []QuestInfo{},
 		MergedBranches: []string{},
@@ -73,25 +84,51 @@ func Scan(gitRoot string) (*StatusResult, error) {
 
 	dataDir := datadir.Name()
 
-	// Load fellowship state (optional — may not exist).
-	statePath := filepath.Join(gitRoot, dataDir, "fellowship-state.json")
-	fs, err := dashboard.LoadFellowshipState(statePath)
-	if err == nil {
+	// Load fellowship metadata from DB (optional — may not exist).
+	var fellowshipName, fellowshipCreatedAt string
+	var hasFellowship bool
+	err := sqlitex.Execute(conn,
+		`SELECT name, created_at FROM fellowship WHERE id = 1`,
+		&sqlitex.ExecOptions{
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				hasFellowship = true
+				fellowshipName = stmt.ColumnText(0)
+				fellowshipCreatedAt = stmt.ColumnText(1)
+				return nil
+			},
+		})
+	if err == nil && hasFellowship {
 		result.Fellowship = &FellowshipInfo{
-			Name:      fs.Name,
-			CreatedAt: fs.CreatedAt,
+			Name:      fellowshipName,
+			CreatedAt: fellowshipCreatedAt,
 		}
 	}
 
-	// Build a task description lookup from fellowship state.
-	taskDescriptions := map[string]string{}
-	if fs != nil {
-		for _, q := range fs.Quests {
-			taskDescriptions[q.Name] = q.TaskDescription
-		}
+	// Query quests from DB: join fellowship_quests with quest_state.
+	var rows []questRow
+	err = sqlitex.Execute(conn,
+		`SELECT fq.name, fq.task_description, fq.worktree, fq.branch,
+			COALESCE(qs.phase, ''), COALESCE(qs.gate_pending, 0)
+		 FROM fellowship_quests fq
+		 LEFT JOIN quest_state qs ON fq.name = qs.quest_name`,
+		&sqlitex.ExecOptions{
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				rows = append(rows, questRow{
+					name:            stmt.ColumnText(0),
+					taskDescription: stmt.ColumnText(1),
+					worktree:        stmt.ColumnText(2),
+					branch:          stmt.ColumnText(3),
+					phase:           stmt.ColumnText(4),
+					gatePending:     stmt.ColumnInt(5) != 0,
+				})
+				return nil
+			},
+		})
+	if err != nil {
+		return nil, err
 	}
 
-	// Discover merged branches.
+	// Discover merged branches (git operation).
 	mergedOutput, err := gitutil.RunGit(gitRoot, "branch", "--merged", "main")
 	if err == nil {
 		result.MergedBranches = ParseMergedBranches(mergedOutput)
@@ -101,37 +138,25 @@ func Scan(gitRoot string) (*StatusResult, error) {
 		mergedSet[b] = true
 	}
 
-	// Enumerate worktrees.
-	worktrees, err := gitutil.ListWorktrees(gitRoot)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, wt := range worktrees {
-		questStatePath := filepath.Join(wt, dataDir, "quest-state.json")
-		if !gitutil.FileExists(questStatePath) {
-			continue
+	// Build quest info from DB rows + git filesystem checks.
+	for _, row := range rows {
+		hasCheckpoint := false
+		hasUncommitted := false
+		if row.worktree != "" {
+			hasCheckpoint = gitutil.FileExists(filepath.Join(row.worktree, dataDir, "checkpoint.md"))
+			hasUncommitted = gitutil.CheckUncommitted(row.worktree)
 		}
-
-		s, err := state.Load(questStatePath)
-		if err != nil {
-			continue
-		}
-
-		branch := gitutil.BranchForWorktree(wt)
-		hasCheckpoint := gitutil.FileExists(filepath.Join(wt, dataDir, "checkpoint.md"))
-		hasUncommitted := gitutil.CheckUncommitted(wt)
 
 		qi := QuestInfo{
-			Name:            s.QuestName,
-			TaskDescription: taskDescriptions[s.QuestName],
-			Worktree:        wt,
-			Branch:          branch,
-			Phase:           s.Phase,
-			GatePending:     s.GatePending,
+			Name:            row.name,
+			TaskDescription: row.taskDescription,
+			Worktree:        row.worktree,
+			Branch:          row.branch,
+			Phase:           row.phase,
+			GatePending:     row.gatePending,
 			HasCheckpoint:   hasCheckpoint,
 			HasUncommitted:  hasUncommitted,
-			Merged:          mergedSet[branch],
+			Merged:          mergedSet[row.branch],
 		}
 		qi.Classification = ClassifyQuest(qi)
 		result.Quests = append(result.Quests, qi)
@@ -139,4 +164,3 @@ func Scan(gitRoot string) (*StatusResult, error) {
 
 	return result, nil
 }
-
