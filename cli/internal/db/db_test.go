@@ -54,12 +54,16 @@ func TestWithTx_Rollback(t *testing.T) {
 	defer d.Close()
 
 	// Insert a row, then roll back
-	_ = d.WithTx(context.Background(), func(conn *Conn) error {
+	rollbackErr := fmt.Errorf("rollback")
+	err = d.WithTx(context.Background(), func(conn *Conn) error {
 		if err := sqlitex.Execute(conn, `INSERT INTO quest_state (quest_name, phase, created_at, updated_at) VALUES ('test', 'Onboard', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`, nil); err != nil {
 			t.Fatal(err)
 		}
-		return fmt.Errorf("rollback")
+		return rollbackErr
 	})
+	if err == nil || err.Error() != rollbackErr.Error() {
+		t.Fatalf("expected rollback error, got %v", err)
+	}
 
 	// Row should not exist
 	var count int

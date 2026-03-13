@@ -1,6 +1,7 @@
 package status
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -97,7 +98,10 @@ func Scan(conn *sqlite.Conn, gitRoot string) (*StatusResult, error) {
 				return nil
 			},
 		})
-	if err == nil && hasFellowship {
+	if err != nil {
+		return nil, fmt.Errorf("status: load fellowship: %w", err)
+	}
+	if hasFellowship {
 		result.Fellowship = &FellowshipInfo{
 			Name:      fellowshipName,
 			CreatedAt: fellowshipCreatedAt,

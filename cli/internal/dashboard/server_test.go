@@ -158,7 +158,7 @@ func TestAPIGateApprove_NoPending(t *testing.T) {
 	d, worktreeDir := setupTestDB(t)
 
 	// Override quest state with gate_pending: false
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		return state.Upsert(conn, &state.State{
 			QuestName:   "quest-login",
 			TaskID:      "t1",
@@ -166,7 +166,9 @@ func TestAPIGateApprove_NoPending(t *testing.T) {
 			Phase:       "Plan",
 			GatePending: false,
 		})
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	srv := NewServer(d, 5)
 

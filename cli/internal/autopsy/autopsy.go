@@ -214,7 +214,7 @@ func Scan(conn *sqlite.Conn, opts ScanOptions, expiryDays int) ([]Autopsy, error
 		`SELECT a.id, a.timestamp, a.quest, a.task, a.phase, a.trigger_type,
 		        a.what_failed, a.resolution, a.expires_at
 		 FROM autopsies a
-		 WHERE a.expires_at > datetime('now')
+		 WHERE datetime(a.expires_at) > datetime('now')
 		   AND (%s)
 		 ORDER BY a.timestamp DESC`,
 		strings.Join(conditions, " OR "))

@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -33,6 +34,10 @@ func Open(fromDir string) (*DB, error) {
 
 // OpenPath opens a DB at the given file path.
 func OpenPath(dbPath string) (*DB, error) {
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		return nil, fmt.Errorf("db: mkdir %s: %w", filepath.Dir(dbPath), err)
+	}
+
 	pool, err := sqlitex.NewPool(dbPath, sqlitex.PoolOptions{
 		PoolSize: 1,
 		Flags:    sqlite.OpenReadWrite | sqlite.OpenCreate | sqlite.OpenWAL,
