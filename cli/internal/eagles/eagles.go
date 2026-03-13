@@ -90,64 +90,12 @@ func Sweep(gitRoot string, opts Options) (*EaglesReport, error) {
 }
 
 // classifyQuest examines a single worktree and returns its health.
+// TODO: migrate to accept *db.Conn and use state.Load(conn, questName).
 func classifyQuest(worktree string, opts Options) (*QuestHealth, error) {
-	questStatePath := filepath.Join(worktree, datadir.Name(), "quest-state.json")
-	s, err := state.Load(questStatePath)
-	if err != nil {
-		return nil, err
-	}
-
-	hasCheckpoint := gitutil.FileExists(filepath.Join(worktree, datadir.Name(), "checkpoint.md"))
-	lastActivity := latestModTime(worktree)
-
-	qh := &QuestHealth{
-		Name:          s.QuestName,
-		Worktree:      worktree,
-		Phase:         s.Phase,
-		HasCheckpoint: hasCheckpoint,
-		LastActivity:  lastActivity.UTC().Format(time.RFC3339),
-	}
-
-	// Classify health
-	switch {
-	case s.Phase == "Complete":
-		qh.Health = Complete
-		qh.Action = "none"
-
-	case s.GatePending && s.GateID != nil:
-		pendingSec := gitutil.GateAge(*s.GateID, opts.Now)
-		qh.GatePendingSec = pendingSec
-		if time.Duration(pendingSec)*time.Second >= opts.GateThreshold {
-			qh.Health = Stalled
-			qh.Action = "nudge"
-		} else {
-			qh.Health = Working
-			qh.Action = "none"
-		}
-
-	case s.GatePending:
-		// Gate pending but no gate ID — treat as stalled
-		qh.Health = Stalled
-		qh.Action = "nudge"
-
-	case opts.Now.Sub(lastActivity) >= opts.ZombieTimeout && s.Phase != "Onboard":
-		qh.Health = Zombie
-		if hasCheckpoint {
-			qh.Action = "respawn"
-		} else {
-			qh.Action = "nudge"
-		}
-
-	case s.Phase == "Onboard" && s.QuestName == "":
-		qh.Health = Idle
-		qh.Action = "none"
-
-	default:
-		qh.Health = Working
-		qh.Action = "none"
-	}
-
-	return qh, nil
+	_ = state.NextPhase // keep import until full migration
+	_ = opts.Now        // suppress unused
+	// Cannot load quest state without a DB connection. Return error so Sweep skips.
+	return nil, fmt.Errorf("eagles: requires DB migration")
 }
 
 

@@ -1,71 +1,49 @@
 package dashboard
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
+	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
-func setupTestRoot(t *testing.T) string {
+func setupTestDB(t *testing.T) (*db.DB, string) {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir()) // Pin HOME so datadir.Name() returns default
-	root := t.TempDir()
+	d := db.OpenTest(t)
+	worktreeDir := "/tmp/test-worktrees/quest-login"
 
-	// Create a fake worktree directory with .fellowship/quest-state.json
-	worktreeDir := filepath.Join(root, "worktrees", "quest-login")
-	if err := os.MkdirAll(filepath.Join(worktreeDir, ".fellowship"), 0755); err != nil {
-		t.Fatalf("creating worktree dir: %v", err)
-	}
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		InitFellowship(conn, "test-fellowship", "/tmp/repo", "main")
+		AddQuest(conn, QuestEntry{
+			Name:     "quest-login",
+			Worktree: worktreeDir,
+			TaskID:   "t1",
+		})
+		gateID := "gate-plan-review"
+		state.Upsert(conn, &state.State{
+			QuestName:   "quest-login",
+			TaskID:      "t1",
+			TeamName:    "team",
+			Phase:       "Plan",
+			GatePending: true,
+			GateID:      &gateID,
+		})
+		return nil
+	})
 
-	questState := `{
-  "version": 1,
-  "quest_name": "quest-login",
-  "task_id": "t1",
-  "team_name": "team",
-  "phase": "Plan",
-  "gate_pending": true,
-  "gate_id": "gate-plan-review",
-  "lembas_completed": false,
-  "metadata_updated": false,
-  "auto_approve_gates": []
-}`
-	if err := os.WriteFile(filepath.Join(worktreeDir, ".fellowship", "quest-state.json"), []byte(questState), 0644); err != nil {
-		t.Fatalf("writing quest-state.json: %v", err)
-	}
-
-	// Create fellowship-state.json pointing to that worktree
-	if err := os.MkdirAll(filepath.Join(root, ".fellowship"), 0755); err != nil {
-		t.Fatalf("creating data dir: %v", err)
-	}
-	fellowshipState := fmt.Sprintf(`{
-  "name": "test-fellowship",
-  "created_at": "2025-01-15T10:30:00Z",
-  "quests": [
-    {
-      "name": "quest-login",
-      "worktree": %q,
-      "task_id": "t1"
-    }
-  ],
-  "scouts": []
-}`, worktreeDir)
-	if err := os.WriteFile(filepath.Join(root, ".fellowship", "fellowship-state.json"), []byte(fellowshipState), 0644); err != nil {
-		t.Fatalf("writing fellowship-state.json: %v", err)
-	}
-
-	return root
+	return d, worktreeDir
 }
 
 func TestAPIStatus(t *testing.T) {
-	root := setupTestRoot(t)
-	srv := NewServer(root, 5)
+	d, _ := setupTestDB(t)
+	srv := NewServer(d, 5)
 
 	req := httptest.NewRequest("GET", "/api/status", nil)
 	w := httptest.NewRecorder()
@@ -111,10 +89,9 @@ func TestAPIStatus(t *testing.T) {
 }
 
 func TestAPIGateApprove(t *testing.T) {
-	root := setupTestRoot(t)
-	srv := NewServer(root, 5)
+	d, worktreeDir := setupTestDB(t)
+	srv := NewServer(d, 5)
 
-	worktreeDir := filepath.Join(root, "worktrees", "quest-login")
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/approve", body)
 	w := httptest.NewRecorder()
@@ -141,10 +118,9 @@ func TestAPIGateApprove(t *testing.T) {
 }
 
 func TestAPIGateReject(t *testing.T) {
-	root := setupTestRoot(t)
-	srv := NewServer(root, 5)
+	d, worktreeDir := setupTestDB(t)
+	srv := NewServer(d, 5)
 
-	worktreeDir := filepath.Join(root, "worktrees", "quest-login")
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/reject", body)
 	w := httptest.NewRecorder()
@@ -171,26 +147,20 @@ func TestAPIGateReject(t *testing.T) {
 }
 
 func TestAPIGateApprove_NoPending(t *testing.T) {
-	root := setupTestRoot(t)
-	srv := NewServer(root, 5)
+	d, worktreeDir := setupTestDB(t)
 
-	// Overwrite quest-state.json with gate_pending: false
-	worktreeDir := filepath.Join(root, "worktrees", "quest-login")
-	questState := `{
-  "version": 1,
-  "quest_name": "quest-login",
-  "task_id": "t1",
-  "team_name": "team",
-  "phase": "Plan",
-  "gate_pending": false,
-  "gate_id": null,
-  "lembas_completed": false,
-  "metadata_updated": false,
-  "auto_approve_gates": []
-}`
-	if err := os.WriteFile(filepath.Join(worktreeDir, ".fellowship", "quest-state.json"), []byte(questState), 0644); err != nil {
-		t.Fatalf("writing quest-state.json: %v", err)
-	}
+	// Override quest state with gate_pending: false
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		return state.Upsert(conn, &state.State{
+			QuestName:   "quest-login",
+			TaskID:      "t1",
+			TeamName:    "team",
+			Phase:       "Plan",
+			GatePending: false,
+		})
+	})
+
+	srv := NewServer(d, 5)
 
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/approve", body)
@@ -203,10 +173,9 @@ func TestAPIGateApprove_NoPending(t *testing.T) {
 }
 
 func TestAPIGateApprove_HeraldLogging(t *testing.T) {
-	root := setupTestRoot(t)
-	srv := NewServer(root, 5)
+	d, worktreeDir := setupTestDB(t)
+	srv := NewServer(d, 5)
 
-	worktreeDir := filepath.Join(root, "worktrees", "quest-login")
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/approve", body)
 	w := httptest.NewRecorder()
@@ -216,10 +185,14 @@ func TestAPIGateApprove_HeraldLogging(t *testing.T) {
 		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
 	}
 
-	tidings, err := herald.Read(worktreeDir, 0)
-	if err != nil {
-		t.Fatalf("reading herald: %v", err)
-	}
+	// Read herald entries from DB
+	var tidings []herald.Tiding
+	d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		tidings, err = herald.Read(conn, "quest-login", 0)
+		return err
+	})
+
 	if len(tidings) < 2 {
 		t.Fatalf("expected at least 2 tidings (GateApproved + PhaseTransition), got %d", len(tidings))
 	}
@@ -242,10 +215,9 @@ func TestAPIGateApprove_HeraldLogging(t *testing.T) {
 }
 
 func TestAPIGateReject_HeraldLogging(t *testing.T) {
-	root := setupTestRoot(t)
-	srv := NewServer(root, 5)
+	d, worktreeDir := setupTestDB(t)
+	srv := NewServer(d, 5)
 
-	worktreeDir := filepath.Join(root, "worktrees", "quest-login")
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/reject", body)
 	w := httptest.NewRecorder()
@@ -255,10 +227,12 @@ func TestAPIGateReject_HeraldLogging(t *testing.T) {
 		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
 	}
 
-	tidings, err := herald.Read(worktreeDir, 0)
-	if err != nil {
-		t.Fatalf("reading herald: %v", err)
-	}
+	var tidings []herald.Tiding
+	d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		tidings, err = herald.Read(conn, "quest-login", 0)
+		return err
+	})
 
 	var foundRejected bool
 	for _, td := range tidings {
@@ -272,8 +246,8 @@ func TestAPIGateReject_HeraldLogging(t *testing.T) {
 }
 
 func TestAPIStatus_NotFound(t *testing.T) {
-	root := setupTestRoot(t)
-	srv := NewServer(root, 5)
+	d, _ := setupTestDB(t)
+	srv := NewServer(d, 5)
 
 	req := httptest.NewRequest("GET", "/api/nonexistent", nil)
 	w := httptest.NewRecorder()

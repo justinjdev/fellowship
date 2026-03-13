@@ -1,288 +1,208 @@
 package dashboard
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
+	"context"
 	"testing"
+
+	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
-func TestLoadFellowshipState(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "fellowship-state.json")
-
-	data := `{
-  "name": "test-fellowship",
-  "created_at": "2025-01-15T10:30:00Z",
-  "quests": [
-    {
-      "name": "add-auth",
-      "worktree": "/tmp/worktrees/add-auth",
-      "task_id": "task-001"
-    },
-    {
-      "name": "fix-bug",
-      "worktree": "/tmp/worktrees/fix-bug",
-      "task_id": "task-002"
-    }
-  ],
-  "scouts": [
-    {
-      "name": "research-api",
-      "task_id": "task-003"
-    }
-  ]
-}`
-
-	if err := os.WriteFile(path, []byte(data), 0644); err != nil {
-		t.Fatalf("writing test file: %v", err)
-	}
-
-	state, err := LoadFellowshipState(path)
-	if err != nil {
-		t.Fatalf("LoadFellowshipState() error: %v", err)
-	}
-
-	if state.Name != "test-fellowship" {
-		t.Errorf("Name = %q, want %q", state.Name, "test-fellowship")
-	}
-	if state.CreatedAt != "2025-01-15T10:30:00Z" {
-		t.Errorf("CreatedAt = %q, want %q", state.CreatedAt, "2025-01-15T10:30:00Z")
-	}
-	if len(state.Quests) != 2 {
-		t.Fatalf("len(Quests) = %d, want 2", len(state.Quests))
-	}
-	if state.Quests[0].Name != "add-auth" {
-		t.Errorf("Quests[0].Name = %q, want %q", state.Quests[0].Name, "add-auth")
-	}
-	if state.Quests[0].Worktree != "/tmp/worktrees/add-auth" {
-		t.Errorf("Quests[0].Worktree = %q, want %q", state.Quests[0].Worktree, "/tmp/worktrees/add-auth")
-	}
-	if state.Quests[0].TaskID != "task-001" {
-		t.Errorf("Quests[0].TaskID = %q, want %q", state.Quests[0].TaskID, "task-001")
-	}
-	if state.Quests[1].Name != "fix-bug" {
-		t.Errorf("Quests[1].Name = %q, want %q", state.Quests[1].Name, "fix-bug")
-	}
-	if len(state.Scouts) != 1 {
-		t.Fatalf("len(Scouts) = %d, want 1", len(state.Scouts))
-	}
-	if state.Scouts[0].Name != "research-api" {
-		t.Errorf("Scouts[0].Name = %q, want %q", state.Scouts[0].Name, "research-api")
-	}
-	if state.Scouts[0].TaskID != "task-003" {
-		t.Errorf("Scouts[0].TaskID = %q, want %q", state.Scouts[0].TaskID, "task-003")
-	}
+func TestInitAndLoadFellowship(t *testing.T) {
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		err := InitFellowship(conn, "test-fellowship", "/tmp/repo", "main")
+		if err != nil {
+			t.Fatal(err)
+		}
+		fs, err := LoadFellowship(conn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fs.Name != "test-fellowship" {
+			t.Errorf("Name = %q, want %q", fs.Name, "test-fellowship")
+		}
+		if fs.MainRepo != "/tmp/repo" {
+			t.Errorf("MainRepo = %q, want %q", fs.MainRepo, "/tmp/repo")
+		}
+		if fs.BaseBranch != "main" {
+			t.Errorf("BaseBranch = %q, want %q", fs.BaseBranch, "main")
+		}
+		return nil
+	})
 }
 
-func TestDiscoverQuests_FromFellowshipState(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("HOME", t.TempDir()) // Pin HOME so datadir.Name() returns default
-
-	// Create a fake worktree directory with .fellowship/quest-state.json
-	worktreeDir := filepath.Join(root, "worktrees", "quest-auth")
-	if err := os.MkdirAll(filepath.Join(worktreeDir, ".fellowship"), 0755); err != nil {
-		t.Fatalf("creating worktree dir: %v", err)
-	}
-
-	questState := `{
-  "version": 1,
-  "quest_name": "quest-auth",
-  "task_id": "t1",
-  "team_name": "team",
-  "phase": "Implement",
-  "gate_pending": false,
-  "gate_id": null,
-  "lembas_completed": false,
-  "metadata_updated": false,
-  "auto_approve_gates": []
-}`
-	if err := os.WriteFile(filepath.Join(worktreeDir, ".fellowship", "quest-state.json"), []byte(questState), 0644); err != nil {
-		t.Fatalf("writing quest-state.json: %v", err)
-	}
-
-	// Create fellowship-state.json pointing to that worktree
-	if err := os.MkdirAll(filepath.Join(root, ".fellowship"), 0755); err != nil {
-		t.Fatalf("creating data dir: %v", err)
-	}
-	fellowshipState := fmt.Sprintf(`{
-  "name": "test-fellowship",
-  "created_at": "2025-01-15T10:30:00Z",
-  "quests": [
-    {
-      "name": "quest-auth",
-      "worktree": %q,
-      "task_id": "t1"
-    }
-  ],
-  "scouts": []
-}`, worktreeDir)
-	if err := os.WriteFile(filepath.Join(root, ".fellowship", "fellowship-state.json"), []byte(fellowshipState), 0644); err != nil {
-		t.Fatalf("writing fellowship-state.json: %v", err)
-	}
-
-	// Call DiscoverQuests
-	status, err := DiscoverQuests(root)
-	if err != nil {
-		t.Fatalf("DiscoverQuests() error: %v", err)
-	}
-
-	if status.Name != "test-fellowship" {
-		t.Errorf("Name = %q, want %q", status.Name, "test-fellowship")
-	}
-	if len(status.Quests) != 1 {
-		t.Fatalf("len(Quests) = %d, want 1", len(status.Quests))
-	}
-	q := status.Quests[0]
-	if q.Name != "quest-auth" {
-		t.Errorf("Quest.Name = %q, want %q", q.Name, "quest-auth")
-	}
-	if q.Phase != "Implement" {
-		t.Errorf("Quest.Phase = %q, want %q", q.Phase, "Implement")
-	}
-	if q.GatePending != false {
-		t.Errorf("Quest.GatePending = %v, want false", q.GatePending)
-	}
-	if q.GateID != nil {
-		t.Errorf("Quest.GateID = %v, want nil", q.GateID)
-	}
-	if q.Worktree != worktreeDir {
-		t.Errorf("Quest.Worktree = %q, want %q", q.Worktree, worktreeDir)
-	}
+func TestAddQuest(t *testing.T) {
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		InitFellowship(conn, "f1", "/tmp", "main")
+		AddQuest(conn, QuestEntry{
+			Name: "q1", TaskDescription: "build auth", Worktree: "/tmp/wt/q1", Branch: "feat/q1",
+		})
+		quests, _ := ListQuests(conn)
+		if len(quests) != 1 {
+			t.Fatalf("expected 1, got %d", len(quests))
+		}
+		if quests[0].Name != "q1" {
+			t.Errorf("Name = %q, want %q", quests[0].Name, "q1")
+		}
+		if quests[0].TaskDescription != "build auth" {
+			t.Errorf("TaskDescription = %q, want %q", quests[0].TaskDescription, "build auth")
+		}
+		return nil
+	})
 }
 
-func TestDiscoverQuests_SkipsMissingWorktree(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("HOME", t.TempDir()) // Pin HOME so datadir.Name() returns default
+func TestAddAndRemoveScout(t *testing.T) {
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		InitFellowship(conn, "f1", "/tmp", "main")
+		AddScout(conn, ScoutEntry{Name: "s1", Question: "how?", TaskID: "t1"})
+		scouts, _ := ListScouts(conn)
+		if len(scouts) != 1 {
+			t.Fatalf("expected 1 scout, got %d", len(scouts))
+		}
+		if scouts[0].Name != "s1" {
+			t.Errorf("Name = %q, want %q", scouts[0].Name, "s1")
+		}
 
-	// Create fellowship-state.json pointing to a non-existent worktree
-	if err := os.MkdirAll(filepath.Join(root, ".fellowship"), 0755); err != nil {
-		t.Fatalf("creating data dir: %v", err)
-	}
-	fellowshipState := `{
-  "name": "test-fellowship",
-  "created_at": "2025-01-15T10:30:00Z",
-  "quests": [
-    {
-      "name": "quest-missing",
-      "worktree": "/nonexistent/worktree",
-      "task_id": "t1"
-    }
-  ],
-  "scouts": []
-}`
-	if err := os.WriteFile(filepath.Join(root, ".fellowship", "fellowship-state.json"), []byte(fellowshipState), 0644); err != nil {
-		t.Fatalf("writing fellowship-state.json: %v", err)
-	}
-
-	status, err := DiscoverQuests(root)
-	if err != nil {
-		t.Fatalf("DiscoverQuests() error: %v", err)
-	}
-
-	if len(status.Quests) != 0 {
-		t.Errorf("len(Quests) = %d, want 0 (missing worktree should be skipped)", len(status.Quests))
-	}
+		RemoveScout(conn, "s1")
+		scouts, _ = ListScouts(conn)
+		if len(scouts) != 0 {
+			t.Errorf("expected 0 scouts after remove, got %d", len(scouts))
+		}
+		return nil
+	})
 }
 
-func TestSaveFellowshipState_RoundTrip(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "fellowship-state.json")
+func TestAddCompany(t *testing.T) {
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		InitFellowship(conn, "f1", "/tmp", "main")
+		AddQuest(conn, QuestEntry{Name: "q1", Worktree: "/tmp/wt/q1"})
+		AddScout(conn, ScoutEntry{Name: "s1", Question: "why?"})
+		AddCompany(conn, "team-alpha", []string{"q1"}, []string{"s1"})
 
-	original := &FellowshipState{
-		Version:   1,
-		Name:      "test-fellowship",
-		CreatedAt: "2025-01-15T10:30:00Z",
-		MainRepo:  "/path/to/repo",
-		Quests: []QuestEntry{
-			{Name: "quest-1", TaskDescription: "do stuff", Worktree: "/tmp/wt", Branch: "fellowship/quest-1", TaskID: "t1"},
-		},
-		Scouts: []ScoutEntry{
-			{Name: "scout-1", Question: "how does X work?", TaskID: "t2"},
-		},
-		Companies: []CompanyEntry{
-			{Name: "company-1", Quests: []string{"quest-1"}, Scouts: []string{"scout-1"}},
-		},
-	}
-
-	if err := SaveFellowshipState(path, original); err != nil {
-		t.Fatalf("SaveFellowshipState() error: %v", err)
-	}
-
-	loaded, err := LoadFellowshipState(path)
-	if err != nil {
-		t.Fatalf("LoadFellowshipState() error: %v", err)
-	}
-
-	if loaded.Name != original.Name {
-		t.Errorf("Name = %q, want %q", loaded.Name, original.Name)
-	}
-	if loaded.Version != original.Version {
-		t.Errorf("Version = %d, want %d", loaded.Version, original.Version)
-	}
-	if loaded.MainRepo != original.MainRepo {
-		t.Errorf("MainRepo = %q, want %q", loaded.MainRepo, original.MainRepo)
-	}
-	if len(loaded.Quests) != 1 {
-		t.Fatalf("len(Quests) = %d, want 1", len(loaded.Quests))
-	}
-	if loaded.Quests[0].TaskDescription != "do stuff" {
-		t.Errorf("Quests[0].TaskDescription = %q, want %q", loaded.Quests[0].TaskDescription, "do stuff")
-	}
-	if loaded.Quests[0].Branch != "fellowship/quest-1" {
-		t.Errorf("Quests[0].Branch = %q, want %q", loaded.Quests[0].Branch, "fellowship/quest-1")
-	}
-	if len(loaded.Scouts) != 1 {
-		t.Fatalf("len(Scouts) = %d, want 1", len(loaded.Scouts))
-	}
-	if loaded.Scouts[0].Question != "how does X work?" {
-		t.Errorf("Scouts[0].Question = %q, want %q", loaded.Scouts[0].Question, "how does X work?")
-	}
-	if len(loaded.Companies) != 1 {
-		t.Fatalf("len(Companies) = %d, want 1", len(loaded.Companies))
-	}
-	if loaded.Companies[0].Name != "company-1" {
-		t.Errorf("Companies[0].Name = %q, want %q", loaded.Companies[0].Name, "company-1")
-	}
+		companies, _ := ListCompanies(conn)
+		if len(companies) != 1 {
+			t.Fatalf("expected 1 company, got %d", len(companies))
+		}
+		if companies[0].Name != "team-alpha" {
+			t.Errorf("Name = %q, want %q", companies[0].Name, "team-alpha")
+		}
+		if len(companies[0].Quests) != 1 || companies[0].Quests[0] != "q1" {
+			t.Errorf("Quests = %v, want [q1]", companies[0].Quests)
+		}
+		if len(companies[0].Scouts) != 1 || companies[0].Scouts[0] != "s1" {
+			t.Errorf("Scouts = %v, want [s1]", companies[0].Scouts)
+		}
+		return nil
+	})
 }
 
-func TestSaveFellowshipState_NilSlices(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "fellowship-state.json")
+func TestUpdateQuest(t *testing.T) {
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		InitFellowship(conn, "f1", "/tmp", "main")
+		AddQuest(conn, QuestEntry{Name: "q1", Worktree: "/tmp/wt/q1", Status: "active"})
+		UpdateQuest(conn, "q1", map[string]any{"status": "completed"})
 
-	s := &FellowshipState{
-		Version:   1,
-		Name:      "test",
-		CreatedAt: "2025-01-15T10:30:00Z",
-		MainRepo:  "/repo",
-	}
-
-	if err := SaveFellowshipState(path, s); err != nil {
-		t.Fatalf("SaveFellowshipState() error: %v", err)
-	}
-
-	loaded, err := LoadFellowshipState(path)
-	if err != nil {
-		t.Fatalf("LoadFellowshipState() error: %v", err)
-	}
-
-	// Nil slices should be saved as empty arrays, not null
-	if loaded.Quests == nil {
-		t.Error("Quests should be non-nil (empty slice)")
-	}
-	if loaded.Scouts == nil {
-		t.Error("Scouts should be non-nil (empty slice)")
-	}
-	if loaded.Companies == nil {
-		t.Error("Companies should be non-nil (empty slice)")
-	}
+		quests, _ := ListQuests(conn)
+		if len(quests) != 1 {
+			t.Fatalf("expected 1, got %d", len(quests))
+		}
+		if quests[0].Status != "completed" {
+			t.Errorf("Status = %q, want %q", quests[0].Status, "completed")
+		}
+		return nil
+	})
 }
 
-func TestLoadFellowshipState_Missing(t *testing.T) {
-	_, err := LoadFellowshipState("/nonexistent/path/fellowship-state.json")
-	if err == nil {
-		t.Fatal("LoadFellowshipState() expected error for missing file, got nil")
-	}
+func TestRemoveQuest(t *testing.T) {
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		InitFellowship(conn, "f1", "/tmp", "main")
+		AddQuest(conn, QuestEntry{Name: "q1", Worktree: "/tmp/wt/q1"})
+		RemoveQuest(conn, "q1")
+		quests, _ := ListQuests(conn)
+		if len(quests) != 0 {
+			t.Errorf("expected 0 quests after remove, got %d", len(quests))
+		}
+		return nil
+	})
+}
+
+func TestSaveFellowship_RoundTrip(t *testing.T) {
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		InitFellowship(conn, "test-fellowship", "/path/to/repo", "main")
+
+		original := &FellowshipState{
+			Version:    1,
+			Name:       "test-fellowship",
+			CreatedAt:  "2025-01-15T10:30:00Z",
+			MainRepo:   "/path/to/repo",
+			BaseBranch: "main",
+			Quests: []QuestEntry{
+				{Name: "quest-1", TaskDescription: "do stuff", Worktree: "/tmp/wt", Branch: "fellowship/quest-1", TaskID: "t1"},
+			},
+			Scouts: []ScoutEntry{
+				{Name: "scout-1", Question: "how does X work?", TaskID: "t2"},
+			},
+			Companies: []CompanyEntry{
+				{Name: "company-1", Quests: []string{"quest-1"}, Scouts: []string{"scout-1"}},
+			},
+		}
+
+		if err := SaveFellowship(conn, original); err != nil {
+			t.Fatalf("SaveFellowship() error: %v", err)
+		}
+
+		loaded, err := LoadFellowship(conn)
+		if err != nil {
+			t.Fatalf("LoadFellowship() error: %v", err)
+		}
+
+		if loaded.Name != original.Name {
+			t.Errorf("Name = %q, want %q", loaded.Name, original.Name)
+		}
+		if loaded.MainRepo != original.MainRepo {
+			t.Errorf("MainRepo = %q, want %q", loaded.MainRepo, original.MainRepo)
+		}
+		if len(loaded.Quests) != 1 {
+			t.Fatalf("len(Quests) = %d, want 1", len(loaded.Quests))
+		}
+		if loaded.Quests[0].TaskDescription != "do stuff" {
+			t.Errorf("Quests[0].TaskDescription = %q, want %q", loaded.Quests[0].TaskDescription, "do stuff")
+		}
+		if loaded.Quests[0].Branch != "fellowship/quest-1" {
+			t.Errorf("Quests[0].Branch = %q, want %q", loaded.Quests[0].Branch, "fellowship/quest-1")
+		}
+		if len(loaded.Scouts) != 1 {
+			t.Fatalf("len(Scouts) = %d, want 1", len(loaded.Scouts))
+		}
+		if loaded.Scouts[0].Question != "how does X work?" {
+			t.Errorf("Scouts[0].Question = %q, want %q", loaded.Scouts[0].Question, "how does X work?")
+		}
+		if len(loaded.Companies) != 1 {
+			t.Fatalf("len(Companies) = %d, want 1", len(loaded.Companies))
+		}
+		if loaded.Companies[0].Name != "company-1" {
+			t.Errorf("Companies[0].Name = %q, want %q", loaded.Companies[0].Name, "company-1")
+		}
+		return nil
+	})
+}
+
+func TestLoadFellowship_NotInitialized(t *testing.T) {
+	d := db.OpenTest(t)
+	d.WithConn(context.Background(), func(conn *db.Conn) error {
+		_, err := LoadFellowship(conn)
+		if err == nil {
+			t.Fatal("expected error for uninitialized fellowship, got nil")
+		}
+		return nil
+	})
 }
 
 func TestQuestEntryStatus_Default(t *testing.T) {
@@ -301,211 +221,101 @@ func TestQuestEntryStatus_Explicit(t *testing.T) {
 	}
 }
 
-func TestSaveFellowshipState_WithStatus(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "fellowship-state.json")
-
-	original := &FellowshipState{
-		Version: 1, Name: "test", CreatedAt: "2025-01-15T10:30:00Z",
-		Quests: []QuestEntry{
-			{Name: "q1", Status: "completed"},
-			{Name: "q2"}, // no status — omitempty
-		},
-	}
-
-	if err := SaveFellowshipState(path, original); err != nil {
-		t.Fatalf("SaveFellowshipState() error: %v", err)
-	}
-
-	loaded, err := LoadFellowshipState(path)
-	if err != nil {
-		t.Fatalf("LoadFellowshipState() error: %v", err)
-	}
-
-	if loaded.Quests[0].Status != "completed" {
-		t.Errorf("Quests[0].Status = %q, want %q", loaded.Quests[0].Status, "completed")
-	}
-	if loaded.Quests[1].Status != "" {
-		t.Errorf("Quests[1].Status = %q, want empty", loaded.Quests[1].Status)
-	}
+func TestDiscoverQuests_NoFellowship(t *testing.T) {
+	d := db.OpenTest(t)
+	d.WithConn(context.Background(), func(conn *db.Conn) error {
+		status, err := DiscoverQuests(conn)
+		if err != nil {
+			t.Fatalf("DiscoverQuests() error: %v", err)
+		}
+		if len(status.Quests) != 0 {
+			t.Errorf("expected 0 quests, got %d", len(status.Quests))
+		}
+		return nil
+	})
 }
 
-func TestDiscoverQuests_CompletedMissingWorktree(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("HOME", t.TempDir())
+func TestDiscoverQuests_WithQuestState(t *testing.T) {
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		InitFellowship(conn, "test-fellowship", "/tmp/repo", "main")
+		AddQuest(conn, QuestEntry{
+			Name: "quest-auth", Worktree: "/tmp/wt/quest-auth", Branch: "feat/auth",
+		})
 
-	if err := os.MkdirAll(filepath.Join(root, ".fellowship"), 0755); err != nil {
-		t.Fatalf("creating data dir: %v", err)
-	}
-	fellowshipState := `{
-  "name": "test-fellowship",
-  "created_at": "2025-01-15T10:30:00Z",
-  "quests": [
-    {
-      "name": "quest-done",
-      "worktree": "/nonexistent/worktree",
-      "task_id": "t1",
-      "status": "completed"
-    }
-  ],
-  "scouts": []
-}`
-	if err := os.WriteFile(filepath.Join(root, ".fellowship", "fellowship-state.json"), []byte(fellowshipState), 0644); err != nil {
-		t.Fatalf("writing fellowship-state.json: %v", err)
-	}
+		// Insert quest_state row
+		state.Upsert(conn, &state.State{
+			QuestName: "quest-auth",
+			Phase:     "Implement",
+		})
 
-	status, err := DiscoverQuests(root)
-	if err != nil {
-		t.Fatalf("DiscoverQuests() error: %v", err)
-	}
-
-	if len(status.Quests) != 1 {
-		t.Fatalf("len(Quests) = %d, want 1", len(status.Quests))
-	}
-	q := status.Quests[0]
-	if q.Name != "quest-done" {
-		t.Errorf("Quest.Name = %q, want %q", q.Name, "quest-done")
-	}
-	if q.Phase != "Complete" {
-		t.Errorf("Quest.Phase = %q, want %q", q.Phase, "Complete")
-	}
-	if q.Status != "completed" {
-		t.Errorf("Quest.Status = %q, want %q", q.Status, "completed")
-	}
+		status, err := DiscoverQuests(conn)
+		if err != nil {
+			t.Fatalf("DiscoverQuests() error: %v", err)
+		}
+		if status.Name != "test-fellowship" {
+			t.Errorf("Name = %q, want %q", status.Name, "test-fellowship")
+		}
+		if len(status.Quests) != 1 {
+			t.Fatalf("len(Quests) = %d, want 1", len(status.Quests))
+		}
+		q := status.Quests[0]
+		if q.Name != "quest-auth" {
+			t.Errorf("Quest.Name = %q, want %q", q.Name, "quest-auth")
+		}
+		if q.Phase != "Implement" {
+			t.Errorf("Quest.Phase = %q, want %q", q.Phase, "Implement")
+		}
+		if q.Worktree != "/tmp/wt/quest-auth" {
+			t.Errorf("Quest.Worktree = %q, want %q", q.Worktree, "/tmp/wt/quest-auth")
+		}
+		return nil
+	})
 }
 
-func TestDiscoverQuests_CancelledMissingWorktree(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("HOME", t.TempDir())
+func TestDiscoverQuests_CompletedNoQuestState(t *testing.T) {
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		InitFellowship(conn, "test-fellowship", "/tmp/repo", "main")
+		AddQuest(conn, QuestEntry{
+			Name: "quest-done", Worktree: "/tmp/wt/done", Status: "completed",
+		})
 
-	if err := os.MkdirAll(filepath.Join(root, ".fellowship"), 0755); err != nil {
-		t.Fatalf("creating data dir: %v", err)
-	}
-	fellowshipState := `{
-  "name": "test-fellowship",
-  "created_at": "2025-01-15T10:30:00Z",
-  "quests": [
-    {
-      "name": "quest-cancelled",
-      "worktree": "/nonexistent/worktree",
-      "task_id": "t1",
-      "status": "cancelled"
-    }
-  ],
-  "scouts": []
-}`
-	if err := os.WriteFile(filepath.Join(root, ".fellowship", "fellowship-state.json"), []byte(fellowshipState), 0644); err != nil {
-		t.Fatalf("writing fellowship-state.json: %v", err)
-	}
-
-	status, err := DiscoverQuests(root)
-	if err != nil {
-		t.Fatalf("DiscoverQuests() error: %v", err)
-	}
-
-	if len(status.Quests) != 1 {
-		t.Fatalf("len(Quests) = %d, want 1", len(status.Quests))
-	}
-	if status.Quests[0].Status != "cancelled" {
-		t.Errorf("Quest.Status = %q, want %q", status.Quests[0].Status, "cancelled")
-	}
-	if status.Quests[0].Phase != "Complete" {
-		t.Errorf("Quest.Phase = %q, want %q", status.Quests[0].Phase, "Complete")
-	}
+		// No quest_state row — should appear as synthetic Complete entry
+		status, err := DiscoverQuests(conn)
+		if err != nil {
+			t.Fatalf("DiscoverQuests() error: %v", err)
+		}
+		if len(status.Quests) != 1 {
+			t.Fatalf("len(Quests) = %d, want 1", len(status.Quests))
+		}
+		q := status.Quests[0]
+		if q.Phase != "Complete" {
+			t.Errorf("Quest.Phase = %q, want %q", q.Phase, "Complete")
+		}
+		if q.Status != "completed" {
+			t.Errorf("Quest.Status = %q, want %q", q.Status, "completed")
+		}
+		return nil
+	})
 }
 
-func TestDiscoverQuests_ActiveMissingWorktreeSkipped(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("HOME", t.TempDir())
+func TestDiscoverQuests_ActiveNoQuestStateSkipped(t *testing.T) {
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		InitFellowship(conn, "test-fellowship", "/tmp/repo", "main")
+		AddQuest(conn, QuestEntry{
+			Name: "quest-active", Worktree: "/tmp/wt/active",
+		})
 
-	if err := os.MkdirAll(filepath.Join(root, ".fellowship"), 0755); err != nil {
-		t.Fatalf("creating data dir: %v", err)
-	}
-	// Active quest (no status) with missing worktree — should still be skipped
-	fellowshipState := `{
-  "name": "test-fellowship",
-  "created_at": "2025-01-15T10:30:00Z",
-  "quests": [
-    {
-      "name": "quest-active",
-      "worktree": "/nonexistent/worktree",
-      "task_id": "t1"
-    }
-  ],
-  "scouts": []
-}`
-	if err := os.WriteFile(filepath.Join(root, ".fellowship", "fellowship-state.json"), []byte(fellowshipState), 0644); err != nil {
-		t.Fatalf("writing fellowship-state.json: %v", err)
-	}
-
-	status, err := DiscoverQuests(root)
-	if err != nil {
-		t.Fatalf("DiscoverQuests() error: %v", err)
-	}
-
-	if len(status.Quests) != 0 {
-		t.Errorf("len(Quests) = %d, want 0 (active quest with missing worktree should be skipped)", len(status.Quests))
-	}
-}
-
-func TestDiscoverQuests_CompletedExistingWorktree(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("HOME", t.TempDir())
-
-	// Create a worktree with quest-state.json
-	worktreeDir := filepath.Join(root, "worktrees", "quest-done")
-	if err := os.MkdirAll(filepath.Join(worktreeDir, ".fellowship"), 0755); err != nil {
-		t.Fatalf("creating worktree dir: %v", err)
-	}
-	questState := `{
-  "version": 1,
-  "quest_name": "quest-done",
-  "task_id": "t1",
-  "team_name": "team",
-  "phase": "Complete",
-  "gate_pending": false,
-  "gate_id": null,
-  "lembas_completed": false,
-  "metadata_updated": false,
-  "auto_approve_gates": []
-}`
-	if err := os.WriteFile(filepath.Join(worktreeDir, ".fellowship", "quest-state.json"), []byte(questState), 0644); err != nil {
-		t.Fatalf("writing quest-state.json: %v", err)
-	}
-
-	if err := os.MkdirAll(filepath.Join(root, ".fellowship"), 0755); err != nil {
-		t.Fatalf("creating data dir: %v", err)
-	}
-	fellowshipState := fmt.Sprintf(`{
-  "name": "test-fellowship",
-  "created_at": "2025-01-15T10:30:00Z",
-  "quests": [
-    {
-      "name": "quest-done",
-      "worktree": %q,
-      "task_id": "t1",
-      "status": "completed"
-    }
-  ],
-  "scouts": []
-}`, worktreeDir)
-	if err := os.WriteFile(filepath.Join(root, ".fellowship", "fellowship-state.json"), []byte(fellowshipState), 0644); err != nil {
-		t.Fatalf("writing fellowship-state.json: %v", err)
-	}
-
-	status, err := DiscoverQuests(root)
-	if err != nil {
-		t.Fatalf("DiscoverQuests() error: %v", err)
-	}
-
-	if len(status.Quests) != 1 {
-		t.Fatalf("len(Quests) = %d, want 1", len(status.Quests))
-	}
-	q := status.Quests[0]
-	if q.Status != "completed" {
-		t.Errorf("Quest.Status = %q, want %q", q.Status, "completed")
-	}
-	if q.Phase != "Complete" {
-		t.Errorf("Quest.Phase = %q, want %q", q.Phase, "Complete")
-	}
+		// No quest_state row, active status — should be skipped
+		status, err := DiscoverQuests(conn)
+		if err != nil {
+			t.Fatalf("DiscoverQuests() error: %v", err)
+		}
+		if len(status.Quests) != 0 {
+			t.Errorf("expected 0 quests (active with no quest_state should be skipped), got %d", len(status.Quests))
+		}
+		return nil
+	})
 }
