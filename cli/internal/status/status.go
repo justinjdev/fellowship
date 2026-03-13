@@ -114,7 +114,8 @@ func Scan(conn *sqlite.Conn, gitRoot string) (*StatusResult, error) {
 		`SELECT fq.name, fq.task_description, fq.worktree, fq.branch,
 			COALESCE(qs.phase, ''), COALESCE(qs.gate_pending, 0)
 		 FROM fellowship_quests fq
-		 LEFT JOIN quest_state qs ON fq.name = qs.quest_name`,
+		 LEFT JOIN quest_state qs ON fq.name = qs.quest_name
+		 ORDER BY fq.name`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				rows = append(rows, questRow{
