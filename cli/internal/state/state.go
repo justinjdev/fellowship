@@ -3,22 +3,13 @@ package state
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
+	"time"
 
-	"github.com/justinjdev/fellowship/cli/internal/datadir"
-	"github.com/justinjdev/fellowship/cli/internal/filelock"
+	"zombiezen.com/go/sqlite"
+	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-// ErrNoSave can be returned from a WithLock callback to skip saving
-// the state file while still releasing the lock without error.
-var ErrNoSave = fmt.Errorf("no save needed")
-
 type State struct {
-	Version          int      `json:"version"`
 	QuestName        string   `json:"quest_name"`
 	TaskID           string   `json:"task_id"`
 	TeamName         string   `json:"team_name"`
@@ -50,96 +41,120 @@ func IsEarlyPhase(phase string) bool {
 	return phase == "Onboard" || phase == "Research" || phase == "Plan"
 }
 
-func Load(path string) (*State, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading state file: %w", err)
-	}
-	if len(data) == 0 {
-		return nil, fmt.Errorf("state file is empty")
-	}
+// Load reads quest state from DB by quest name.
+func Load(conn *sqlite.Conn, questName string) (*State, error) {
 	var s State
-	if err := json.Unmarshal(data, &s); err != nil {
-		return nil, fmt.Errorf("parsing state file: %w", err)
+	var found bool
+	err := sqlitex.Execute(conn, `SELECT quest_name, task_id, team_name, phase,
+		gate_pending, gate_id, lembas_completed, metadata_updated,
+		held, held_reason, auto_approve, created_at, updated_at
+		FROM quest_state WHERE quest_name = :name`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":name": questName},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				found = true
+				s.QuestName = stmt.ColumnText(0)
+				s.TaskID = stmt.ColumnText(1)
+				s.TeamName = stmt.ColumnText(2)
+				s.Phase = stmt.ColumnText(3)
+				s.GatePending = stmt.ColumnInt(4) != 0
+				if stmt.ColumnType(5) != sqlite.TypeNull {
+					gid := stmt.ColumnText(5)
+					s.GateID = &gid
+				}
+				s.LembasCompleted = stmt.ColumnInt(6) != 0
+				s.MetadataUpdated = stmt.ColumnInt(7) != 0
+				s.Held = stmt.ColumnInt(8) != 0
+				if stmt.ColumnType(9) != sqlite.TypeNull {
+					hr := stmt.ColumnText(9)
+					s.HeldReason = &hr
+				}
+				if aa := stmt.ColumnText(10); aa != "" {
+					json.Unmarshal([]byte(aa), &s.AutoApproveGates)
+				}
+				return nil
+			},
+		})
+	if err != nil {
+		return nil, fmt.Errorf("state: load %s: %w", questName, err)
+	}
+	if !found {
+		return nil, fmt.Errorf("state: quest %q not found", questName)
 	}
 	return &s, nil
 }
 
-func Save(path string, s *State) error {
-	data, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshaling state: %w", err)
+// Upsert inserts or updates quest state.
+func Upsert(conn *sqlite.Conn, s *State) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	var autoApprove string
+	if len(s.AutoApproveGates) > 0 {
+		b, _ := json.Marshal(s.AutoApproveGates)
+		autoApprove = string(b)
 	}
-	data = append(data, '\n')
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		return fmt.Errorf("writing temp file: %w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
-		return fmt.Errorf("renaming temp file: %w", err)
-	}
-	return nil
+
+	return sqlitex.Execute(conn, `INSERT INTO quest_state
+		(quest_name, task_id, team_name, phase, gate_pending, gate_id,
+		 lembas_completed, metadata_updated, held, held_reason, auto_approve,
+		 created_at, updated_at)
+		VALUES (:name, :task_id, :team, :phase, :gate_pending, :gate_id,
+		 :lembas, :metadata, :held, :held_reason, :auto_approve, :now, :now)
+		ON CONFLICT(quest_name) DO UPDATE SET
+		 task_id=:task_id, team_name=:team, phase=:phase,
+		 gate_pending=:gate_pending, gate_id=:gate_id,
+		 lembas_completed=:lembas, metadata_updated=:metadata,
+		 held=:held, held_reason=:held_reason, auto_approve=:auto_approve,
+		 updated_at=:now`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{
+				":name":         s.QuestName,
+				":task_id":      s.TaskID,
+				":team":         s.TeamName,
+				":phase":        s.Phase,
+				":gate_pending": boolToInt(s.GatePending),
+				":gate_id":      ptrToAny(s.GateID),
+				":lembas":       boolToInt(s.LembasCompleted),
+				":metadata":     boolToInt(s.MetadataUpdated),
+				":held":         boolToInt(s.Held),
+				":held_reason":  ptrToAny(s.HeldReason),
+				":auto_approve": autoApprove,
+				":now":          now,
+			},
+		})
 }
 
-// WithLock acquires an exclusive file lock, loads the state, calls fn to
-// mutate it, and saves the result. The entire load→mutate→save is atomic with
-// respect to other processes using the same lock.
-func WithLock(path string, fn func(s *State) error) error {
-	lockPath := path + ".lock"
-	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
-	if err != nil {
-		return fmt.Errorf("opening lock file: %w", err)
-	}
-	defer lockFile.Close()
-
-	if err := filelock.Lock(lockFile.Fd()); err != nil {
-		return fmt.Errorf("acquiring lock: %w", err)
-	}
-	defer filelock.Unlock(lockFile.Fd())
-
-	s, err := Load(path)
-	if err != nil {
-		return err
-	}
-
-	if err := fn(s); err != nil {
-		if err == ErrNoSave {
-			return nil
-		}
-		return err
-	}
-
-	return Save(path, s)
+// Delete removes quest state by name.
+func Delete(conn *sqlite.Conn, questName string) error {
+	return sqlitex.Execute(conn,
+		`DELETE FROM quest_state WHERE quest_name = :name`,
+		&sqlitex.ExecOptions{Named: map[string]any{":name": questName}})
 }
 
-func FindStateFile(fromDir string) (string, error) {
-	root, err := gitRoot(fromDir)
-	if err != nil {
-		root = fromDir
-	}
-	dd := filepath.Join(root, datadir.Name())
-	path := filepath.Join(dd, "quest-state.json")
-	if _, err := os.Stat(path); err != nil {
-		return "", nil
-	}
-	// If fellowship-state.json also exists in this data directory, the CWD is
-	// at the main repo root where the lead (Gandalf) runs — not inside a quest
-	// worktree. Skip quest-state enforcement so the lead isn't blocked by a
-	// quest runner's state file that leaked into the repo root.
-	if _, err := os.Stat(filepath.Join(dd, "fellowship-state.json")); err == nil {
-		return "", nil
-	}
-	return path, nil
+// FindQuest returns the quest name for a given worktree root path.
+func FindQuest(conn *sqlite.Conn, worktreeRoot string) (string, error) {
+	var name string
+	err := sqlitex.Execute(conn,
+		`SELECT name FROM fellowship_quests WHERE worktree = :wt`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":wt": worktreeRoot},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				name = stmt.ColumnText(0)
+				return nil
+			},
+		})
+	return name, err
 }
 
-func gitRoot(fromDir string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	cmd.Dir = fromDir
-	cmd.Stderr = io.Discard
-	out, err := cmd.Output()
-	if err != nil {
-		return "", err
+func boolToInt(b bool) int {
+	if b {
+		return 1
 	}
-	return strings.TrimSpace(string(out)), nil
+	return 0
+}
+
+func ptrToAny(s *string) any {
+	if s == nil {
+		return nil
+	}
+	return *s
 }
