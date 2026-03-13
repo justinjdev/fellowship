@@ -340,21 +340,13 @@ func batchApproveCompany(conn *db.Conn, c CompanyEntry, fs *FellowshipState) (ap
 }
 
 func (s *Server) handleEagles(w http.ResponseWriter, r *http.Request) {
-	// Eagles still operates on git root; derive from DB path.
 	opts := eagles.DefaultOptions()
-	var gitRoot string
-	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
-		fs, err := LoadFellowship(conn)
-		if err == nil {
-			gitRoot = fs.MainRepo
-		}
-		return nil
+	var report *eagles.EaglesReport
+	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+		var sweepErr error
+		report, sweepErr = eagles.Sweep(conn, opts)
+		return sweepErr
 	})
-	if gitRoot == "" {
-		http.Error(w, "fellowship not initialized", http.StatusInternalServerError)
-		return
-	}
-	report, err := eagles.Sweep(gitRoot, opts)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
