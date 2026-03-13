@@ -1,260 +1,191 @@
-package tome
+package tome_test
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
+	"context"
 	"testing"
+
+	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/state"
+	"github.com/justinjdev/fellowship/cli/internal/tome"
+	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-func TestLoadSaveRoundTrip(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "quest-tome.json")
-
-	original := &QuestTome{
-		Version:   1,
-		QuestName: "test-quest",
-		CreatedAt: "2025-01-01T00:00:00Z",
-		Task:      "implement feature X",
-		Status:    "active",
-		PhasesCompleted: []PhaseRecord{
-			{Phase: "Research", CompletedAt: "2025-01-01T01:00:00Z"},
-		},
-		GateHistory: []GateEvent{
-			{Phase: "Research", Action: "submitted", Timestamp: "2025-01-01T01:00:00Z"},
-		},
-		FilesTouched: []string{"main.go", "lib.go"},
-		Respawns:     1,
-	}
-
-	if err := Save(path, original); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
-
-	loaded, err := Load(path)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-
-	if loaded.QuestName != original.QuestName {
-		t.Errorf("QuestName = %q, want %q", loaded.QuestName, original.QuestName)
-	}
-	if loaded.Task != original.Task {
-		t.Errorf("Task = %q, want %q", loaded.Task, original.Task)
-	}
-	if loaded.Status != original.Status {
-		t.Errorf("Status = %q, want %q", loaded.Status, original.Status)
-	}
-	if len(loaded.PhasesCompleted) != 1 {
-		t.Errorf("PhasesCompleted len = %d, want 1", len(loaded.PhasesCompleted))
-	}
-	if len(loaded.GateHistory) != 1 {
-		t.Errorf("GateHistory len = %d, want 1", len(loaded.GateHistory))
-	}
-	if len(loaded.FilesTouched) != 2 {
-		t.Errorf("FilesTouched len = %d, want 2", len(loaded.FilesTouched))
-	}
-	if loaded.Respawns != 1 {
-		t.Errorf("Respawns = %d, want 1", loaded.Respawns)
-	}
-	if loaded.UpdatedAt == "" {
-		t.Error("UpdatedAt should be set after Save")
-	}
-}
-
-func TestLoadEmptyFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "quest-tome.json")
-	os.WriteFile(path, []byte{}, 0644)
-
-	_, err := Load(path)
-	if err == nil {
-		t.Error("Load should fail on empty file")
-	}
-}
-
-func TestLoadMissingFile(t *testing.T) {
-	_, err := Load("/nonexistent/quest-tome.json")
-	if err == nil {
-		t.Error("Load should fail on missing file")
-	}
-}
-
-func TestSaveAtomicWrite(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "quest-tome.json")
-	c := &QuestTome{Version: 1, Status: "active", PhasesCompleted: []PhaseRecord{}, GateHistory: []GateEvent{}, FilesTouched: []string{}}
-
-	if err := Save(path, c); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
-
-	// Verify no .tmp file remains
-	tmpPath := path + ".tmp"
-	if _, err := os.Stat(tmpPath); !os.IsNotExist(err) {
-		t.Error("tmp file should not remain after Save")
-	}
-
-	// Verify file is valid JSON
-	data, _ := os.ReadFile(path)
-	var check QuestTome
-	if err := json.Unmarshal(data, &check); err != nil {
-		t.Errorf("saved file is not valid JSON: %v", err)
-	}
+func seedQuest(t *testing.T, d *db.DB, name string) {
+	t.Helper()
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		return state.Upsert(conn, &state.State{QuestName: name, Phase: "Research"})
+	})
 }
 
 func TestRecordPhase(t *testing.T) {
-	c := &QuestTome{PhasesCompleted: []PhaseRecord{}}
+	d := db.OpenTest(t)
+	seedQuest(t, d, "q1")
 
-	RecordPhase(c, "Research")
-	if len(c.PhasesCompleted) != 1 {
-		t.Fatalf("PhasesCompleted len = %d, want 1", len(c.PhasesCompleted))
-	}
-	if c.PhasesCompleted[0].Phase != "Research" {
-		t.Errorf("Phase = %q, want Research", c.PhasesCompleted[0].Phase)
-	}
-	if c.PhasesCompleted[0].CompletedAt == "" {
-		t.Error("CompletedAt should be set")
-	}
-
-	RecordPhase(c, "Plan")
-	if len(c.PhasesCompleted) != 2 {
-		t.Fatalf("PhasesCompleted len = %d, want 2", len(c.PhasesCompleted))
-	}
-	if c.PhasesCompleted[1].Phase != "Plan" {
-		t.Errorf("Phase = %q, want Plan", c.PhasesCompleted[1].Phase)
-	}
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := tome.RecordPhase(conn, "q1", "Research", 120); err != nil {
+			t.Fatal(err)
+		}
+		phases, err := tome.LoadPhases(conn, "q1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(phases) != 1 || phases[0].Phase != "Research" {
+			t.Errorf("unexpected phases: %+v", phases)
+		}
+		return nil
+	})
 }
 
 func TestRecordGate(t *testing.T) {
-	c := &QuestTome{GateHistory: []GateEvent{}}
+	d := db.OpenTest(t)
+	seedQuest(t, d, "q1")
 
-	RecordGate(c, "Research", "submitted")
-	if len(c.GateHistory) != 1 {
-		t.Fatalf("GateHistory len = %d, want 1", len(c.GateHistory))
-	}
-	if c.GateHistory[0].Phase != "Research" {
-		t.Errorf("Phase = %q, want Research", c.GateHistory[0].Phase)
-	}
-	if c.GateHistory[0].Action != "submitted" {
-		t.Errorf("Action = %q, want submitted", c.GateHistory[0].Action)
-	}
-	if c.GateHistory[0].Timestamp == "" {
-		t.Error("Timestamp should be set")
-	}
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		tome.RecordGate(conn, "q1", "Research", "submitted", "")
+		tome.RecordGate(conn, "q1", "Research", "approved", "")
 
-	RecordGate(c, "Research", "approved")
-	if len(c.GateHistory) != 2 {
-		t.Fatalf("GateHistory len = %d, want 2", len(c.GateHistory))
-	}
-}
-
-func TestRecordFiles_Deduplication(t *testing.T) {
-	c := &QuestTome{FilesTouched: []string{"main.go"}}
-
-	RecordFiles(c, []string{"main.go", "lib.go", "main.go"})
-	if len(c.FilesTouched) != 2 {
-		t.Fatalf("FilesTouched len = %d, want 2", len(c.FilesTouched))
-	}
-
-	expected := map[string]bool{"main.go": true, "lib.go": true}
-	for _, f := range c.FilesTouched {
-		if !expected[f] {
-			t.Errorf("unexpected file: %q", f)
+		gates, _ := tome.LoadGates(conn, "q1")
+		if len(gates) != 2 {
+			t.Fatalf("expected 2 gates, got %d", len(gates))
 		}
-	}
+		if gates[0].Action != "submitted" {
+			t.Errorf("expected submitted, got %s", gates[0].Action)
+		}
+		return nil
+	})
 }
 
-func TestRecordFiles_Empty(t *testing.T) {
-	c := &QuestTome{FilesTouched: []string{"a.go"}}
-	RecordFiles(c, []string{})
-	if len(c.FilesTouched) != 1 {
-		t.Errorf("FilesTouched len = %d, want 1", len(c.FilesTouched))
-	}
+func TestRecordFiles(t *testing.T) {
+	d := db.OpenTest(t)
+	seedQuest(t, d, "q1")
+
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		tome.RecordFiles(conn, "q1", []string{"src/main.go", "src/util.go"})
+		tome.RecordFiles(conn, "q1", []string{"src/main.go", "src/new.go"}) // main.go deduplicated
+
+		files, _ := tome.LoadFiles(conn, "q1")
+		if len(files) != 3 {
+			t.Fatalf("expected 3 unique files, got %d: %v", len(files), files)
+		}
+		return nil
+	})
 }
 
-func TestFindTome_Exists(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	dir := t.TempDir()
-	dataDir := filepath.Join(dir, ".fellowship")
-	os.MkdirAll(dataDir, 0755)
-	tomePath := filepath.Join(dataDir, "quest-tome.json")
-	os.WriteFile(tomePath, []byte(`{}`), 0644)
+func TestLoad(t *testing.T) {
+	d := db.OpenTest(t)
+	seedQuest(t, d, "q1")
 
-	// FindTome uses git root; test with direct dir since no git repo
-	found, err := FindTome(dir)
-	if err != nil {
-		t.Fatalf("FindTome: %v", err)
-	}
-	// In a non-git dir, FindTome falls back to fromDir
-	if found != tomePath {
-		t.Errorf("FindTome = %q, want %q", found, tomePath)
-	}
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		tome.RecordPhase(conn, "q1", "Onboard", 60)
+		tome.RecordGate(conn, "q1", "Onboard", "approved", "")
+		tome.RecordFiles(conn, "q1", []string{"a.go"})
+
+		qt, err := tome.Load(conn, "q1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(qt.PhasesCompleted) != 1 {
+			t.Errorf("expected 1 phase, got %d", len(qt.PhasesCompleted))
+		}
+		if len(qt.GateHistory) != 1 {
+			t.Errorf("expected 1 gate, got %d", len(qt.GateHistory))
+		}
+		if len(qt.FilesTouched) != 1 {
+			t.Errorf("expected 1 file, got %d", len(qt.FilesTouched))
+		}
+		return nil
+	})
 }
 
-func TestFindTome_NotExists(t *testing.T) {
-	dir := t.TempDir()
-	found, err := FindTome(dir)
-	if err != nil {
-		t.Fatalf("FindTome: %v", err)
-	}
-	if found != "" {
-		t.Errorf("FindTome = %q, want empty string", found)
-	}
+func TestLoad_NoData(t *testing.T) {
+	d := db.OpenTest(t)
+	seedQuest(t, d, "q1")
+
+	d.WithConn(context.Background(), func(conn *db.Conn) error {
+		qt, err := tome.Load(conn, "q1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if qt.QuestName != "q1" {
+			t.Errorf("expected q1, got %s", qt.QuestName)
+		}
+		if qt.Status != "active" {
+			t.Errorf("expected active status, got %s", qt.Status)
+		}
+		if len(qt.PhasesCompleted) != 0 {
+			t.Errorf("expected 0 phases, got %d", len(qt.PhasesCompleted))
+		}
+		if len(qt.GateHistory) != 0 {
+			t.Errorf("expected 0 gates, got %d", len(qt.GateHistory))
+		}
+		if len(qt.FilesTouched) != 0 {
+			t.Errorf("expected 0 files, got %d", len(qt.FilesTouched))
+		}
+		return nil
+	})
 }
 
 func TestRecordSkippedPhases(t *testing.T) {
-	c := &QuestTome{
-		GateHistory:     []GateEvent{},
-		PhasesCompleted: []PhaseRecord{},
-	}
+	d := db.OpenTest(t)
+	seedQuest(t, d, "q1")
 
-	RecordSkippedPhases(c, []string{"Onboard", "Research", "Plan"}, "pre-existing plan")
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := tome.RecordSkippedPhases(conn, "q1", []string{"Onboard", "Research", "Plan"}, "pre-existing plan"); err != nil {
+			t.Fatal(err)
+		}
 
-	if len(c.GateHistory) != 3 {
-		t.Fatalf("GateHistory len = %d, want 3", len(c.GateHistory))
-	}
-	if len(c.PhasesCompleted) != 3 {
-		t.Fatalf("PhasesCompleted len = %d, want 3", len(c.PhasesCompleted))
-	}
+		phases, _ := tome.LoadPhases(conn, "q1")
+		if len(phases) != 3 {
+			t.Fatalf("expected 3 phases, got %d", len(phases))
+		}
 
-	for i, phase := range []string{"Onboard", "Research", "Plan"} {
-		if c.GateHistory[i].Phase != phase {
-			t.Errorf("GateHistory[%d].Phase = %q, want %q", i, c.GateHistory[i].Phase, phase)
+		gates, _ := tome.LoadGates(conn, "q1")
+		if len(gates) != 3 {
+			t.Fatalf("expected 3 gates, got %d", len(gates))
 		}
-		if c.GateHistory[i].Action != "skipped" {
-			t.Errorf("GateHistory[%d].Action = %q, want skipped", i, c.GateHistory[i].Action)
+
+		for i, phase := range []string{"Onboard", "Research", "Plan"} {
+			if gates[i].Phase != phase {
+				t.Errorf("gates[%d].Phase = %q, want %q", i, gates[i].Phase, phase)
+			}
+			if gates[i].Action != "skipped" {
+				t.Errorf("gates[%d].Action = %q, want skipped", i, gates[i].Action)
+			}
+			if gates[i].Reason != "pre-existing plan" {
+				t.Errorf("gates[%d].Reason = %q, want 'pre-existing plan'", i, gates[i].Reason)
+			}
+			if phases[i].Phase != phase {
+				t.Errorf("phases[%d].Phase = %q, want %q", i, phases[i].Phase, phase)
+			}
 		}
-		if c.GateHistory[i].Reason != "pre-existing plan" {
-			t.Errorf("GateHistory[%d].Reason = %q, want 'pre-existing plan'", i, c.GateHistory[i].Reason)
-		}
-		if c.PhasesCompleted[i].Phase != phase {
-			t.Errorf("PhasesCompleted[%d].Phase = %q, want %q", i, c.PhasesCompleted[i].Phase, phase)
-		}
-	}
+		return nil
+	})
 }
 
-func TestLoadOrCreate_NewTome(t *testing.T) {
-	c := LoadOrCreate("/nonexistent/quest-tome.json")
-	if c.Version != 1 {
-		t.Errorf("Version = %d, want 1", c.Version)
-	}
-	if c.Status != "active" {
-		t.Errorf("Status = %q, want active", c.Status)
-	}
-	if c.CreatedAt == "" {
-		t.Error("CreatedAt should be set")
-	}
-}
+func TestSetStatus(t *testing.T) {
+	d := db.OpenTest(t)
+	seedQuest(t, d, "q1")
 
-func TestLoadOrCreate_ExistingTome(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "quest-tome.json")
-	original := &QuestTome{Version: 1, QuestName: "existing", Status: "active", PhasesCompleted: []PhaseRecord{}, GateHistory: []GateEvent{}, FilesTouched: []string{}}
-	Save(path, original)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		// Insert a fellowship_quests row for SetStatus to update.
+		tome.SetStatus(conn, "q1", "completed") // no-op since no fellowship_quests row yet
+		return nil
+	})
 
-	c := LoadOrCreate(path)
-	if c.QuestName != "existing" {
-		t.Errorf("QuestName = %q, want existing", c.QuestName)
-	}
+	// Insert fellowship_quests row and test SetStatus.
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		// Manually insert a fellowship_quests row.
+		if err := sqlitex.Execute(conn, `INSERT INTO fellowship_quests (name, status) VALUES ('q1', 'active')`, nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := tome.SetStatus(conn, "q1", "completed"); err != nil {
+			t.Fatal(err)
+		}
+
+		qt, _ := tome.Load(conn, "q1")
+		if qt.Status != "completed" {
+			t.Errorf("expected completed, got %s", qt.Status)
+		}
+		return nil
+	})
 }
