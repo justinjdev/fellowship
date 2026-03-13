@@ -1,67 +1,86 @@
 package hooks
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
+	"context"
 	"testing"
 
-	"github.com/justinjdev/fellowship/cli/internal/tome"
+	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/state"
+	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
+func seedQuest(t *testing.T, d *db.DB, name string) {
+	t.Helper()
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		return state.Upsert(conn, &state.State{QuestName: name, Phase: "Implement"})
+	})
+}
+
 func TestFileTrack_EditToolInput(t *testing.T) {
-	dir := t.TempDir()
-	tomePath := filepath.Join(dir, "quest-tome.json")
+	d := db.OpenTest(t)
+	seedQuest(t, d, "q1")
+
 	s := &state.State{Phase: "Implement"}
 	input := &HookInput{
 		ToolInput: ToolInput{FilePath: "/home/user/project/main.go"},
 	}
 
-	modified := FileTrack(s, input, tomePath)
+	var modified bool
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		modified = FileTrack(conn, s, input, "q1")
+		return nil
+	})
 	if !modified {
 		t.Error("FileTrack should return true on first file write")
 	}
 
-	data, err := os.ReadFile(tomePath)
-	if err != nil {
-		t.Fatalf("reading tome: %v", err)
-	}
-	var c tome.QuestTome
-	if err := json.Unmarshal(data, &c); err != nil {
-		t.Fatalf("parsing tome: %v", err)
-	}
-	if len(c.FilesTouched) != 1 {
-		t.Fatalf("FilesTouched len = %d, want 1", len(c.FilesTouched))
-	}
-	if c.FilesTouched[0] != "/home/user/project/main.go" {
-		t.Errorf("FilesTouched[0] = %q, want /home/user/project/main.go", c.FilesTouched[0])
-	}
+	d.WithConn(context.Background(), func(conn *db.Conn) error {
+		files, err := tome.LoadFiles(conn, "q1")
+		if err != nil {
+			t.Fatalf("loading files: %v", err)
+		}
+		if len(files) != 1 {
+			t.Fatalf("files len = %d, want 1", len(files))
+		}
+		if files[0] != "/home/user/project/main.go" {
+			t.Errorf("files[0] = %q, want /home/user/project/main.go", files[0])
+		}
+		return nil
+	})
 }
 
 func TestFileTrack_NotebookPath(t *testing.T) {
-	dir := t.TempDir()
-	tomePath := filepath.Join(dir, "quest-tome.json")
+	d := db.OpenTest(t)
+	seedQuest(t, d, "q1")
+
 	s := &state.State{Phase: "Implement"}
 	input := &HookInput{
 		ToolInput: ToolInput{NotebookPath: "/home/user/project/analysis.ipynb"},
 	}
 
-	modified := FileTrack(s, input, tomePath)
+	var modified bool
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		modified = FileTrack(conn, s, input, "q1")
+		return nil
+	})
 	if !modified {
 		t.Error("FileTrack should return true for notebook path")
 	}
 
-	c, _ := tome.Load(tomePath)
-	if len(c.FilesTouched) != 1 || c.FilesTouched[0] != "/home/user/project/analysis.ipynb" {
-		t.Errorf("expected notebook path in FilesTouched, got %v", c.FilesTouched)
-	}
+	d.WithConn(context.Background(), func(conn *db.Conn) error {
+		files, _ := tome.LoadFiles(conn, "q1")
+		if len(files) != 1 || files[0] != "/home/user/project/analysis.ipynb" {
+			t.Errorf("expected notebook path in files, got %v", files)
+		}
+		return nil
+	})
 }
 
 func TestFileTrack_DataDirPathExclusion(t *testing.T) {
 	t.Setenv("HOME", t.TempDir()) // ensure default datadir (.fellowship)
-	dir := t.TempDir()
-	tomePath := filepath.Join(dir, "quest-tome.json")
+	d := db.OpenTest(t)
+	seedQuest(t, d, "q1")
+
 	s := &state.State{Phase: "Implement"}
 
 	tests := []struct {
@@ -77,75 +96,55 @@ func TestFileTrack_DataDirPathExclusion(t *testing.T) {
 			input := &HookInput{
 				ToolInput: ToolInput{FilePath: tt.path},
 			}
-			modified := FileTrack(s, input, tomePath)
-			if modified {
-				t.Errorf("FileTrack should return false for data dir path %q", tt.path)
-			}
+			d.WithTx(context.Background(), func(conn *db.Conn) error {
+				modified := FileTrack(conn, s, input, "q1")
+				if modified {
+					t.Errorf("FileTrack should return false for data dir path %q", tt.path)
+				}
+				return nil
+			})
 		})
 	}
 }
 
 func TestFileTrack_EmptyFilePath(t *testing.T) {
-	dir := t.TempDir()
-	tomePath := filepath.Join(dir, "quest-tome.json")
+	d := db.OpenTest(t)
+	seedQuest(t, d, "q1")
+
 	s := &state.State{Phase: "Implement"}
 	input := &HookInput{
 		ToolInput: ToolInput{},
 	}
 
-	modified := FileTrack(s, input, tomePath)
-	if modified {
-		t.Error("FileTrack should return false when no file path present")
-	}
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		modified := FileTrack(conn, s, input, "q1")
+		if modified {
+			t.Error("FileTrack should return false when no file path present")
+		}
+		return nil
+	})
 }
 
 func TestFileTrack_Deduplication(t *testing.T) {
-	dir := t.TempDir()
-	tomePath := filepath.Join(dir, "quest-tome.json")
+	d := db.OpenTest(t)
+	seedQuest(t, d, "q1")
+
 	s := &state.State{Phase: "Implement"}
 	input := &HookInput{
 		ToolInput: ToolInput{FilePath: "/home/user/project/main.go"},
 	}
 
-	FileTrack(s, input, tomePath)
-	modified := FileTrack(s, input, tomePath)
-	if modified {
-		t.Error("FileTrack should return false on duplicate file")
-	}
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		FileTrack(conn, s, input, "q1")
+		modified := FileTrack(conn, s, input, "q1")
+		if modified {
+			t.Error("FileTrack should return false on duplicate file")
+		}
 
-	c, _ := tome.Load(tomePath)
-	if len(c.FilesTouched) != 1 {
-		t.Errorf("FilesTouched len = %d, want 1", len(c.FilesTouched))
-	}
-}
-
-func TestFileTrack_TomeCreationOnFirstWrite(t *testing.T) {
-	dir := t.TempDir()
-	tomePath := filepath.Join(dir, "quest-tome.json")
-	s := &state.State{Phase: "Implement"}
-	input := &HookInput{
-		ToolInput: ToolInput{FilePath: "/home/user/project/new.go"},
-	}
-
-	// Tome file should not exist yet
-	if _, err := os.Stat(tomePath); !os.IsNotExist(err) {
-		t.Fatal("Tome file should not exist before first FileTrack call")
-	}
-
-	modified := FileTrack(s, input, tomePath)
-	if !modified {
-		t.Error("FileTrack should return true and create tome on first file write")
-	}
-
-	// Tome file should now exist
-	c, err := tome.Load(tomePath)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if c.Version != 1 {
-		t.Errorf("Version = %d, want 1", c.Version)
-	}
-	if c.Status != "active" {
-		t.Errorf("Status = %q, want active", c.Status)
-	}
+		files, _ := tome.LoadFiles(conn, "q1")
+		if len(files) != 1 {
+			t.Errorf("files len = %d, want 1", len(files))
+		}
+		return nil
+	})
 }
