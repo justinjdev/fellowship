@@ -1,15 +1,15 @@
 package herald
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/justinjdev/fellowship/cli/internal/datadir"
+	"zombiezen.com/go/sqlite"
+	"zombiezen.com/go/sqlite/sqlitex"
+
+	"github.com/justinjdev/fellowship/cli/internal/db"
 )
 
 // Severity represents the severity level of a detected problem.
@@ -28,40 +28,42 @@ type Problem struct {
 	Message  string   `json:"message"`
 }
 
-type questState struct {
-	QuestName  string  `json:"quest_name"`
-	Phase      string  `json:"phase"`
-	GatePending bool   `json:"gate_pending"`
-	GateID     *string `json:"gate_id"`
-}
-
-// DetectProblems scans worktrees for potential issues.
-func DetectProblems(dirs []string) []Problem {
+// DetectProblems scans the database for potential quest issues.
+func DetectProblems(conn *db.Conn) []Problem {
 	var problems []Problem
 
-	for _, dir := range dirs {
-		statePath := filepath.Join(dir, datadir.Name(), "quest-state.json")
-		data, err := os.ReadFile(statePath)
-		if err != nil {
-			continue
-		}
-		var qs questState
-		if err := json.Unmarshal(data, &qs); err != nil {
-			continue
-		}
+	// Query all active quests (not Complete).
+	type questInfo struct {
+		questName   string
+		phase       string
+		gatePending bool
+		gateID      string
+	}
 
-		questName := qs.QuestName
-		if questName == "" {
-			questName = filepath.Base(dir)
-		}
+	var quests []questInfo
+	_ = sqlitex.Execute(conn,
+		`SELECT quest_name, phase, gate_pending, gate_id FROM quest_state WHERE phase != 'Complete'`,
+		&sqlitex.ExecOptions{
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				quests = append(quests, questInfo{
+					questName:   stmt.ColumnText(0),
+					phase:       stmt.ColumnText(1),
+					gatePending: stmt.ColumnInt(2) != 0,
+					gateID:      stmt.ColumnText(3),
+				})
+				return nil
+			},
+		},
+	)
 
+	for _, qs := range quests {
 		// Stalled detection: gate pending for too long
-		if qs.GatePending && qs.GateID != nil {
-			if ts := extractTimestamp(*qs.GateID); ts > 0 {
+		if qs.gatePending && qs.gateID != "" {
+			if ts := extractTimestamp(qs.gateID); ts > 0 {
 				age := time.Since(time.Unix(ts, 0))
 				if age > 10*time.Minute {
 					problems = append(problems, Problem{
-						Quest:    questName,
+						Quest:    qs.questName,
 						Type:     "stalled",
 						Severity: Warning,
 						Message:  fmt.Sprintf("Gate pending for %s", formatDuration(age)),
@@ -70,43 +72,52 @@ func DetectProblems(dirs []string) []Problem {
 			}
 		}
 
-		// Zombie detection: quest not Complete, no recent activity
-		if qs.Phase != "Complete" {
-			tidings, err := Read(dir, 0)
-			if err == nil && len(tidings) > 0 {
-				last := tidings[len(tidings)-1]
-				lastTime, err := time.Parse(time.RFC3339, last.Timestamp)
-				if err == nil {
-					age := time.Since(lastTime)
-					if age > 15*time.Minute {
-						problems = append(problems, Problem{
-							Quest:    questName,
-							Type:     "zombie",
-							Severity: Critical,
-							Message:  fmt.Sprintf("No activity for %s", formatDuration(age)),
-						})
-					}
+		// Zombie detection: no recent activity
+		var lastTimestamp string
+		_ = sqlitex.Execute(conn,
+			`SELECT timestamp FROM herald WHERE quest = ? ORDER BY id DESC LIMIT 1`,
+			&sqlitex.ExecOptions{
+				Args: []any{qs.questName},
+				ResultFunc: func(stmt *sqlite.Stmt) error {
+					lastTimestamp = stmt.ColumnText(0)
+					return nil
+				},
+			},
+		)
+		if lastTimestamp != "" {
+			lastTime, err := time.Parse(time.RFC3339, lastTimestamp)
+			if err == nil {
+				age := time.Since(lastTime)
+				if age > 15*time.Minute {
+					problems = append(problems, Problem{
+						Quest:    qs.questName,
+						Type:     "zombie",
+						Severity: Critical,
+						Message:  fmt.Sprintf("No activity for %s", formatDuration(age)),
+					})
 				}
 			}
 		}
 
 		// Struggling detection: multiple rejections in same phase
-		tidings, err := Read(dir, 0)
-		if err == nil {
-			rejections := 0
-			for _, t := range tidings {
-				if t.Type == GateRejected && t.Phase == qs.Phase {
-					rejections++
-				}
-			}
-			if rejections >= 2 {
-				problems = append(problems, Problem{
-					Quest:    questName,
-					Type:     "struggling",
-					Severity: Warning,
-					Message:  fmt.Sprintf("Gate rejected %d times in %s phase", rejections, qs.Phase),
-				})
-			}
+		var rejections int
+		_ = sqlitex.Execute(conn,
+			`SELECT count(*) FROM herald WHERE quest = ? AND type = ? AND phase = ?`,
+			&sqlitex.ExecOptions{
+				Args: []any{qs.questName, string(GateRejected), qs.phase},
+				ResultFunc: func(stmt *sqlite.Stmt) error {
+					rejections = stmt.ColumnInt(0)
+					return nil
+				},
+			},
+		)
+		if rejections >= 2 {
+			problems = append(problems, Problem{
+				Quest:    qs.questName,
+				Type:     "struggling",
+				Severity: Warning,
+				Message:  fmt.Sprintf("Gate rejected %d times in %s phase", rejections, qs.phase),
+			})
 		}
 	}
 

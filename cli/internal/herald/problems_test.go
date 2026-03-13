@@ -1,194 +1,194 @@
 package herald
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
+
+	"zombiezen.com/go/sqlite/sqlitex"
+
+	"github.com/justinjdev/fellowship/cli/internal/db"
 )
 
-func writeQuestState(t *testing.T, dir string, phase string, gatePending bool, gateID *string) {
-	t.Helper()
-	t.Setenv("HOME", t.TempDir())
-	dataDir := filepath.Join(dir, ".fellowship")
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("creating data dir: %v", err)
+func insertQuestState(conn *db.Conn, questName, phase string, gatePending bool, gateID string) {
+	gp := 0
+	if gatePending {
+		gp = 1
 	}
-
-	state := map[string]interface{}{
-		"version":            1,
-		"quest_name":         filepath.Base(dir),
-		"phase":              phase,
-		"gate_pending":       gatePending,
-		"gate_id":            gateID,
-		"lembas_completed":   false,
-		"metadata_updated":   false,
-		"auto_approve_gates": []string{},
+	var gateIDArg any
+	if gateID != "" {
+		gateIDArg = gateID
 	}
-	data, _ := json.MarshalIndent(state, "", "  ")
-	if err := os.WriteFile(filepath.Join(dataDir, "quest-state.json"), data, 0644); err != nil {
-		t.Fatalf("writing quest-state.json: %v", err)
-	}
+	sqlitex.Execute(conn,
+		`INSERT INTO quest_state (quest_name, phase, gate_pending, gate_id, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`,
+		&sqlitex.ExecOptions{
+			Args: []any{questName, phase, gp, gateIDArg},
+		},
+	)
 }
 
 func TestStalledDetection(t *testing.T) {
-	dir := t.TempDir()
-	oldTimestamp := time.Now().Add(-15 * time.Minute).Unix()
-	gateID := fmt.Sprintf("gate-Plan-%d", oldTimestamp)
-	writeQuestState(t, dir, "Plan", true, &gateID)
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		oldTimestamp := time.Now().Add(-15 * time.Minute).Unix()
+		gateID := fmt.Sprintf("gate-Plan-%d", oldTimestamp)
+		insertQuestState(conn, "q1", "Plan", true, gateID)
 
-	problems := DetectProblems([]string{dir})
+		problems := DetectProblems(conn)
 
-	var found bool
-	for _, p := range problems {
-		if p.Type == "stalled" {
-			found = true
-			if p.Severity != Warning {
-				t.Errorf("stalled severity = %q, want %q", p.Severity, Warning)
+		var found bool
+		for _, p := range problems {
+			if p.Type == "stalled" {
+				found = true
+				if p.Severity != Warning {
+					t.Errorf("stalled severity = %q, want %q", p.Severity, Warning)
+				}
 			}
 		}
-	}
-	if !found {
-		t.Errorf("expected stalled problem, got %v", problems)
-	}
+		if !found {
+			t.Errorf("expected stalled problem, got %v", problems)
+		}
+		return nil
+	})
 }
 
 func TestStalledNotDetectedWhenRecent(t *testing.T) {
-	dir := t.TempDir()
-	recentTimestamp := time.Now().Add(-2 * time.Minute).Unix()
-	gateID := fmt.Sprintf("gate-Plan-%d", recentTimestamp)
-	writeQuestState(t, dir, "Plan", true, &gateID)
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		recentTimestamp := time.Now().Add(-2 * time.Minute).Unix()
+		gateID := fmt.Sprintf("gate-Plan-%d", recentTimestamp)
+		insertQuestState(conn, "q1", "Plan", true, gateID)
 
-	problems := DetectProblems([]string{dir})
+		problems := DetectProblems(conn)
 
-	for _, p := range problems {
-		if p.Type == "stalled" {
-			t.Errorf("unexpected stalled problem: %v", p)
+		for _, p := range problems {
+			if p.Type == "stalled" {
+				t.Errorf("unexpected stalled problem: %v", p)
+			}
 		}
-	}
+		return nil
+	})
 }
 
 func TestZombieDetection(t *testing.T) {
-	dir := t.TempDir()
-	writeQuestState(t, dir, "Implement", false, nil)
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		insertQuestState(conn, "q1", "Implement", false, "")
 
-	// Write an old tiding
-	oldTime := time.Now().Add(-20 * time.Minute).UTC().Format(time.RFC3339)
-	Announce(dir, Tiding{
-		Timestamp: oldTime,
-		Quest:     "test-quest",
-		Type:      MetadataUpdated,
-	})
+		oldTime := time.Now().Add(-20 * time.Minute).UTC().Format(time.RFC3339)
+		Announce(conn, Tiding{
+			Timestamp: oldTime,
+			Quest:     "q1",
+			Type:      MetadataUpdated,
+		})
 
-	problems := DetectProblems([]string{dir})
+		problems := DetectProblems(conn)
 
-	var found bool
-	for _, p := range problems {
-		if p.Type == "zombie" {
-			found = true
-			if p.Severity != Critical {
-				t.Errorf("zombie severity = %q, want %q", p.Severity, Critical)
+		var found bool
+		for _, p := range problems {
+			if p.Type == "zombie" {
+				found = true
+				if p.Severity != Critical {
+					t.Errorf("zombie severity = %q, want %q", p.Severity, Critical)
+				}
 			}
 		}
-	}
-	if !found {
-		t.Errorf("expected zombie problem, got %v", problems)
-	}
+		if !found {
+			t.Errorf("expected zombie problem, got %v", problems)
+		}
+		return nil
+	})
 }
 
 func TestZombieNotDetectedWhenComplete(t *testing.T) {
-	dir := t.TempDir()
-	writeQuestState(t, dir, "Complete", false, nil)
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		insertQuestState(conn, "q1", "Complete", false, "")
 
-	oldTime := time.Now().Add(-20 * time.Minute).UTC().Format(time.RFC3339)
-	Announce(dir, Tiding{
-		Timestamp: oldTime,
-		Quest:     "test-quest",
-		Type:      MetadataUpdated,
-	})
+		oldTime := time.Now().Add(-20 * time.Minute).UTC().Format(time.RFC3339)
+		Announce(conn, Tiding{
+			Timestamp: oldTime,
+			Quest:     "q1",
+			Type:      MetadataUpdated,
+		})
 
-	problems := DetectProblems([]string{dir})
+		problems := DetectProblems(conn)
 
-	for _, p := range problems {
-		if p.Type == "zombie" {
-			t.Errorf("unexpected zombie problem for Complete quest: %v", p)
+		for _, p := range problems {
+			if p.Type == "zombie" {
+				t.Errorf("unexpected zombie problem for Complete quest: %v", p)
+			}
 		}
-	}
+		return nil
+	})
 }
 
 func TestStrugglingDetection(t *testing.T) {
-	dir := t.TempDir()
-	writeQuestState(t, dir, "Plan", false, nil)
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		insertQuestState(conn, "q1", "Plan", false, "")
 
-	now := time.Now().UTC().Format(time.RFC3339)
-	// Two rejections for the same phase
-	Announce(dir, Tiding{
-		Timestamp: now,
-		Quest:     "test-quest",
-		Type:      GateRejected,
-		Phase:     "Plan",
-	})
-	Announce(dir, Tiding{
-		Timestamp: now,
-		Quest:     "test-quest",
-		Type:      GateRejected,
-		Phase:     "Plan",
-	})
+		now := time.Now().UTC().Format(time.RFC3339)
+		Announce(conn, Tiding{Timestamp: now, Quest: "q1", Type: GateRejected, Phase: "Plan"})
+		Announce(conn, Tiding{Timestamp: now, Quest: "q1", Type: GateRejected, Phase: "Plan"})
 
-	problems := DetectProblems([]string{dir})
+		problems := DetectProblems(conn)
 
-	var found bool
-	for _, p := range problems {
-		if p.Type == "struggling" {
-			found = true
-			if p.Severity != Warning {
-				t.Errorf("struggling severity = %q, want %q", p.Severity, Warning)
+		var found bool
+		for _, p := range problems {
+			if p.Type == "struggling" {
+				found = true
+				if p.Severity != Warning {
+					t.Errorf("struggling severity = %q, want %q", p.Severity, Warning)
+				}
 			}
 		}
-	}
-	if !found {
-		t.Errorf("expected struggling problem, got %v", problems)
-	}
+		if !found {
+			t.Errorf("expected struggling problem, got %v", problems)
+		}
+		return nil
+	})
 }
 
 func TestStrugglingNotDetectedWithOneRejection(t *testing.T) {
-	dir := t.TempDir()
-	writeQuestState(t, dir, "Plan", false, nil)
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		insertQuestState(conn, "q1", "Plan", false, "")
 
-	now := time.Now().UTC().Format(time.RFC3339)
-	Announce(dir, Tiding{
-		Timestamp: now,
-		Quest:     "test-quest",
-		Type:      GateRejected,
-		Phase:     "Plan",
-	})
+		now := time.Now().UTC().Format(time.RFC3339)
+		Announce(conn, Tiding{Timestamp: now, Quest: "q1", Type: GateRejected, Phase: "Plan"})
 
-	problems := DetectProblems([]string{dir})
+		problems := DetectProblems(conn)
 
-	for _, p := range problems {
-		if p.Type == "struggling" {
-			t.Errorf("unexpected struggling problem with only 1 rejection: %v", p)
+		for _, p := range problems {
+			if p.Type == "struggling" {
+				t.Errorf("unexpected struggling problem with only 1 rejection: %v", p)
+			}
 		}
-	}
+		return nil
+	})
 }
 
 func TestNoProblemsForHealthyQuest(t *testing.T) {
-	dir := t.TempDir()
-	writeQuestState(t, dir, "Implement", false, nil)
+	d := db.OpenTest(t)
+	d.WithTx(context.Background(), func(conn *db.Conn) error {
+		insertQuestState(conn, "q1", "Implement", false, "")
 
-	now := time.Now().UTC().Format(time.RFC3339)
-	Announce(dir, Tiding{
-		Timestamp: now,
-		Quest:     "test-quest",
-		Type:      GateApproved,
-		Phase:     "Plan",
+		now := time.Now().UTC().Format(time.RFC3339)
+		Announce(conn, Tiding{
+			Timestamp: now,
+			Quest:     "q1",
+			Type:      GateApproved,
+			Phase:     "Plan",
+		})
+
+		problems := DetectProblems(conn)
+
+		if len(problems) != 0 {
+			t.Errorf("expected no problems, got %v", problems)
+		}
+		return nil
 	})
-
-	problems := DetectProblems([]string{dir})
-
-	if len(problems) != 0 {
-		t.Errorf("expected no problems, got %v", problems)
-	}
 }
