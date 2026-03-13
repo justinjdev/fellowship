@@ -63,7 +63,23 @@ Phase 5: Complete ───→ finishing-a-development-branch
 When running as a fellowship teammate (indicated by the spawn prompt), the gate prerequisite order at the end of each phase is:
 1. Run `/lembas` to compress context (hooks verify this)
 2. Update task metadata: `TaskUpdate(taskId: "<your_task_id>", metadata: {"phase": "<current_phase>"})` (hooks verify this)
-3. Send `[GATE]` message to the lead via SendMessage
+3. Send `[GATE]` message to the lead via SendMessage using this template:
+
+```
+[GATE] <phase> complete
+
+## Summary
+<2-3 sentences: what was done this phase, key decisions made>
+
+## Artifacts
+- <file:lines> — <what/why>
+
+## Risks
+<any concerns for the next phase, or "None">
+
+## Next Phase Needs
+<what the next phase should focus on>
+```
 
 Both steps 1 and 2 must complete before step 3 — the hooks will block gate submission otherwise. Valid phase names: Onboard, Research, Plan, Implement, Adversarial, Review, Complete.
 

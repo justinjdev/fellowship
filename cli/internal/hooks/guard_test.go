@@ -190,3 +190,117 @@ func TestGateGuard_HeldBlocksFellowshipEscapeCommands(t *testing.T) {
 		t.Error("held state should block even fellowship escape commands")
 	}
 }
+
+func TestWorktreeGuard_BlocksBareCD(t *testing.T) {
+	for _, cmd := range []string{
+		"cd .claude/worktrees/quest-1",
+		"cd /home/user/repo/.claude/worktrees/quest-1",
+		"cd .claude/worktrees/quest-1/src",
+	} {
+		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
+		result := WorktreeGuard(input)
+		if !result.Block {
+			t.Errorf("should block bare cd into worktree, cmd=%q", cmd)
+		}
+	}
+}
+
+func TestWorktreeGuard_BlocksPushd(t *testing.T) {
+	input := &HookInput{ToolInput: ToolInput{Command: "pushd .claude/worktrees/quest-1"}}
+	result := WorktreeGuard(input)
+	if !result.Block {
+		t.Error("should block pushd into worktree")
+	}
+}
+
+func TestWorktreeGuard_AllowsScopedCD(t *testing.T) {
+	for _, cmd := range []string{
+		"cd .claude/worktrees/quest-1 && git log",
+		"cd .claude/worktrees/quest-1 && go test ./...",
+		"cd .claude/worktrees/quest-1 || echo fail",
+	} {
+		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
+		result := WorktreeGuard(input)
+		if result.Block {
+			t.Errorf("should allow scoped cd, cmd=%q", cmd)
+		}
+	}
+}
+
+func TestWorktreeGuard_AllowsNonWorktreeCD(t *testing.T) {
+	for _, cmd := range []string{
+		"cd /tmp",
+		"cd src/auth",
+		"cd ..",
+	} {
+		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
+		result := WorktreeGuard(input)
+		if result.Block {
+			t.Errorf("should allow cd to non-worktree path, cmd=%q", cmd)
+		}
+	}
+}
+
+func TestWorktreeGuard_AllowsNonCDCommands(t *testing.T) {
+	for _, cmd := range []string{
+		"cat .claude/worktrees/quest-1/src/main.go",
+		"ls .claude/worktrees/quest-1",
+		"grep -r foo .claude/worktrees/quest-1",
+	} {
+		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
+		result := WorktreeGuard(input)
+		if result.Block {
+			t.Errorf("should allow non-cd commands referencing worktrees, cmd=%q", cmd)
+		}
+	}
+}
+
+func TestWorktreeGuard_BlocksWorktreeRoot(t *testing.T) {
+	for _, cmd := range []string{
+		"cd .claude/worktrees",
+		"cd /home/user/repo/.claude/worktrees",
+		"pushd .claude/worktrees",
+	} {
+		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
+		result := WorktreeGuard(input)
+		if !result.Block {
+			t.Errorf("should block cd into worktree root, cmd=%q", cmd)
+		}
+	}
+}
+
+func TestWorktreeGuard_BlocksQuotedTarget(t *testing.T) {
+	for _, cmd := range []string{
+		`cd ".claude/worktrees/quest-1"`,
+		`cd '.claude/worktrees/quest-1'`,
+	} {
+		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
+		result := WorktreeGuard(input)
+		if !result.Block {
+			t.Errorf("should block quoted cd into worktree, cmd=%q", cmd)
+		}
+	}
+}
+
+func TestWorktreeGuard_BlocksTrailingSemicolon(t *testing.T) {
+	input := &HookInput{ToolInput: ToolInput{Command: "cd .claude/worktrees/quest-1;"}}
+	result := WorktreeGuard(input)
+	if !result.Block {
+		t.Errorf("should block cd with trailing semicolon")
+	}
+}
+
+func TestWorktreeGuard_AllowsEmptyCommand(t *testing.T) {
+	input := &HookInput{ToolInput: ToolInput{Command: ""}}
+	result := WorktreeGuard(input)
+	if result.Block {
+		t.Error("should allow empty command")
+	}
+}
+
+func TestWorktreeGuard_AllowsNilInput(t *testing.T) {
+	result := WorktreeGuard(nil)
+	if result.Block {
+		t.Error("should allow nil input")
+	}
+}
