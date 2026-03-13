@@ -1,25 +1,22 @@
 package autopsy
 
 import (
-	"crypto/rand"
-	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/justinjdev/fellowship/cli/internal/datadir"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
-	"github.com/justinjdev/fellowship/cli/internal/tome"
+	"zombiezen.com/go/sqlite"
+	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-const autopsyDir = "autopsies"
+// DefaultExpiryDays is the default autopsy TTL when not configured.
+const DefaultExpiryDays = 90
 
 // Autopsy represents a structured failure record.
 type Autopsy struct {
-	Version    int      `json:"version"`
+	ID         int64    `json:"id"`
 	Timestamp  string   `json:"ts"`
 	Quest      string   `json:"quest"`
 	Task       string   `json:"task"`
@@ -30,9 +27,10 @@ type Autopsy struct {
 	WhatFailed string   `json:"what_failed"`
 	Resolution string   `json:"resolution,omitempty"`
 	Tags       []string `json:"tags"`
+	ExpiresAt  string   `json:"expires_at"`
 }
 
-// CreateInput is the subset of fields the caller provides; version and timestamp are filled in.
+// CreateInput is the subset of fields the caller provides; timestamp and expiry are filled in.
 type CreateInput struct {
 	Quest      string   `json:"quest"`
 	Task       string   `json:"task"`
@@ -45,75 +43,6 @@ type CreateInput struct {
 	Tags       []string `json:"tags,omitempty"`
 }
 
-var validTriggers = map[string]bool{
-	"recovery":    true,
-	"rejection":   true,
-	"abandonment": true,
-}
-
-// Create validates input, fills in version/timestamp, and writes to the autopsies directory.
-func Create(repoRoot string, input *CreateInput) (string, error) {
-	if input == nil {
-		return "", fmt.Errorf("input is required")
-	}
-	if input.Quest == "" {
-		return "", fmt.Errorf("quest is required")
-	}
-	if input.WhatFailed == "" {
-		return "", fmt.Errorf("what_failed is required")
-	}
-	if !validTriggers[input.Trigger] {
-		return "", fmt.Errorf("invalid trigger %q (must be recovery, rejection, or abandonment)", input.Trigger)
-	}
-
-	now := time.Now().UTC()
-	a := &Autopsy{
-		Version:    1,
-		Timestamp:  now.Format(time.RFC3339),
-		Quest:      input.Quest,
-		Task:       input.Task,
-		Phase:      input.Phase,
-		Trigger:    input.Trigger,
-		Files:      input.Files,
-		Modules:    input.Modules,
-		WhatFailed: input.WhatFailed,
-		Resolution: input.Resolution,
-		Tags:       input.Tags,
-	}
-	if a.Files == nil {
-		a.Files = []string{}
-	}
-	if a.Modules == nil {
-		a.Modules = []string{}
-	}
-	if a.Tags == nil {
-		a.Tags = []string{}
-	}
-
-	dir := filepath.Join(repoRoot, datadir.Name(), autopsyDir)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", fmt.Errorf("creating autopsies directory: %w", err)
-	}
-
-	randBytes := make([]byte, 4)
-	if _, err := rand.Read(randBytes); err != nil {
-		return "", fmt.Errorf("generating autopsy filename suffix: %w", err)
-	}
-	filename := fmt.Sprintf("%s-%s-%x.json", now.Format("20060102T150405"), sanitize(input.Quest), randBytes)
-	path := filepath.Join(dir, filename)
-
-	data, err := json.MarshalIndent(a, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("marshaling autopsy: %w", err)
-	}
-	data = append(data, '\n')
-
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return "", fmt.Errorf("writing autopsy: %w", err)
-	}
-	return path, nil
-}
-
 // ScanOptions configures which autopsies to match.
 type ScanOptions struct {
 	Files   []string
@@ -121,130 +50,390 @@ type ScanOptions struct {
 	Tags    []string
 }
 
-// Scan reads all autopsies from the repo root, prunes expired ones, and returns matches.
-func Scan(repoRoot string, opts ScanOptions, expiryDays int) ([]Autopsy, error) {
+var validTriggers = map[string]bool{
+	"recovery":    true,
+	"rejection":   true,
+	"abandonment": true,
+}
+
+// Create validates input, inserts the autopsy and its related files/modules/tags into the DB,
+// and returns the row ID.
+func Create(conn *sqlite.Conn, input *CreateInput) (int64, error) {
+	if input == nil {
+		return 0, fmt.Errorf("input is required")
+	}
+	if input.Quest == "" {
+		return 0, fmt.Errorf("quest is required")
+	}
+	if input.WhatFailed == "" {
+		return 0, fmt.Errorf("what_failed is required")
+	}
+	if !validTriggers[input.Trigger] {
+		return 0, fmt.Errorf("invalid trigger %q (must be recovery, rejection, or abandonment)", input.Trigger)
+	}
+
+	now := time.Now().UTC()
+	timestamp := now.Format(time.RFC3339)
+	expiresAt := now.AddDate(0, 0, DefaultExpiryDays).Format(time.RFC3339)
+
+	err := sqlitex.Execute(conn,
+		`INSERT INTO autopsies (timestamp, quest, task, phase, trigger_type, what_failed, resolution, expires_at)
+		 VALUES (:ts, :quest, :task, :phase, :trigger, :what_failed, :resolution, :expires_at)`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{
+				":ts":          timestamp,
+				":quest":       input.Quest,
+				":task":        input.Task,
+				":phase":       input.Phase,
+				":trigger":     input.Trigger,
+				":what_failed": input.WhatFailed,
+				":resolution":  input.Resolution,
+				":expires_at":  expiresAt,
+			},
+		})
+	if err != nil {
+		return 0, fmt.Errorf("autopsy: insert: %w", err)
+	}
+
+	id := conn.LastInsertRowID()
+
+	for _, f := range input.Files {
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO autopsy_files (autopsy_id, file_path) VALUES (?, ?)`,
+			&sqlitex.ExecOptions{
+				Args: []any{id, f},
+			}); err != nil {
+			return 0, fmt.Errorf("autopsy: insert file: %w", err)
+		}
+	}
+
+	for _, m := range input.Modules {
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO autopsy_modules (autopsy_id, module) VALUES (?, ?)`,
+			&sqlitex.ExecOptions{
+				Args: []any{id, m},
+			}); err != nil {
+			return 0, fmt.Errorf("autopsy: insert module: %w", err)
+		}
+	}
+
+	for _, tag := range input.Tags {
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO autopsy_tags (autopsy_id, tag) VALUES (?, ?)`,
+			&sqlitex.ExecOptions{
+				Args: []any{id, tag},
+			}); err != nil {
+			return 0, fmt.Errorf("autopsy: insert tag: %w", err)
+		}
+	}
+
+	return id, nil
+}
+
+// Scan queries autopsies from the DB, filtering by files/modules/tags and excluding expired entries.
+func Scan(conn *sqlite.Conn, opts ScanOptions, expiryDays int) ([]Autopsy, error) {
 	if len(opts.Files) == 0 && len(opts.Modules) == 0 && len(opts.Tags) == 0 {
 		return nil, fmt.Errorf("at least one of --files, --modules, or --tags is required")
 	}
 
-	dir := filepath.Join(repoRoot, datadir.Name(), autopsyDir)
-	entries, err := os.ReadDir(dir)
+	// Build a query that joins across the junction tables.
+	// We select all non-expired autopsies that match any of the filter criteria.
+	var conditions []string
+	var args []any
+
+	if len(opts.Files) > 0 {
+		filePlaceholders := make([]string, len(opts.Files))
+		for i, f := range opts.Files {
+			filePlaceholders[i] = "?"
+			args = append(args, f)
+		}
+		// Match by exact file path or same directory
+		conditions = append(conditions,
+			fmt.Sprintf(`a.id IN (
+				SELECT af.autopsy_id FROM autopsy_files af
+				WHERE af.file_path IN (%s)
+				   OR EXISTS (
+				      SELECT 1 FROM autopsy_files af2
+				      WHERE af2.autopsy_id = af.autopsy_id
+				      AND af2.file_path != af.file_path
+				   )
+			)`, strings.Join(filePlaceholders, ",")))
+		// Actually, we need directory-level matching. Let's use a simpler approach:
+		// For each query file, match autopsies that have a file in the same directory.
+		conditions = conditions[:len(conditions)-1] // remove the above
+		args = args[:len(args)-len(opts.Files)]     // remove args
+
+		// Use a subquery that checks directory matching
+		var fileCondParts []string
+		for _, f := range opts.Files {
+			// Exact match
+			args = append(args, f)
+			fileCondParts = append(fileCondParts, "af.file_path = ?")
+
+			// Same directory match (for files with directories)
+			dir := filepath.Dir(filepath.ToSlash(f))
+			if dir != "." {
+				args = append(args, dir+"/%")
+				fileCondParts = append(fileCondParts, "af.file_path LIKE ?")
+			}
+
+			// Query file is under a directory prefix in the autopsy
+			if strings.HasSuffix(f, "/") {
+				args = append(args, f+"%")
+				fileCondParts = append(fileCondParts, "af.file_path LIKE ?")
+			}
+		}
+		conditions = append(conditions,
+			fmt.Sprintf("a.id IN (SELECT af.autopsy_id FROM autopsy_files af WHERE %s)",
+				strings.Join(fileCondParts, " OR ")))
+	}
+
+	if len(opts.Modules) > 0 {
+		placeholders := make([]string, len(opts.Modules))
+		for i, m := range opts.Modules {
+			placeholders[i] = "?"
+			args = append(args, m)
+		}
+		conditions = append(conditions,
+			fmt.Sprintf("a.id IN (SELECT am.autopsy_id FROM autopsy_modules am WHERE am.module IN (%s))",
+				strings.Join(placeholders, ",")))
+	}
+
+	if len(opts.Tags) > 0 {
+		placeholders := make([]string, len(opts.Tags))
+		for i, tag := range opts.Tags {
+			placeholders[i] = "?"
+			args = append(args, tag)
+		}
+		conditions = append(conditions,
+			fmt.Sprintf("a.id IN (SELECT at2.autopsy_id FROM autopsy_tags at2 WHERE at2.tag IN (%s))",
+				strings.Join(placeholders, ",")))
+	}
+
+	query := fmt.Sprintf(
+		`SELECT a.id, a.timestamp, a.quest, a.task, a.phase, a.trigger_type,
+		        a.what_failed, a.resolution, a.expires_at
+		 FROM autopsies a
+		 WHERE a.expires_at > datetime('now')
+		   AND (%s)
+		 ORDER BY a.timestamp DESC`,
+		strings.Join(conditions, " OR "))
+
+	var autopsies []Autopsy
+	err := sqlitex.Execute(conn, query, &sqlitex.ExecOptions{
+		Args: args,
+		ResultFunc: func(stmt *sqlite.Stmt) error {
+			a := Autopsy{
+				ID:         stmt.ColumnInt64(0),
+				Timestamp:  stmt.ColumnText(1),
+				Quest:      stmt.ColumnText(2),
+				Task:       stmt.ColumnText(3),
+				Phase:      stmt.ColumnText(4),
+				Trigger:    stmt.ColumnText(5),
+				WhatFailed: stmt.ColumnText(6),
+				Resolution: stmt.ColumnText(7),
+				ExpiresAt:  stmt.ColumnText(8),
+			}
+			autopsies = append(autopsies, a)
+			return nil
+		},
+	})
 	if err != nil {
-		if os.IsNotExist(err) {
-			return []Autopsy{}, nil
-		}
-		return nil, fmt.Errorf("reading autopsies directory: %w", err)
+		return nil, fmt.Errorf("autopsy: scan: %w", err)
 	}
 
-	cutoff := time.Now().UTC().AddDate(0, 0, -expiryDays)
-	var matches []Autopsy
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-
-		path := filepath.Join(dir, entry.Name())
-		a, err := loadAutopsy(path)
-		if err != nil {
-			return nil, fmt.Errorf("reading autopsy %s: %w", entry.Name(), err)
-		}
-
-		ts, err := time.Parse(time.RFC3339, a.Timestamp)
-		if err != nil {
-			return nil, fmt.Errorf("parsing autopsy timestamp for %s: %w", entry.Name(), err)
-		}
-		if ts.Before(cutoff) {
-			os.Remove(path) // best-effort cleanup; don't abort scan on failure
-			continue
-		}
-
-		if matchesFilters(a, opts) {
-			matches = append(matches, *a)
+	// Load files, modules, and tags for each autopsy
+	for i := range autopsies {
+		if err := loadAutopsyRelations(conn, &autopsies[i]); err != nil {
+			return nil, err
 		}
 	}
 
-	if matches == nil {
-		matches = []Autopsy{}
+	if autopsies == nil {
+		autopsies = []Autopsy{}
 	}
-	return matches, nil
+	return autopsies, nil
 }
 
-// Infer reconstructs a best-effort autopsy from a quest worktree's external signals.
-func Infer(worktreeDir, repoRoot string) (string, error) {
-	tomePath := filepath.Join(worktreeDir, datadir.Name(), "quest-tome.json")
-	t, err := tome.Load(tomePath)
-	if err != nil {
-		return "", fmt.Errorf("loading tome: %w", err)
+// loadAutopsyRelations populates Files, Modules, and Tags for an autopsy.
+func loadAutopsyRelations(conn *sqlite.Conn, a *Autopsy) error {
+	// Files
+	a.Files = []string{}
+	if err := sqlitex.Execute(conn,
+		`SELECT file_path FROM autopsy_files WHERE autopsy_id = ? ORDER BY file_path`,
+		&sqlitex.ExecOptions{
+			Args: []any{a.ID},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				a.Files = append(a.Files, stmt.ColumnText(0))
+				return nil
+			},
+		}); err != nil {
+		return fmt.Errorf("autopsy: load files: %w", err)
 	}
 
-	// Determine trigger from signals
-	trigger, whatFailed, err := inferTrigger(worktreeDir, t)
+	// Modules
+	a.Modules = []string{}
+	if err := sqlitex.Execute(conn,
+		`SELECT module FROM autopsy_modules WHERE autopsy_id = ? ORDER BY module`,
+		&sqlitex.ExecOptions{
+			Args: []any{a.ID},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				a.Modules = append(a.Modules, stmt.ColumnText(0))
+				return nil
+			},
+		}); err != nil {
+		return fmt.Errorf("autopsy: load modules: %w", err)
+	}
+
+	// Tags
+	a.Tags = []string{}
+	if err := sqlitex.Execute(conn,
+		`SELECT tag FROM autopsy_tags WHERE autopsy_id = ? ORDER BY tag`,
+		&sqlitex.ExecOptions{
+			Args: []any{a.ID},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				a.Tags = append(a.Tags, stmt.ColumnText(0))
+				return nil
+			},
+		}); err != nil {
+		return fmt.Errorf("autopsy: load tags: %w", err)
+	}
+
+	return nil
+}
+
+// Infer reconstructs a best-effort autopsy from quest DB state.
+// It queries fellowship_quests for respawns/status, quest_gates for rejections,
+// quest_phases for phase history, and quest_files for files touched.
+func Infer(conn *sqlite.Conn, questName string) (int64, error) {
+	// Load quest info from fellowship_quests
+	var status string
+	var respawns int
+	var taskDesc string
+	found := false
+	err := sqlitex.Execute(conn,
+		`SELECT status, respawns, COALESCE(task_description, '') FROM fellowship_quests WHERE name = :name`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":name": questName},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				status = stmt.ColumnText(0)
+				respawns = stmt.ColumnInt(1)
+				taskDesc = stmt.ColumnText(2)
+				found = true
+				return nil
+			},
+		})
 	if err != nil {
-		return "", err
+		return 0, fmt.Errorf("autopsy: query quest: %w", err)
+	}
+	if !found {
+		return 0, fmt.Errorf("quest %q not found", questName)
+	}
+
+	// Determine trigger
+	trigger, whatFailed, err := inferTriggerFromDB(conn, questName, status, respawns)
+	if err != nil {
+		return 0, err
 	}
 	if trigger == "" {
-		return "", fmt.Errorf("no failure signals found in worktree")
+		return 0, fmt.Errorf("no failure signals found for quest %q", questName)
 	}
 
-	// Derive modules from files_touched
-	modules := inferModules(t.FilesTouched)
+	// Get phase from quest_phases (last completed phase)
+	phase := "unknown"
+	err = sqlitex.Execute(conn,
+		`SELECT phase FROM quest_phases WHERE quest_name = :name ORDER BY completed_at DESC LIMIT 1`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":name": questName},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				phase = stmt.ColumnText(0)
+				return nil
+			},
+		})
+	if err != nil {
+		return 0, fmt.Errorf("autopsy: query phases: %w", err)
+	}
+
+	// Get files touched from quest_files
+	var files []string
+	err = sqlitex.Execute(conn,
+		`SELECT file_path FROM quest_files WHERE quest_name = :name ORDER BY file_path`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":name": questName},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				files = append(files, stmt.ColumnText(0))
+				return nil
+			},
+		})
+	if err != nil {
+		return 0, fmt.Errorf("autopsy: query files: %w", err)
+	}
+	if files == nil {
+		files = []string{}
+	}
+
+	modules := inferModules(files)
 
 	input := &CreateInput{
-		Quest:      t.QuestName,
-		Task:       t.Task,
-		Phase:      inferPhase(t),
+		Quest:      questName,
+		Task:       taskDesc,
+		Phase:      phase,
 		Trigger:    trigger,
-		Files:      t.FilesTouched,
+		Files:      files,
 		Modules:    modules,
 		WhatFailed: whatFailed,
 	}
 
-	return Create(repoRoot, input)
+	return Create(conn, input)
 }
 
-func inferTrigger(worktreeDir string, t *tome.QuestTome) (string, string, error) {
+// inferTriggerFromDB determines the failure trigger by querying DB tables.
+func inferTriggerFromDB(conn *sqlite.Conn, questName, status string, respawns int) (string, string, error) {
 	// Check for respawns
-	if t.Respawns > 0 {
-		return "recovery", fmt.Sprintf("Quest required %d respawn(s)", t.Respawns), nil
+	if respawns > 0 {
+		return "recovery", fmt.Sprintf("Quest required %d respawn(s)", respawns), nil
 	}
 
-	// Check for gate rejections in herald
-	tidings, err := herald.Read(worktreeDir, 0)
-	if err != nil && !os.IsNotExist(err) {
-		return "", "", fmt.Errorf("reading herald: %w", err)
+	// Check for gate rejections in quest_gates
+	var rejectionReason string
+	var rejectionPhase string
+	err := sqlitex.Execute(conn,
+		`SELECT phase, COALESCE(reason, '') FROM quest_gates
+		 WHERE quest_name = :name AND action = 'rejected'
+		 ORDER BY timestamp DESC LIMIT 1`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":name": questName},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				rejectionPhase = stmt.ColumnText(0)
+				rejectionReason = stmt.ColumnText(1)
+				return nil
+			},
+		})
+	if err != nil {
+		return "", "", fmt.Errorf("autopsy: query gates: %w", err)
 	}
-	for i := len(tidings) - 1; i >= 0; i-- {
-		if tidings[i].Type == herald.GateRejected {
-			detail := tidings[i].Detail
-			if detail == "" {
-				detail = fmt.Sprintf("Gate rejected at %s phase", tidings[i].Phase)
-			}
-			return "rejection", detail, nil
+	if rejectionPhase != "" {
+		detail := rejectionReason
+		if detail == "" {
+			detail = fmt.Sprintf("Gate rejected at %s phase", rejectionPhase)
 		}
+		return "rejection", detail, nil
 	}
 
-	// Check for failed/cancelled status in tome
-	if t.Status == "failed" || t.Status == "cancelled" {
-		return "abandonment", fmt.Sprintf("Quest %s with status: %s", t.QuestName, t.Status), nil
+	// Check for failed/cancelled status
+	if status == "failed" || status == "cancelled" {
+		return "abandonment", fmt.Sprintf("Quest %s with status: %s", questName, status), nil
 	}
 
 	return "", "", nil
 }
 
-func inferPhase(t *tome.QuestTome) string {
-	if len(t.PhasesCompleted) > 0 {
-		return t.PhasesCompleted[len(t.PhasesCompleted)-1].Phase
-	}
-	return "unknown"
-}
-
+// inferModules derives module names from file paths using the first directory component.
 func inferModules(files []string) []string {
 	seen := map[string]bool{}
 	for _, f := range files {
 		parts := strings.Split(filepath.ToSlash(f), "/")
 		if len(parts) >= 2 {
-			// Use the first directory component as the module
 			mod := parts[0]
 			if !seen[mod] {
 				seen[mod] = true
@@ -258,73 +447,3 @@ func inferModules(files []string) []string {
 	sort.Strings(modules)
 	return modules
 }
-
-func matchesFilters(a *Autopsy, opts ScanOptions) bool {
-	// File match: exact match, directory containment, or same directory
-	for _, queryFile := range opts.Files {
-		for _, autopsyFile := range a.Files {
-			// Exact match
-			if queryFile == autopsyFile {
-				return true
-			}
-			// Directory containment (query is a dir prefix of autopsy file or vice versa)
-			if strings.HasSuffix(queryFile, "/") && strings.HasPrefix(autopsyFile, queryFile) {
-				return true
-			}
-			if strings.HasSuffix(autopsyFile, "/") && strings.HasPrefix(queryFile, autopsyFile) {
-				return true
-			}
-			// Same directory (skip root-level files)
-			queryDir := filepath.Dir(queryFile)
-			aDir := filepath.Dir(autopsyFile)
-			if queryDir != "." && aDir != "." && queryDir == aDir {
-				return true
-			}
-		}
-	}
-
-	// Module match
-	for _, queryMod := range opts.Modules {
-		for _, autopsyMod := range a.Modules {
-			if queryMod == autopsyMod {
-				return true
-			}
-		}
-	}
-
-	// Tag match
-	for _, queryTag := range opts.Tags {
-		for _, autopsyTag := range a.Tags {
-			if queryTag == autopsyTag {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func loadAutopsy(path string) (*Autopsy, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var a Autopsy
-	if err := json.Unmarshal(data, &a); err != nil {
-		return nil, err
-	}
-	return &a, nil
-}
-
-func sanitize(s string) string {
-	for _, c := range []string{" ", "/", "\\", ":", "*", "?", "\"", "<", ">", "|"} {
-		s = strings.ReplaceAll(s, c, "-")
-	}
-	if len(s) > 40 {
-		s = s[:40]
-	}
-	return s
-}
-
-// DefaultExpiryDays is the default autopsy TTL when not configured.
-const DefaultExpiryDays = 90
