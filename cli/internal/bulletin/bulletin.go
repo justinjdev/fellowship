@@ -1,17 +1,14 @@
 package bulletin
 
 import (
-	"bufio"
-	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/justinjdev/fellowship/cli/internal/datadir"
-	"github.com/justinjdev/fellowship/cli/internal/filelock"
+	"zombiezen.com/go/sqlite"
+	"zombiezen.com/go/sqlite/sqlitex"
+
+	"github.com/justinjdev/fellowship/cli/internal/db"
 )
 
 // Entry represents a single bulletin board discovery.
@@ -23,86 +20,107 @@ type Entry struct {
 	Discovery string   `json:"discovery"`
 }
 
-// Post appends an entry to the bulletin JSONL file with exclusive file locking.
-func Post(path string, entry Entry) error {
+// Post inserts an entry into the bulletin table and its files into bulletin_files.
+func Post(conn *db.Conn, entry Entry) error {
 	if entry.Timestamp == "" {
 		entry.Timestamp = time.Now().UTC().Format(time.RFC3339)
 	}
 
-	line, err := json.Marshal(entry)
-	if err != nil {
-		return fmt.Errorf("marshaling entry: %w", err)
+	if err := sqlitex.Execute(conn,
+		`INSERT INTO bulletin (timestamp, quest, topic, discovery) VALUES (?, ?, ?, ?)`,
+		&sqlitex.ExecOptions{
+			Args: []any{entry.Timestamp, entry.Quest, entry.Topic, entry.Discovery},
+		},
+	); err != nil {
+		return fmt.Errorf("bulletin: post: %w", err)
 	}
-	line = append(line, '\n')
 
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
+	id := conn.LastInsertRowID()
 
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		return fmt.Errorf("opening bulletin file: %w", err)
-	}
-	defer f.Close()
-
-	if err := filelock.Lock(f.Fd()); err != nil {
-		return fmt.Errorf("locking bulletin file: %w", err)
-	}
-	defer filelock.Unlock(f.Fd())
-
-	if _, err := f.Write(line); err != nil {
-		return fmt.Errorf("writing entry: %w", err)
+	for _, f := range entry.Files {
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO bulletin_files (bulletin_id, file_path) VALUES (?, ?)`,
+			&sqlitex.ExecOptions{
+				Args: []any{id, f},
+			},
+		); err != nil {
+			return fmt.Errorf("bulletin: post file %s: %w", f, err)
+		}
 	}
 	return nil
 }
 
-// Load reads all entries from the bulletin JSONL file under an exclusive lock
-// to avoid observing partially written lines from concurrent Post/Clear calls.
-func Load(path string) ([]Entry, error) {
-	f, err := os.Open(path)
+// Load reads all bulletin entries from the database, assembling the Files slice
+// from the bulletin_files join table.
+func Load(conn *db.Conn) ([]Entry, error) {
+	// First load all entries.
+	type row struct {
+		id        int64
+		entry     Entry
+	}
+	var rows []row
+
+	err := sqlitex.Execute(conn,
+		`SELECT id, timestamp, quest, topic, discovery FROM bulletin ORDER BY id ASC`,
+		&sqlitex.ExecOptions{
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				rows = append(rows, row{
+					id: stmt.ColumnInt64(0),
+					entry: Entry{
+						Timestamp: stmt.ColumnText(1),
+						Quest:     stmt.ColumnText(2),
+						Topic:     stmt.ColumnText(3),
+						Discovery: stmt.ColumnText(4),
+					},
+				})
+				return nil
+			},
+		},
+	)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("opening bulletin file: %w", err)
+		return nil, fmt.Errorf("bulletin: load: %w", err)
 	}
-	defer f.Close()
 
-	if err := filelock.Lock(f.Fd()); err != nil {
-		return nil, fmt.Errorf("locking bulletin file for read: %w", err)
+	if len(rows) == 0 {
+		return nil, nil
 	}
-	defer filelock.Unlock(f.Fd())
 
-	var entries []Entry
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024) // 1MB max line
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-		var e Entry
-		if err := json.Unmarshal([]byte(line), &e); err != nil {
-			continue // skip malformed lines
-		}
-		entries = append(entries, e)
+	// Build a map for file association.
+	idToIdx := make(map[int64]int, len(rows))
+	for i, r := range rows {
+		idToIdx[r.id] = i
 	}
-	if err := scanner.Err(); err != nil {
-		return entries, fmt.Errorf("reading bulletin file: %w", err)
+
+	// Load all files for these bulletin entries.
+	err = sqlitex.Execute(conn,
+		`SELECT bulletin_id, file_path FROM bulletin_files ORDER BY bulletin_id, file_path`,
+		&sqlitex.ExecOptions{
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				bid := stmt.ColumnInt64(0)
+				if idx, ok := idToIdx[bid]; ok {
+					rows[idx].entry.Files = append(rows[idx].entry.Files, stmt.ColumnText(1))
+				}
+				return nil
+			},
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("bulletin: load files: %w", err)
+	}
+
+	entries := make([]Entry, len(rows))
+	for i, r := range rows {
+		entries[i] = r.entry
 	}
 	return entries, nil
 }
 
-// Scan reads the bulletin and returns entries matching the given files or topics.
-// An entry matches if any of its files have a prefix in the files list, or if its
-// topic matches any of the given topics. Both filters are case-insensitive.
-// If both files and topics are empty, all entries are returned.
-//
-// File matching is bidirectional: filter "src/auth/" matches entry file
-// "src/auth/jwt.go", and filter "src/auth/jwt.go" also matches entry file
-// "src/auth/". This allows both directory-level and file-level filters.
-func Scan(path string, files []string, topics []string) ([]Entry, error) {
-	all, err := Load(path)
+// Scan reads all bulletin entries and returns those matching the given files or topics.
+// An entry matches if any of its files have a bidirectional path containment with the
+// files list, or if its topic matches any of the given topics. Both filters are
+// case-insensitive. If both files and topics are empty, all entries are returned.
+func Scan(conn *db.Conn, files []string, topics []string) ([]Entry, error) {
+	all, err := Load(conn)
 	if err != nil {
 		return nil, err
 	}
@@ -125,57 +143,15 @@ func Scan(path string, files []string, topics []string) ([]Entry, error) {
 	return result, nil
 }
 
-// Clear truncates the bulletin file in place under an exclusive lock,
-// ensuring concurrent Post calls are not lost to an unlinked inode.
-func Clear(path string) error {
-	f, err := os.OpenFile(path, os.O_RDWR, 0644)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("opening bulletin file: %w", err)
+// Clear deletes all bulletin entries and their associated files.
+func Clear(conn *db.Conn) error {
+	if err := sqlitex.Execute(conn, `DELETE FROM bulletin_files`, nil); err != nil {
+		return fmt.Errorf("bulletin: clear files: %w", err)
 	}
-	defer f.Close()
-
-	if err := filelock.Lock(f.Fd()); err != nil {
-		return fmt.Errorf("locking bulletin file: %w", err)
-	}
-	defer filelock.Unlock(f.Fd())
-
-	if err := f.Truncate(0); err != nil {
-		return fmt.Errorf("clearing bulletin: %w", err)
+	if err := sqlitex.Execute(conn, `DELETE FROM bulletin`, nil); err != nil {
+		return fmt.Errorf("bulletin: clear: %w", err)
 	}
 	return nil
-}
-
-// MainRepoRoot returns the main repository root, even when called from a worktree.
-// Uses git's --git-common-dir to find the shared .git directory.
-func MainRepoRoot(fromDir string) (string, error) {
-	return mainRepoRootFunc(fromDir)
-}
-
-var mainRepoRootFunc = func(fromDir string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--path-format=absolute", "--git-common-dir")
-	if fromDir != "" {
-		cmd.Dir = fromDir
-	}
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("finding main repo root: %w", err)
-	}
-	gitDir := strings.TrimSpace(string(out))
-	// --git-common-dir returns the .git directory; parent is the repo root
-	root := filepath.Dir(gitDir)
-	return root, nil
-}
-
-// BulletinPath returns the path to the bulletin JSONL file in the main repo.
-func BulletinPath(fromDir string) (string, error) {
-	root, err := MainRepoRoot(fromDir)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(root, datadir.Name(), "bulletin.jsonl"), nil
 }
 
 func matchesTopic(topic string, lowerTopics []string) bool {
