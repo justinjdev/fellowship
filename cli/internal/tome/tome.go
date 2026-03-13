@@ -157,7 +157,7 @@ func Load(conn *sqlite.Conn, questName string) (*QuestTome, error) {
 	// Load status/task/respawns from fellowship_quests.
 	var status, task string
 	var respawns int
-	_ = sqlitex.Execute(conn,
+	if err := sqlitex.Execute(conn,
 		`SELECT status, task_description, respawns FROM fellowship_quests WHERE name = :name`,
 		&sqlitex.ExecOptions{
 			Named: map[string]any{":name": questName},
@@ -167,7 +167,9 @@ func Load(conn *sqlite.Conn, questName string) (*QuestTome, error) {
 				respawns = stmt.ColumnInt(2)
 				return nil
 			},
-		})
+		}); err != nil {
+		return nil, fmt.Errorf("tome: load fellowship_quests: %w", err)
+	}
 	if status == "" {
 		status = "active"
 	}

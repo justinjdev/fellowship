@@ -71,12 +71,19 @@ func GateSubmit(s *state.State, input *HookInput) SubmitResult {
 
 // RecordGateSubmitted records a "submitted" gate event in the quest tome.
 // If autoApproved is true, the phase is also recorded as completed.
-func RecordGateSubmitted(conn *sqlite.Conn, questName, phase string, autoApproved bool) {
-	tome.RecordGate(conn, questName, phase, "submitted", "")
-	if autoApproved {
-		tome.RecordGate(conn, questName, phase, "approved", "")
-		tome.RecordPhase(conn, questName, phase, 0)
+func RecordGateSubmitted(conn *sqlite.Conn, questName, phase string, autoApproved bool) error {
+	if err := tome.RecordGate(conn, questName, phase, "submitted", ""); err != nil {
+		return err
 	}
+	if autoApproved {
+		if err := tome.RecordGate(conn, questName, phase, "approved", ""); err != nil {
+			return err
+		}
+		if err := tome.RecordPhase(conn, questName, phase, 0); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // HookSpecificOutput is the JSON structure Claude Code expects from

@@ -22,6 +22,6 @@ func CompletionGuard(s *state.State, input *HookInput) HookResult {
 }
 
 // MarkTomeCompleted marks the quest tome status as "completed".
-func MarkTomeCompleted(conn *sqlite.Conn, questName string) {
-	tome.SetStatus(conn, questName, "completed")
+func MarkTomeCompleted(conn *sqlite.Conn, questName string) error {
+	return tome.SetStatus(conn, questName, "completed")
 }

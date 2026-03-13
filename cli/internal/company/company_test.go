@@ -88,22 +88,34 @@ func TestCalculateProgress_MissingQuests(t *testing.T) {
 
 func TestBatchApprove_MultipleQuests(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		dashboard.InitFellowship(conn, "test", "/tmp", "main")
-		dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"})
-		dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q2", Worktree: "/tmp/wt2"})
-		dashboard.AddCompany(conn, "batch-test", []string{"q1", "q2"}, nil)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
+		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+			return err
+		}
+		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q2", Worktree: "/tmp/wt2"}); err != nil {
+			return err
+		}
+		if err := dashboard.AddCompany(conn, "batch-test", []string{"q1", "q2"}, nil); err != nil {
+			return err
+		}
 
-		state.Upsert(conn, &state.State{
+		if err := state.Upsert(conn, &state.State{
 			QuestName:   "q1",
 			Phase:       "Research",
 			GatePending: true,
-		})
-		state.Upsert(conn, &state.State{
+		}); err != nil {
+			return err
+		}
+		if err := state.Upsert(conn, &state.State{
 			QuestName:   "q2",
 			Phase:       "Plan",
 			GatePending: true,
-		})
+		}); err != nil {
+			return err
+		}
 
 		company := dashboard.CompanyEntry{
 			Name:   "batch-test",
@@ -120,7 +132,10 @@ func TestBatchApprove_MultipleQuests(t *testing.T) {
 		}
 
 		// Verify phases were advanced
-		s1, _ := state.Load(conn, "q1")
+		s1, err := state.Load(conn, "q1")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if s1.Phase != "Plan" {
 			t.Errorf("expected q1 phase 'Plan', got %q", s1.Phase)
 		}
@@ -128,25 +143,36 @@ func TestBatchApprove_MultipleQuests(t *testing.T) {
 			t.Error("expected q1 gate_pending to be false")
 		}
 
-		s2, _ := state.Load(conn, "q2")
+		s2, err := state.Load(conn, "q2")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if s2.Phase != "Implement" {
 			t.Errorf("expected q2 phase 'Implement', got %q", s2.Phase)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestBatchApprove_NoPendingGates(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		dashboard.InitFellowship(conn, "test", "/tmp", "main")
-		dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt"})
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
+		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt"}); err != nil {
+			return err
+		}
 
-		state.Upsert(conn, &state.State{
+		if err := state.Upsert(conn, &state.State{
 			QuestName:   "q1",
 			Phase:       "Implement",
 			GatePending: false,
-		})
+		}); err != nil {
+			return err
+		}
 
 		company := dashboard.CompanyEntry{
 			Name:   "no-gates",
@@ -162,15 +188,21 @@ func TestBatchApprove_NoPendingGates(t *testing.T) {
 			t.Errorf("expected 0 approved (no-op), got %d", len(approved))
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestBatchApprove_MissingQuestState(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		dashboard.InitFellowship(conn, "test", "/tmp", "main")
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
 		// q1 has no quest_state row
-		dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt"})
+		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt"}); err != nil {
+			return err
+		}
 
 		company := dashboard.CompanyEntry{
 			Name:   "missing-state",
@@ -187,7 +219,9 @@ func TestBatchApprove_MissingQuestState(t *testing.T) {
 			t.Errorf("expected 2 errors, got %d: %v", len(errs), errs)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFindCompanyForQuest(t *testing.T) {
@@ -222,15 +256,21 @@ func TestProgressSummary(t *testing.T) {
 
 func TestBatchApprove_HeraldLogging(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		dashboard.InitFellowship(conn, "test", "/tmp", "main")
-		dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"})
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
+		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+			return err
+		}
 
-		state.Upsert(conn, &state.State{
+		if err := state.Upsert(conn, &state.State{
 			QuestName:   "q1",
 			Phase:       "Research",
 			GatePending: true,
-		})
+		}); err != nil {
+			return err
+		}
 
 		company := dashboard.CompanyEntry{
 			Name:   "herald-test",
@@ -267,20 +307,28 @@ func TestBatchApprove_HeraldLogging(t *testing.T) {
 			t.Error("expected PhaseTransition tiding for Plan phase")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestBatchApprove_TomeRecording(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		dashboard.InitFellowship(conn, "test", "/tmp", "main")
-		dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"})
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
+		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+			return err
+		}
 
-		state.Upsert(conn, &state.State{
+		if err := state.Upsert(conn, &state.State{
 			QuestName:   "q1",
 			Phase:       "Plan",
 			GatePending: true,
-		})
+		}); err != nil {
+			return err
+		}
 
 		company := dashboard.CompanyEntry{
 			Name:   "tome-test",
@@ -317,94 +365,134 @@ func TestBatchApprove_TomeRecording(t *testing.T) {
 			t.Errorf("expected phase 'Plan', got %q", phases[0].Phase)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestList_NoCompanies(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
-		dashboard.InitFellowship(conn, "test", "/tmp", "main")
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
 		// No companies — should print "No companies defined."
 		err := List(conn)
 		if err != nil {
 			t.Fatalf("List() error: %v", err)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestList_WithCompanies(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		dashboard.InitFellowship(conn, "test", "/tmp", "main")
-		dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"})
-		dashboard.AddCompany(conn, "team-alpha", []string{"q1"}, nil)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
+		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+			return err
+		}
+		if err := dashboard.AddCompany(conn, "team-alpha", []string{"q1"}, nil); err != nil {
+			return err
+		}
 
 		err := List(conn)
 		if err != nil {
 			t.Fatalf("List() error: %v", err)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestShow_CompanyNotFound(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
-		dashboard.InitFellowship(conn, "test", "/tmp", "main")
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
 		err := Show(conn, "nonexistent")
 		if err == nil {
 			t.Fatal("expected error for nonexistent company")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestShow_WithQuestState(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		dashboard.InitFellowship(conn, "test", "/tmp", "main")
-		dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"})
-		dashboard.AddCompany(conn, "team-alpha", []string{"q1"}, []string{})
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
+		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+			return err
+		}
+		if err := dashboard.AddCompany(conn, "team-alpha", []string{"q1"}, []string{}); err != nil {
+			return err
+		}
 
-		state.Upsert(conn, &state.State{
+		if err := state.Upsert(conn, &state.State{
 			QuestName:   "q1",
 			Phase:       "Implement",
 			GatePending: true,
-		})
+		}); err != nil {
+			return err
+		}
 
 		err := Show(conn, "team-alpha")
 		if err != nil {
 			t.Fatalf("Show() error: %v", err)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestApprove_CompanyNotFound(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
-		dashboard.InitFellowship(conn, "test", "/tmp", "main")
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
 		err := Approve(conn, "nonexistent")
 		if err == nil {
 			t.Fatal("expected error for nonexistent company")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestApprove_WithPendingGates(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		dashboard.InitFellowship(conn, "test", "/tmp", "main")
-		dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"})
-		dashboard.AddCompany(conn, "team-alpha", []string{"q1"}, nil)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
+		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+			return err
+		}
+		if err := dashboard.AddCompany(conn, "team-alpha", []string{"q1"}, nil); err != nil {
+			return err
+		}
 
-		state.Upsert(conn, &state.State{
+		if err := state.Upsert(conn, &state.State{
 			QuestName:   "q1",
 			Phase:       "Research",
 			GatePending: true,
-		})
+		}); err != nil {
+			return err
+		}
 
 		err := Approve(conn, "team-alpha")
 		if err != nil {
@@ -412,24 +500,41 @@ func TestApprove_WithPendingGates(t *testing.T) {
 		}
 
 		// Verify state was advanced
-		s, _ := state.Load(conn, "q1")
+		s, err := state.Load(conn, "q1")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if s.Phase != "Plan" {
 			t.Errorf("expected phase 'Plan', got %q", s.Phase)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLoadAndMarshalProgress(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		dashboard.InitFellowship(conn, "test", "/tmp", "main")
-		dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"})
-		dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q2", Worktree: "/tmp/wt2"})
-		dashboard.AddCompany(conn, "team-alpha", []string{"q1", "q2"}, nil)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
+		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+			return err
+		}
+		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q2", Worktree: "/tmp/wt2"}); err != nil {
+			return err
+		}
+		if err := dashboard.AddCompany(conn, "team-alpha", []string{"q1", "q2"}, nil); err != nil {
+			return err
+		}
 
-		state.Upsert(conn, &state.State{QuestName: "q1", Phase: "Implement"})
-		state.Upsert(conn, &state.State{QuestName: "q2", Phase: "Complete"})
+		if err := state.Upsert(conn, &state.State{QuestName: "q1", Phase: "Implement"}); err != nil {
+			return err
+		}
+		if err := state.Upsert(conn, &state.State{QuestName: "q2", Phase: "Complete"}); err != nil {
+			return err
+		}
 
 		data, err := LoadAndMarshalProgress(conn, "team-alpha")
 		if err != nil {
@@ -454,17 +559,23 @@ func TestLoadAndMarshalProgress(t *testing.T) {
 			t.Errorf("InProgress = %d, want 2", progress.InProgress)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLoadAndMarshalProgress_NotFound(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
-		dashboard.InitFellowship(conn, "test", "/tmp", "main")
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
 		_, err := LoadAndMarshalProgress(conn, "nonexistent")
 		if err == nil {
 			t.Fatal("expected error for nonexistent company")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }

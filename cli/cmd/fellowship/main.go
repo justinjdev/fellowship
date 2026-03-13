@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -251,12 +252,21 @@ func runHook(d *db.DB, name string) int {
 
 	// Find quest name for this worktree.
 	var questName string
-	d.WithConn(ctx, func(conn *db.Conn) error {
-		questName, _ = state.FindQuest(conn, gitRoot)
-		return nil
-	})
+	var lookupErr error
+	if err := d.WithConn(ctx, func(conn *db.Conn) error {
+		var err error
+		questName, err = state.FindQuest(conn, gitRoot)
+		return err
+	}); err != nil {
+		lookupErr = err
+	}
 	// Lead session (no quest found): only the CWD guard applies.
 	if questName == "" {
+		if lookupErr != nil {
+			// DB error — fail closed for safety.
+			fmt.Fprintf(os.Stderr, "fellowship: quest lookup failed: %v\n", lookupErr)
+			return 2
+		}
 		if name == "gate-guard" {
 			input, err := hooks.ParseInput(os.Stdin)
 			if err != nil {
@@ -342,7 +352,9 @@ func runHook(d *db.DB, name string) int {
 			}
 			result = hooks.CompletionGuard(s, input)
 			if !result.Block && input.ToolInput.Status == "completed" {
-				hooks.MarkTomeCompleted(conn, questName)
+				if err := hooks.MarkTomeCompleted(conn, questName); err != nil {
+					return err
+				}
 			}
 			return nil
 		}); err != nil {
@@ -386,7 +398,9 @@ func runHook(d *db.DB, name string) int {
 				}
 				if !sr.Block {
 					gateSubmitEnrich = true
-					hooks.RecordGateSubmitted(conn, questName, prevPhase, s.Phase != prevPhase)
+					if err := hooks.RecordGateSubmitted(conn, questName, prevPhase, s.Phase != prevPhase); err != nil {
+						return err
+					}
 					herald.Announce(conn, herald.Tiding{
 						Timestamp: time.Now().UTC().Format(time.RFC3339),
 						Quest:     questName,
@@ -743,6 +757,9 @@ func runInit(d *db.DB) int {
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
 		// Try to load existing state to reset it.
 		existing, loadErr := state.Load(conn, qn)
+		if loadErr != nil && !errors.Is(loadErr, state.ErrNotFound) {
+			return fmt.Errorf("loading quest state: %w", loadErr)
+		}
 		if loadErr == nil {
 			// Reset existing state.
 			existing.GatePending = false
@@ -1024,10 +1041,14 @@ func runHerald(d *db.DB, args []string) int {
 
 	if *problems {
 		var detected []herald.Problem
-		d.WithConn(ctx, func(conn *db.Conn) error {
-			detected = herald.DetectProblems(conn)
-			return nil
-		})
+		if err := d.WithConn(ctx, func(conn *db.Conn) error {
+			var err error
+			detected, err = herald.DetectProblems(conn)
+			return err
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+			return 1
+		}
 		if *jsonOut {
 			data, _ := json.MarshalIndent(detected, "", "  ")
 			fmt.Println(string(data))

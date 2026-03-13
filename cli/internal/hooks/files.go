@@ -18,19 +18,9 @@ func FileTrack(conn *sqlite.Conn, s *state.State, input *HookInput, questName st
 		return false
 	}
 
-	// Check if file already recorded.
-	existing, err := tome.LoadFiles(conn, questName)
-	if err != nil {
-		return false
-	}
-	for _, f := range existing {
-		if f == filePath {
-			return false
-		}
-	}
-
+	// RecordFiles uses INSERT OR IGNORE, so duplicates are silently skipped.
 	if err := tome.RecordFiles(conn, questName, []string{filePath}); err != nil {
 		return false
 	}
-	return true
+	return conn.Changes() > 0
 }

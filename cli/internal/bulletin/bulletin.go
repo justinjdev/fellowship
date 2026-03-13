@@ -82,7 +82,7 @@ func Load(conn *db.Conn) ([]Entry, error) {
 	}
 
 	if len(rows) == 0 {
-		return nil, nil
+		return []Entry{}, nil
 	}
 
 	// Build a map for file association.

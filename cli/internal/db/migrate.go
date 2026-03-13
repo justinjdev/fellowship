@@ -63,7 +63,7 @@ type questStateJSON struct {
 	MetadataUpdated bool     `json:"metadata_updated"`
 	Held            bool     `json:"held"`
 	HeldReason      *string  `json:"held_reason"`
-	AutoApprove     *string  `json:"auto_approve"`
+	AutoApproveGates []string `json:"auto_approve_gates"`
 }
 
 type questTomeJSON struct {
@@ -240,22 +240,27 @@ func discoverJSONFiles(mainRepo string) ([]migrationFile, error) {
 func scanDataDir(dataDir string, label string) []migrationFile {
 	var files []migrationFile
 
-	knownFiles := map[string]string{
-		"fellowship-state.json": "fellowship-state",
-		"quest-state.json":      "quest-state",
-		"quest-tome.json":       "quest-tome",
-		"quest-errands.json":    "quest-errands",
-		"quest-herald.jsonl":    "quest-herald",
-		"bulletin.jsonl":        "bulletin",
+	// Ordered to satisfy FK constraints: fellowship-state and quest-state first,
+	// then tables that reference them.
+	knownFiles := []struct {
+		name     string
+		fileType string
+	}{
+		{"fellowship-state.json", "fellowship-state"},
+		{"quest-state.json", "quest-state"},
+		{"quest-tome.json", "quest-tome"},
+		{"quest-errands.json", "quest-errands"},
+		{"quest-herald.jsonl", "quest-herald"},
+		{"bulletin.jsonl", "bulletin"},
 	}
 
-	for name, fileType := range knownFiles {
-		p := filepath.Join(dataDir, name)
+	for _, kf := range knownFiles {
+		p := filepath.Join(dataDir, kf.name)
 		if _, err := os.Stat(p); err == nil {
 			files = append(files, migrationFile{
 				path:     p,
-				relPath:  filepath.Join(label, name),
-				fileType: fileType,
+				relPath:  filepath.Join(label, kf.name),
+				fileType: kf.fileType,
 			})
 		}
 	}
@@ -442,8 +447,9 @@ func migrateQuestState(conn *Conn, data []byte, s *migrationSummary) error {
 		heldReason = *qs.HeldReason
 	}
 	var autoApprove any
-	if qs.AutoApprove != nil {
-		autoApprove = *qs.AutoApprove
+	if len(qs.AutoApproveGates) > 0 {
+		b, _ := json.Marshal(qs.AutoApproveGates)
+		autoApprove = string(b)
 	}
 
 	if err := sqlitex.Execute(conn,
@@ -553,6 +559,7 @@ func migrateQuestErrands(conn *Conn, data []byte, s *migrationSummary) error {
 		return fmt.Errorf("parse quest-errands.json: %w", err)
 	}
 
+	// Insert all errands first, then deps, to satisfy FK constraints.
 	for _, item := range qe.Items {
 		if err := sqlitex.Execute(conn,
 			`INSERT OR REPLACE INTO errands (id, quest_name, description, status, phase, created_at, updated_at)
@@ -570,6 +577,8 @@ func migrateQuestErrands(conn *Conn, data []byte, s *migrationSummary) error {
 			}); err != nil {
 			return err
 		}
+	}
+	for _, item := range qe.Items {
 		for _, dep := range item.DependsOn {
 			if err := sqlitex.Execute(conn,
 				`INSERT OR REPLACE INTO errand_deps (quest_name, errand_id, depends_on)
@@ -722,8 +731,7 @@ func listWorktreePaths(mainRepo string) ([]string, error) {
 	cmd.Dir = mainRepo
 	out, err := cmd.Output()
 	if err != nil {
-		// If git worktree fails, just return the main repo
-		return []string{mainRepo}, nil
+		return nil, fmt.Errorf("git worktree list: %w", err)
 	}
 	var paths []string
 	for _, line := range strings.Split(string(out), "\n") {

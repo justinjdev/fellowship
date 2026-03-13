@@ -12,16 +12,18 @@ import (
 
 func seedQuest(t *testing.T, d *db.DB, name string) {
 	t.Helper()
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		return state.Upsert(conn, &state.State{QuestName: name, Phase: "Research"})
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestRecordPhase(t *testing.T) {
 	d := db.OpenTest(t)
 	seedQuest(t, d, "q1")
 
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		if err := tome.RecordPhase(conn, "q1", "Research", 120); err != nil {
 			t.Fatal(err)
 		}
@@ -33,18 +35,27 @@ func TestRecordPhase(t *testing.T) {
 			t.Errorf("unexpected phases: %+v", phases)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestRecordGate(t *testing.T) {
 	d := db.OpenTest(t)
 	seedQuest(t, d, "q1")
 
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		tome.RecordGate(conn, "q1", "Research", "submitted", "")
-		tome.RecordGate(conn, "q1", "Research", "approved", "")
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := tome.RecordGate(conn, "q1", "Research", "submitted", ""); err != nil {
+			t.Fatal(err)
+		}
+		if err := tome.RecordGate(conn, "q1", "Research", "approved", ""); err != nil {
+			t.Fatal(err)
+		}
 
-		gates, _ := tome.LoadGates(conn, "q1")
+		gates, err := tome.LoadGates(conn, "q1")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(gates) != 2 {
 			t.Fatalf("expected 2 gates, got %d", len(gates))
 		}
@@ -52,33 +63,50 @@ func TestRecordGate(t *testing.T) {
 			t.Errorf("expected submitted, got %s", gates[0].Action)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestRecordFiles(t *testing.T) {
 	d := db.OpenTest(t)
 	seedQuest(t, d, "q1")
 
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		tome.RecordFiles(conn, "q1", []string{"src/main.go", "src/util.go"})
-		tome.RecordFiles(conn, "q1", []string{"src/main.go", "src/new.go"}) // main.go deduplicated
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := tome.RecordFiles(conn, "q1", []string{"src/main.go", "src/util.go"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := tome.RecordFiles(conn, "q1", []string{"src/main.go", "src/new.go"}); err != nil {
+			t.Fatal(err)
+		}
 
-		files, _ := tome.LoadFiles(conn, "q1")
+		files, err := tome.LoadFiles(conn, "q1")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(files) != 3 {
 			t.Fatalf("expected 3 unique files, got %d: %v", len(files), files)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLoad(t *testing.T) {
 	d := db.OpenTest(t)
 	seedQuest(t, d, "q1")
 
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		tome.RecordPhase(conn, "q1", "Onboard", 60)
-		tome.RecordGate(conn, "q1", "Onboard", "approved", "")
-		tome.RecordFiles(conn, "q1", []string{"a.go"})
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := tome.RecordPhase(conn, "q1", "Onboard", 60); err != nil {
+			t.Fatal(err)
+		}
+		if err := tome.RecordGate(conn, "q1", "Onboard", "approved", ""); err != nil {
+			t.Fatal(err)
+		}
+		if err := tome.RecordFiles(conn, "q1", []string{"a.go"}); err != nil {
+			t.Fatal(err)
+		}
 
 		qt, err := tome.Load(conn, "q1")
 		if err != nil {
@@ -94,14 +122,16 @@ func TestLoad(t *testing.T) {
 			t.Errorf("expected 1 file, got %d", len(qt.FilesTouched))
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLoad_NoData(t *testing.T) {
 	d := db.OpenTest(t)
 	seedQuest(t, d, "q1")
 
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		qt, err := tome.Load(conn, "q1")
 		if err != nil {
 			t.Fatal(err)
@@ -122,24 +152,32 @@ func TestLoad_NoData(t *testing.T) {
 			t.Errorf("expected 0 files, got %d", len(qt.FilesTouched))
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestRecordSkippedPhases(t *testing.T) {
 	d := db.OpenTest(t)
 	seedQuest(t, d, "q1")
 
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		if err := tome.RecordSkippedPhases(conn, "q1", []string{"Onboard", "Research", "Plan"}, "pre-existing plan"); err != nil {
 			t.Fatal(err)
 		}
 
-		phases, _ := tome.LoadPhases(conn, "q1")
+		phases, err := tome.LoadPhases(conn, "q1")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(phases) != 3 {
 			t.Fatalf("expected 3 phases, got %d", len(phases))
 		}
 
-		gates, _ := tome.LoadGates(conn, "q1")
+		gates, err := tome.LoadGates(conn, "q1")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(gates) != 3 {
 			t.Fatalf("expected 3 gates, got %d", len(gates))
 		}
@@ -159,21 +197,27 @@ func TestRecordSkippedPhases(t *testing.T) {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestSetStatus(t *testing.T) {
 	d := db.OpenTest(t)
 	seedQuest(t, d, "q1")
 
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		// Insert a fellowship_quests row for SetStatus to update.
-		tome.SetStatus(conn, "q1", "completed") // no-op since no fellowship_quests row yet
+		if err := tome.SetStatus(conn, "q1", "completed"); err != nil {
+			t.Fatal(err)
+		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	// Insert fellowship_quests row and test SetStatus.
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		// Manually insert a fellowship_quests row.
 		if err := sqlitex.Execute(conn, `INSERT INTO fellowship_quests (name, status) VALUES ('q1', 'active')`, nil); err != nil {
 			t.Fatal(err)
@@ -182,10 +226,15 @@ func TestSetStatus(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		qt, _ := tome.Load(conn, "q1")
+		qt, err := tome.Load(conn, "q1")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if qt.Status != "completed" {
 			t.Errorf("expected completed, got %s", qt.Status)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }

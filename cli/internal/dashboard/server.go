@@ -62,12 +62,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
 }
 
-func (s *Server) validWorktreeDir(dir string) bool {
+func (s *Server) validWorktreeDir(dir string) (bool, error) {
 	var valid bool
-	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		status, err := DiscoverQuests(conn)
 		if err != nil {
-			return nil
+			return err
 		}
 		for _, q := range status.Quests {
 			if q.Worktree == dir {
@@ -77,7 +77,7 @@ func (s *Server) validWorktreeDir(dir string) bool {
 		}
 		return nil
 	})
-	return valid
+	return valid, err
 }
 
 func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
@@ -87,11 +87,16 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !s.validWorktreeDir(req.Dir) {
+	if valid, err := s.validWorktreeDir(req.Dir); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else if !valid {
 		http.Error(w, "invalid worktree directory", http.StatusBadRequest)
 		return
 	}
 
+	var result QuestStatus
+	var prevPhase string
 	err := s.db.WithTx(context.Background(), func(conn *db.Conn) error {
 		// Find the quest name for this worktree
 		questName, err := state.FindQuest(conn, req.Dir)
@@ -108,7 +113,7 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("no gate pending")
 		}
 
-		prevPhase := st.Phase
+		prevPhase = st.Phase
 
 		nextPhase, err := state.NextPhase(st.Phase)
 		if err != nil {
@@ -125,22 +130,7 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 
-		now := time.Now().UTC().Format(time.RFC3339)
-		if err := herald.Announce(conn, herald.Tiding{
-			Timestamp: now, Quest: st.QuestName, Type: herald.GateApproved,
-			Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
-		}); err != nil {
-			return err
-		}
-		if err := herald.Announce(conn, herald.Tiding{
-			Timestamp: now, Quest: st.QuestName, Type: herald.PhaseTransition,
-			Phase: st.Phase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, st.Phase),
-		}); err != nil {
-			return err
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(QuestStatus{
+		result = QuestStatus{
 			Name:            st.QuestName,
 			Worktree:        req.Dir,
 			Phase:           st.Phase,
@@ -148,7 +138,7 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 			GateID:          st.GateID,
 			LembasCompleted: st.LembasCompleted,
 			MetadataUpdated: st.MetadataUpdated,
-		})
+		}
 		return nil
 	})
 	if err != nil {
@@ -157,7 +147,25 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		} else {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
+		return
 	}
+
+	// Best-effort herald announcements after tx commits.
+	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+		now := time.Now().UTC().Format(time.RFC3339)
+		herald.Announce(conn, herald.Tiding{
+			Timestamp: now, Quest: result.Name, Type: herald.GateApproved,
+			Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
+		})
+		herald.Announce(conn, herald.Tiding{
+			Timestamp: now, Quest: result.Name, Type: herald.PhaseTransition,
+			Phase: result.Phase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, result.Phase),
+		})
+		return nil
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
@@ -167,11 +175,15 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !s.validWorktreeDir(req.Dir) {
+	if valid, err := s.validWorktreeDir(req.Dir); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else if !valid {
 		http.Error(w, "invalid worktree directory", http.StatusBadRequest)
 		return
 	}
 
+	var result QuestStatus
 	err := s.db.WithTx(context.Background(), func(conn *db.Conn) error {
 		questName, err := state.FindQuest(conn, req.Dir)
 		if err != nil || questName == "" {
@@ -194,16 +206,7 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 
-		if err := herald.Announce(conn, herald.Tiding{
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			Quest:     st.QuestName, Type: herald.GateRejected,
-			Phase: st.Phase, Detail: fmt.Sprintf("Gate rejected for %s", st.Phase),
-		}); err != nil {
-			return err
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(QuestStatus{
+		result = QuestStatus{
 			Name:            st.QuestName,
 			Worktree:        req.Dir,
 			Phase:           st.Phase,
@@ -211,7 +214,7 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 			GateID:          st.GateID,
 			LembasCompleted: st.LembasCompleted,
 			MetadataUpdated: st.MetadataUpdated,
-		})
+		}
 		return nil
 	})
 	if err != nil {
@@ -220,7 +223,21 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		} else {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
+		return
 	}
+
+	// Best-effort herald announcement after tx commits.
+	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+		herald.Announce(conn, herald.Tiding{
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Quest:     result.Name, Type: herald.GateRejected,
+			Phase: result.Phase, Detail: fmt.Sprintf("Gate rejected for %s", result.Phase),
+		})
+		return nil
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
@@ -370,20 +387,31 @@ func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
 	}
 	dir := string(dirBytes)
 
-	if !s.validWorktreeDir(dir) {
+	if valid, err := s.validWorktreeDir(dir); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else if !valid {
 		http.Error(w, "invalid worktree directory", http.StatusBadRequest)
 		return
 	}
 
 	var errands []errand.Errand
-	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+	err = s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		questName, findErr := state.FindQuest(conn, dir)
-		if findErr != nil || questName == "" {
+		if findErr != nil {
+			return findErr
+		}
+		if questName == "" {
 			return nil
 		}
-		errands, _ = errand.List(conn, questName)
-		return nil
+		var listErr error
+		errands, listErr = errand.List(conn, questName)
+		return listErr
 	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	if errands == nil {
 		http.Error(w, "no errand file found", http.StatusNotFound)
@@ -411,11 +439,15 @@ func (s *Server) worktreeDirs() []string {
 
 func (s *Server) handleHerald(w http.ResponseWriter, r *http.Request) {
 	var tidings []herald.Tiding
-	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		tidings, err = herald.ReadAll(conn, 50)
 		return err
 	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if tidings == nil {
 		tidings = []herald.Tiding{}
 	}
@@ -425,10 +457,15 @@ func (s *Server) handleHerald(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleProblems(w http.ResponseWriter, r *http.Request) {
 	var problems []herald.Problem
-	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
-		problems = herald.DetectProblems(conn)
-		return nil
+	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		problems, err = herald.DetectProblems(conn)
+		return err
 	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if problems == nil {
 		problems = []herald.Problem{}
 	}
@@ -438,11 +475,15 @@ func (s *Server) handleProblems(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleBulletin(w http.ResponseWriter, r *http.Request) {
 	var entries []bulletin.Entry
-	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		entries, err = bulletin.Load(conn)
 		return err
 	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if entries == nil {
 		entries = []bulletin.Entry{}
 	}

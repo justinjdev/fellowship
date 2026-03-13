@@ -29,7 +29,7 @@ type Problem struct {
 }
 
 // DetectProblems scans the database for potential quest issues.
-func DetectProblems(conn *db.Conn) []Problem {
+func DetectProblems(conn *db.Conn) ([]Problem, error) {
 	var problems []Problem
 
 	// Query all active quests (not Complete).
@@ -41,7 +41,7 @@ func DetectProblems(conn *db.Conn) []Problem {
 	}
 
 	var quests []questInfo
-	_ = sqlitex.Execute(conn,
+	if err := sqlitex.Execute(conn,
 		`SELECT quest_name, phase, gate_pending, gate_id FROM quest_state WHERE phase != 'Complete'`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -54,7 +54,9 @@ func DetectProblems(conn *db.Conn) []Problem {
 				return nil
 			},
 		},
-	)
+	); err != nil {
+		return nil, fmt.Errorf("detect problems: query quests: %w", err)
+	}
 
 	for _, qs := range quests {
 		// Stalled detection: gate pending for too long
@@ -74,7 +76,7 @@ func DetectProblems(conn *db.Conn) []Problem {
 
 		// Zombie detection: no recent activity
 		var lastTimestamp string
-		_ = sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT timestamp FROM herald WHERE quest = ? ORDER BY id DESC LIMIT 1`,
 			&sqlitex.ExecOptions{
 				Args: []any{qs.questName},
@@ -83,7 +85,9 @@ func DetectProblems(conn *db.Conn) []Problem {
 					return nil
 				},
 			},
-		)
+		); err != nil {
+			return nil, fmt.Errorf("detect problems: query herald for %s: %w", qs.questName, err)
+		}
 		if lastTimestamp != "" {
 			lastTime, err := time.Parse(time.RFC3339, lastTimestamp)
 			if err == nil {
@@ -101,7 +105,7 @@ func DetectProblems(conn *db.Conn) []Problem {
 
 		// Struggling detection: multiple rejections in same phase
 		var rejections int
-		_ = sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT count(*) FROM herald WHERE quest = ? AND type = ? AND phase = ?`,
 			&sqlitex.ExecOptions{
 				Args: []any{qs.questName, string(GateRejected), qs.phase},
@@ -110,7 +114,9 @@ func DetectProblems(conn *db.Conn) []Problem {
 					return nil
 				},
 			},
-		)
+		); err != nil {
+			return nil, fmt.Errorf("detect problems: query rejections for %s: %w", qs.questName, err)
+		}
 		if rejections >= 2 {
 			problems = append(problems, Problem{
 				Quest:    qs.questName,
@@ -121,7 +127,7 @@ func DetectProblems(conn *db.Conn) []Problem {
 		}
 	}
 
-	return problems
+	return problems, nil
 }
 
 func extractTimestamp(gateID string) int64 {

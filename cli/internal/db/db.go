@@ -141,10 +141,6 @@ func resolveMainRepo(fromDir string) (string, error) {
 	}
 	gitCommon = filepath.Clean(gitCommon)
 
-	// The main repo root is the parent of the .git directory.
-	if filepath.Base(gitCommon) == ".git" {
-		return filepath.Dir(gitCommon), nil
-	}
-	// For bare repos or unusual layouts, go up one level.
+	// The main repo root is the parent of the .git (or equivalent) directory.
 	return filepath.Dir(gitCommon), nil
 }

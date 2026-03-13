@@ -70,7 +70,8 @@ var schema = []string{
 		errand_id  TEXT NOT NULL,
 		depends_on TEXT NOT NULL,
 		PRIMARY KEY (quest_name, errand_id, depends_on),
-		FOREIGN KEY (quest_name, errand_id) REFERENCES errands(quest_name, id)
+		FOREIGN KEY (quest_name, errand_id) REFERENCES errands(quest_name, id),
+		FOREIGN KEY (quest_name, depends_on) REFERENCES errands(quest_name, id)
 	)`,
 
 	// Herald event log (replaces quest-herald.jsonl)
@@ -188,7 +189,9 @@ var schema = []string{
 	BEGIN
 		INSERT INTO state_changelog(table_name, operation, quest_name, new_value)
 		VALUES('quest_state', 'INSERT', NEW.quest_name,
-			json_object('phase', NEW.phase, 'gate_pending', NEW.gate_pending, 'held', NEW.held));
+			json_object('phase', NEW.phase, 'gate_pending', NEW.gate_pending, 'held', NEW.held,
+				'held_reason', NEW.held_reason, 'gate_id', NEW.gate_id,
+				'task_id', NEW.task_id, 'team_name', NEW.team_name, 'auto_approve', NEW.auto_approve));
 	END`,
 
 	`CREATE TRIGGER IF NOT EXISTS quest_state_update AFTER UPDATE ON quest_state
@@ -196,8 +199,12 @@ var schema = []string{
 		INSERT INTO state_changelog(table_name, operation, quest_name, old_value, new_value)
 		VALUES('quest_state', 'UPDATE', NEW.quest_name,
 			json_object('phase', OLD.phase, 'gate_pending', OLD.gate_pending, 'held', OLD.held,
+				'held_reason', OLD.held_reason, 'gate_id', OLD.gate_id,
+				'task_id', OLD.task_id, 'team_name', OLD.team_name, 'auto_approve', OLD.auto_approve,
 				'lembas_completed', OLD.lembas_completed, 'metadata_updated', OLD.metadata_updated),
 			json_object('phase', NEW.phase, 'gate_pending', NEW.gate_pending, 'held', NEW.held,
+				'held_reason', NEW.held_reason, 'gate_id', NEW.gate_id,
+				'task_id', NEW.task_id, 'team_name', NEW.team_name, 'auto_approve', NEW.auto_approve,
 				'lembas_completed', NEW.lembas_completed, 'metadata_updated', NEW.metadata_updated));
 	END`,
 }

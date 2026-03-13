@@ -11,9 +11,11 @@ import (
 
 func seedQuest(t *testing.T, d *db.DB, name string) {
 	t.Helper()
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		return state.Upsert(conn, &state.State{QuestName: name, Phase: "Implement"})
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFileTrack_EditToolInput(t *testing.T) {
@@ -26,15 +28,17 @@ func TestFileTrack_EditToolInput(t *testing.T) {
 	}
 
 	var modified bool
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		modified = FileTrack(conn, s, input, "q1")
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if !modified {
 		t.Error("FileTrack should return true on first file write")
 	}
 
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		files, err := tome.LoadFiles(conn, "q1")
 		if err != nil {
 			t.Fatalf("loading files: %v", err)
@@ -46,7 +50,9 @@ func TestFileTrack_EditToolInput(t *testing.T) {
 			t.Errorf("files[0] = %q, want /home/user/project/main.go", files[0])
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFileTrack_NotebookPath(t *testing.T) {
@@ -59,21 +65,28 @@ func TestFileTrack_NotebookPath(t *testing.T) {
 	}
 
 	var modified bool
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		modified = FileTrack(conn, s, input, "q1")
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if !modified {
 		t.Error("FileTrack should return true for notebook path")
 	}
 
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
-		files, _ := tome.LoadFiles(conn, "q1")
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		files, err := tome.LoadFiles(conn, "q1")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(files) != 1 || files[0] != "/home/user/project/analysis.ipynb" {
 			t.Errorf("expected notebook path in files, got %v", files)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFileTrack_DataDirPathExclusion(t *testing.T) {
@@ -96,13 +109,15 @@ func TestFileTrack_DataDirPathExclusion(t *testing.T) {
 			input := &HookInput{
 				ToolInput: ToolInput{FilePath: tt.path},
 			}
-			d.WithTx(context.Background(), func(conn *db.Conn) error {
+			if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 				modified := FileTrack(conn, s, input, "q1")
 				if modified {
 					t.Errorf("FileTrack should return false for data dir path %q", tt.path)
 				}
 				return nil
-			})
+			}); err != nil {
+				t.Fatal(err)
+			}
 		})
 	}
 }
@@ -116,13 +131,15 @@ func TestFileTrack_EmptyFilePath(t *testing.T) {
 		ToolInput: ToolInput{},
 	}
 
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		modified := FileTrack(conn, s, input, "q1")
 		if modified {
 			t.Error("FileTrack should return false when no file path present")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFileTrack_Deduplication(t *testing.T) {
@@ -134,17 +151,22 @@ func TestFileTrack_Deduplication(t *testing.T) {
 		ToolInput: ToolInput{FilePath: "/home/user/project/main.go"},
 	}
 
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		FileTrack(conn, s, input, "q1")
 		modified := FileTrack(conn, s, input, "q1")
 		if modified {
 			t.Error("FileTrack should return false on duplicate file")
 		}
 
-		files, _ := tome.LoadFiles(conn, "q1")
+		files, err := tome.LoadFiles(conn, "q1")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(files) != 1 {
 			t.Errorf("files len = %d, want 1", len(files))
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }

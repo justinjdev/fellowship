@@ -19,24 +19,32 @@ func setupTestDB(t *testing.T) (*db.DB, string) {
 	d := db.OpenTest(t)
 	worktreeDir := "/tmp/test-worktrees/quest-login"
 
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		InitFellowship(conn, "test-fellowship", "/tmp/repo", "main")
-		AddQuest(conn, QuestEntry{
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := InitFellowship(conn, "test-fellowship", "/tmp/repo", "main"); err != nil {
+			return err
+		}
+		if err := AddQuest(conn, QuestEntry{
 			Name:     "quest-login",
 			Worktree: worktreeDir,
 			TaskID:   "t1",
-		})
+		}); err != nil {
+			return err
+		}
 		gateID := "gate-plan-review"
-		state.Upsert(conn, &state.State{
+		if err := state.Upsert(conn, &state.State{
 			QuestName:   "quest-login",
 			TaskID:      "t1",
 			TeamName:    "team",
 			Phase:       "Plan",
 			GatePending: true,
 			GateID:      &gateID,
-		})
+		}); err != nil {
+			return err
+		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	return d, worktreeDir
 }
@@ -187,11 +195,13 @@ func TestAPIGateApprove_HeraldLogging(t *testing.T) {
 
 	// Read herald entries from DB
 	var tidings []herald.Tiding
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		tidings, err = herald.Read(conn, "quest-login", 0)
 		return err
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	if len(tidings) < 2 {
 		t.Fatalf("expected at least 2 tidings (GateApproved + PhaseTransition), got %d", len(tidings))
@@ -228,11 +238,13 @@ func TestAPIGateReject_HeraldLogging(t *testing.T) {
 	}
 
 	var tidings []herald.Tiding
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		tidings, err = herald.Read(conn, "quest-login", 0)
 		return err
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	var foundRejected bool
 	for _, td := range tidings {

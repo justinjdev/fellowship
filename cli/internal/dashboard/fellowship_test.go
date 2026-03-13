@@ -10,7 +10,7 @@ import (
 
 func TestInitAndLoadFellowship(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		err := InitFellowship(conn, "test-fellowship", "/tmp/repo", "main")
 		if err != nil {
 			t.Fatal(err)
@@ -29,17 +29,26 @@ func TestInitAndLoadFellowship(t *testing.T) {
 			t.Errorf("BaseBranch = %q, want %q", fs.BaseBranch, "main")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestAddQuest(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		InitFellowship(conn, "f1", "/tmp", "main")
-		AddQuest(conn, QuestEntry{
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := InitFellowship(conn, "f1", "/tmp", "main"); err != nil {
+			t.Fatal(err)
+		}
+		if err := AddQuest(conn, QuestEntry{
 			Name: "q1", TaskDescription: "build auth", Worktree: "/tmp/wt/q1", Branch: "feat/q1",
-		})
-		quests, _ := ListQuests(conn)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		quests, err := ListQuests(conn)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(quests) != 1 {
 			t.Fatalf("expected 1, got %d", len(quests))
 		}
@@ -50,15 +59,24 @@ func TestAddQuest(t *testing.T) {
 			t.Errorf("TaskDescription = %q, want %q", quests[0].TaskDescription, "build auth")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestAddAndRemoveScout(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		InitFellowship(conn, "f1", "/tmp", "main")
-		AddScout(conn, ScoutEntry{Name: "s1", Question: "how?", TaskID: "t1"})
-		scouts, _ := ListScouts(conn)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := InitFellowship(conn, "f1", "/tmp", "main"); err != nil {
+			t.Fatal(err)
+		}
+		if err := AddScout(conn, ScoutEntry{Name: "s1", Question: "how?", TaskID: "t1"}); err != nil {
+			t.Fatal(err)
+		}
+		scouts, err := ListScouts(conn)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(scouts) != 1 {
 			t.Fatalf("expected 1 scout, got %d", len(scouts))
 		}
@@ -66,24 +84,42 @@ func TestAddAndRemoveScout(t *testing.T) {
 			t.Errorf("Name = %q, want %q", scouts[0].Name, "s1")
 		}
 
-		RemoveScout(conn, "s1")
-		scouts, _ = ListScouts(conn)
+		if err := RemoveScout(conn, "s1"); err != nil {
+			t.Fatal(err)
+		}
+		scouts, err = ListScouts(conn)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(scouts) != 0 {
 			t.Errorf("expected 0 scouts after remove, got %d", len(scouts))
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestAddCompany(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		InitFellowship(conn, "f1", "/tmp", "main")
-		AddQuest(conn, QuestEntry{Name: "q1", Worktree: "/tmp/wt/q1"})
-		AddScout(conn, ScoutEntry{Name: "s1", Question: "why?"})
-		AddCompany(conn, "team-alpha", []string{"q1"}, []string{"s1"})
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := InitFellowship(conn, "f1", "/tmp", "main"); err != nil {
+			t.Fatal(err)
+		}
+		if err := AddQuest(conn, QuestEntry{Name: "q1", Worktree: "/tmp/wt/q1"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := AddScout(conn, ScoutEntry{Name: "s1", Question: "why?"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := AddCompany(conn, "team-alpha", []string{"q1"}, []string{"s1"}); err != nil {
+			t.Fatal(err)
+		}
 
-		companies, _ := ListCompanies(conn)
+		companies, err := ListCompanies(conn)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(companies) != 1 {
 			t.Fatalf("expected 1 company, got %d", len(companies))
 		}
@@ -97,17 +133,28 @@ func TestAddCompany(t *testing.T) {
 			t.Errorf("Scouts = %v, want [s1]", companies[0].Scouts)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestUpdateQuest(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		InitFellowship(conn, "f1", "/tmp", "main")
-		AddQuest(conn, QuestEntry{Name: "q1", Worktree: "/tmp/wt/q1", Status: "active"})
-		UpdateQuest(conn, "q1", map[string]any{"status": "completed"})
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := InitFellowship(conn, "f1", "/tmp", "main"); err != nil {
+			t.Fatal(err)
+		}
+		if err := AddQuest(conn, QuestEntry{Name: "q1", Worktree: "/tmp/wt/q1", Status: "active"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := UpdateQuest(conn, "q1", map[string]any{"status": "completed"}); err != nil {
+			t.Fatal(err)
+		}
 
-		quests, _ := ListQuests(conn)
+		quests, err := ListQuests(conn)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(quests) != 1 {
 			t.Fatalf("expected 1, got %d", len(quests))
 		}
@@ -115,27 +162,42 @@ func TestUpdateQuest(t *testing.T) {
 			t.Errorf("Status = %q, want %q", quests[0].Status, "completed")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestRemoveQuest(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		InitFellowship(conn, "f1", "/tmp", "main")
-		AddQuest(conn, QuestEntry{Name: "q1", Worktree: "/tmp/wt/q1"})
-		RemoveQuest(conn, "q1")
-		quests, _ := ListQuests(conn)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := InitFellowship(conn, "f1", "/tmp", "main"); err != nil {
+			t.Fatal(err)
+		}
+		if err := AddQuest(conn, QuestEntry{Name: "q1", Worktree: "/tmp/wt/q1"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := RemoveQuest(conn, "q1"); err != nil {
+			t.Fatal(err)
+		}
+		quests, err := ListQuests(conn)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(quests) != 0 {
 			t.Errorf("expected 0 quests after remove, got %d", len(quests))
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestSaveFellowship_RoundTrip(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		InitFellowship(conn, "test-fellowship", "/path/to/repo", "main")
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := InitFellowship(conn, "test-fellowship", "/path/to/repo", "main"); err != nil {
+			t.Fatal(err)
+		}
 
 		original := &FellowshipState{
 			Version:    1,
@@ -191,18 +253,22 @@ func TestSaveFellowship_RoundTrip(t *testing.T) {
 			t.Errorf("Companies[0].Name = %q, want %q", loaded.Companies[0].Name, "company-1")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLoadFellowship_NotInitialized(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		_, err := LoadFellowship(conn)
 		if err == nil {
 			t.Fatal("expected error for uninitialized fellowship, got nil")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestQuestEntryStatus_Default(t *testing.T) {
@@ -223,7 +289,7 @@ func TestQuestEntryStatus_Explicit(t *testing.T) {
 
 func TestDiscoverQuests_NoFellowship(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		status, err := DiscoverQuests(conn)
 		if err != nil {
 			t.Fatalf("DiscoverQuests() error: %v", err)
@@ -232,22 +298,30 @@ func TestDiscoverQuests_NoFellowship(t *testing.T) {
 			t.Errorf("expected 0 quests, got %d", len(status.Quests))
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestDiscoverQuests_WithQuestState(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		InitFellowship(conn, "test-fellowship", "/tmp/repo", "main")
-		AddQuest(conn, QuestEntry{
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := InitFellowship(conn, "test-fellowship", "/tmp/repo", "main"); err != nil {
+			t.Fatal(err)
+		}
+		if err := AddQuest(conn, QuestEntry{
 			Name: "quest-auth", Worktree: "/tmp/wt/quest-auth", Branch: "feat/auth",
-		})
+		}); err != nil {
+			t.Fatal(err)
+		}
 
 		// Insert quest_state row
-		state.Upsert(conn, &state.State{
+		if err := state.Upsert(conn, &state.State{
 			QuestName: "quest-auth",
 			Phase:     "Implement",
-		})
+		}); err != nil {
+			t.Fatal(err)
+		}
 
 		status, err := DiscoverQuests(conn)
 		if err != nil {
@@ -270,16 +344,22 @@ func TestDiscoverQuests_WithQuestState(t *testing.T) {
 			t.Errorf("Quest.Worktree = %q, want %q", q.Worktree, "/tmp/wt/quest-auth")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestDiscoverQuests_CompletedNoQuestState(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		InitFellowship(conn, "test-fellowship", "/tmp/repo", "main")
-		AddQuest(conn, QuestEntry{
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := InitFellowship(conn, "test-fellowship", "/tmp/repo", "main"); err != nil {
+			t.Fatal(err)
+		}
+		if err := AddQuest(conn, QuestEntry{
 			Name: "quest-done", Worktree: "/tmp/wt/done", Status: "completed",
-		})
+		}); err != nil {
+			t.Fatal(err)
+		}
 
 		// No quest_state row — should appear as synthetic Complete entry
 		status, err := DiscoverQuests(conn)
@@ -297,16 +377,22 @@ func TestDiscoverQuests_CompletedNoQuestState(t *testing.T) {
 			t.Errorf("Quest.Status = %q, want %q", q.Status, "completed")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestDiscoverQuests_ActiveNoQuestStateSkipped(t *testing.T) {
 	d := db.OpenTest(t)
-	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		InitFellowship(conn, "test-fellowship", "/tmp/repo", "main")
-		AddQuest(conn, QuestEntry{
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := InitFellowship(conn, "test-fellowship", "/tmp/repo", "main"); err != nil {
+			t.Fatal(err)
+		}
+		if err := AddQuest(conn, QuestEntry{
 			Name: "quest-active", Worktree: "/tmp/wt/active",
-		})
+		}); err != nil {
+			t.Fatal(err)
+		}
 
 		// No quest_state row, active status — should be skipped
 		status, err := DiscoverQuests(conn)
@@ -317,5 +403,7 @@ func TestDiscoverQuests_ActiveNoQuestStateSkipped(t *testing.T) {
 			t.Errorf("expected 0 quests (active with no quest_state should be skipped), got %d", len(status.Quests))
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }

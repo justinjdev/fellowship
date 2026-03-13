@@ -103,7 +103,7 @@ func TestParseMergedBranches(t *testing.T) {
 func TestScanLoadsFellowshipFromDB(t *testing.T) {
 	d := db.OpenTest(t)
 
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		// Insert fellowship row.
 		err := sqlitex.Execute(conn,
 			`INSERT INTO fellowship (id, version, name, main_repo, base_branch, created_at)
@@ -133,13 +133,15 @@ func TestScanLoadsFellowshipFromDB(t *testing.T) {
 			t.Errorf("expected 0 quests, got %d", len(result.Quests))
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestScanNoFellowship(t *testing.T) {
 	d := db.OpenTest(t)
 
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		result, err := Scan(conn, "/tmp/nonexistent-repo")
 		if err != nil {
 			t.Fatal(err)
@@ -152,13 +154,15 @@ func TestScanNoFellowship(t *testing.T) {
 			t.Errorf("expected 0 quests, got %d", len(result.Quests))
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestScanQuestsFromDB(t *testing.T) {
 	d := db.OpenTest(t)
 
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		// Insert fellowship.
 		err := sqlitex.Execute(conn,
 			`INSERT INTO fellowship (id, version, name, main_repo, base_branch, created_at)
@@ -219,13 +223,15 @@ func TestScanQuestsFromDB(t *testing.T) {
 			t.Errorf("Classification = %q, want %q", q.Classification, "stale")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestScanQuestWithoutState(t *testing.T) {
 	d := db.OpenTest(t)
 
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		// Insert fellowship.
 		err := sqlitex.Execute(conn,
 			`INSERT INTO fellowship (id, version, name, main_repo, base_branch, created_at)
@@ -265,5 +271,7 @@ func TestScanQuestWithoutState(t *testing.T) {
 			t.Error("expected GatePending to be false")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 }

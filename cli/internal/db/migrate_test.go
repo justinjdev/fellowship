@@ -31,7 +31,10 @@ func writeFellowshipState(t *testing.T, dir string) {
 		},
 		CreatedAt: "2026-01-01T00:00:00Z",
 	}
-	data, _ := json.Marshal(fs)
+	data, err := json.Marshal(fs)
+	if err != nil {
+		t.Fatal(err)
+	}
 	os.MkdirAll(dir, 0o755)
 	os.WriteFile(filepath.Join(dir, "fellowship-state.json"), data, 0o644)
 }
@@ -52,7 +55,10 @@ func writeQuestState(t *testing.T, dir string) {
 		MetadataUpdated: false,
 		Held:            false,
 	}
-	data, _ := json.Marshal(qs)
+	data, err := json.Marshal(qs)
+	if err != nil {
+		t.Fatal(err)
+	}
 	os.MkdirAll(dir, 0o755)
 	os.WriteFile(filepath.Join(dir, "quest-state.json"), data, 0o644)
 }
@@ -74,7 +80,10 @@ func writeQuestTome(t *testing.T, dir string) {
 		Respawns:     1,
 		Status:       "active",
 	}
-	data, _ := json.Marshal(qt)
+	data, err := json.Marshal(qt)
+	if err != nil {
+		t.Fatal(err)
+	}
 	os.MkdirAll(dir, 0o755)
 	os.WriteFile(filepath.Join(dir, "quest-tome.json"), data, 0o644)
 }
@@ -88,13 +97,20 @@ func writeQuestErrands(t *testing.T, dir string) {
 		Task:      "build auth",
 		Items: []errandJSON{
 			{
+				ID: "w-000", Description: "design auth", Status: "done",
+				Phase: "Plan", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z",
+			},
+			{
 				ID: "w-001", Description: "implement login", Status: "pending",
 				Phase: "Implement", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z",
 				DependsOn: []string{"w-000"},
 			},
 		},
 	}
-	data, _ := json.Marshal(qe)
+	data, err := json.Marshal(qe)
+	if err != nil {
+		t.Fatal(err)
+	}
 	os.MkdirAll(dir, 0o755)
 	os.WriteFile(filepath.Join(dir, "quest-errands.json"), data, 0o644)
 }
@@ -108,7 +124,10 @@ func writeHerald(t *testing.T, dir string) {
 	}
 	var sb strings.Builder
 	for _, l := range lines {
-		data, _ := json.Marshal(l)
+		data, err := json.Marshal(l)
+		if err != nil {
+			t.Fatal(err)
+		}
 		sb.Write(data)
 		sb.WriteByte('\n')
 	}
@@ -124,7 +143,10 @@ func writeBulletin(t *testing.T, dir string) {
 	}
 	var sb strings.Builder
 	for _, l := range lines {
-		data, _ := json.Marshal(l)
+		data, err := json.Marshal(l)
+		if err != nil {
+			t.Fatal(err)
+		}
 		sb.Write(data)
 		sb.WriteByte('\n')
 	}
@@ -148,7 +170,10 @@ func writeAutopsy(t *testing.T, dir string, name string) {
 		Tags:       []string{"flaky"},
 		ExpiresAt:  "2026-04-02T00:00:00Z",
 	}
-	data, _ := json.Marshal(a)
+	data, err := json.Marshal(a)
+	if err != nil {
+		t.Fatal(err)
+	}
 	autopsyDir := filepath.Join(dir, "autopsies")
 	os.MkdirAll(autopsyDir, 0o755)
 	os.WriteFile(filepath.Join(autopsyDir, name), data, 0o644)
@@ -193,10 +218,10 @@ func TestMigrateJSON(t *testing.T) {
 	}
 
 	// Verify all data migrated correctly
-	d.WithConn(t.Context(), func(conn *Conn) error {
+	if err := d.WithConn(t.Context(), func(conn *Conn) error {
 		// 1. Fellowship
 		var name, mainRepo, baseBranch string
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT name, main_repo, base_branch FROM fellowship WHERE id = 1`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -205,14 +230,16 @@ func TestMigrateJSON(t *testing.T) {
 					baseBranch = stmt.ColumnText(2)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "fellowship.name", "test-fellowship", name)
 		assertEqual(t, "fellowship.main_repo", "/tmp/repo", mainRepo)
 		assertEqual(t, "fellowship.base_branch", "main", baseBranch)
 
 		// 2. Fellowship quests
 		var questName, taskDesc, branch string
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT name, task_description, branch FROM fellowship_quests WHERE name = 'q1'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -221,14 +248,16 @@ func TestMigrateJSON(t *testing.T) {
 					branch = stmt.ColumnText(2)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "quest.name", "q1", questName)
 		assertEqual(t, "quest.task_description", "build auth", taskDesc)
 		assertEqual(t, "quest.branch", "feat/q1", branch)
 
 		// 3. Fellowship scouts
 		var scoutName, question string
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT name, question FROM fellowship_scouts WHERE name = 's1'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -236,26 +265,30 @@ func TestMigrateJSON(t *testing.T) {
 					question = stmt.ColumnText(1)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "scout.name", "s1", scoutName)
 		assertEqual(t, "scout.question", "how does auth work?", question)
 
 		// 4. Companies and members
 		var companyCount int
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT COUNT(*) FROM company_members WHERE company_name = 'team-a'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					companyCount = stmt.ColumnInt(0)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "company_members.count", 2, companyCount)
 
 		// 5. Quest state
 		var phase string
 		var lembasCompleted int
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT phase, lembas_completed FROM quest_state WHERE quest_name = 'q1'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -263,50 +296,58 @@ func TestMigrateJSON(t *testing.T) {
 					lembasCompleted = stmt.ColumnInt(1)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "quest_state.phase", "Implement", phase)
 		assertEqual(t, "quest_state.lembas_completed", 1, lembasCompleted)
 
 		// 6. Quest phases (from tome)
 		var phaseCount int
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT COUNT(*) FROM quest_phases WHERE quest_name = 'q1'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					phaseCount = stmt.ColumnInt(0)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "quest_phases.count", 1, phaseCount)
 
 		// 7. Quest gates (from tome)
 		var gateCount int
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT COUNT(*) FROM quest_gates WHERE quest_name = 'q1'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					gateCount = stmt.ColumnInt(0)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "quest_gates.count", 1, gateCount)
 
 		// 8. Quest files (from tome)
 		var fileCount int
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT COUNT(*) FROM quest_files WHERE quest_name = 'q1'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					fileCount = stmt.ColumnInt(0)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "quest_files.count", 2, fileCount)
 
 		// 9. Respawns updated in fellowship_quests
 		var respawns int
 		var status string
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT respawns, status FROM fellowship_quests WHERE name = 'q1'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -314,111 +355,135 @@ func TestMigrateJSON(t *testing.T) {
 					status = stmt.ColumnText(1)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "fellowship_quests.respawns", 1, respawns)
 		assertEqual(t, "fellowship_quests.status", "active", status)
 
 		// 10. Errands
 		var errandCount int
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT COUNT(*) FROM errands WHERE quest_name = 'q1'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					errandCount = stmt.ColumnInt(0)
 					return nil
 				},
-			})
-		assertEqual(t, "errands.count", 1, errandCount)
+			}); err != nil {
+			return err
+		}
+		assertEqual(t, "errands.count", 2, errandCount)
 
 		// 11. Errand deps
 		var depCount int
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT COUNT(*) FROM errand_deps WHERE quest_name = 'q1'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					depCount = stmt.ColumnInt(0)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "errand_deps.count", 1, depCount)
 
 		// 12. Herald events
 		var heraldCount int
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT COUNT(*) FROM herald WHERE quest = 'q1'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					heraldCount = stmt.ColumnInt(0)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "herald.count", 2, heraldCount)
 
 		// 13. Bulletin entries
 		var bulletinCount int
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT COUNT(*) FROM bulletin WHERE quest = 'q1'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					bulletinCount = stmt.ColumnInt(0)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "bulletin.count", 1, bulletinCount)
 
 		// 14. Bulletin files
 		var bfCount int
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT COUNT(*) FROM bulletin_files`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					bfCount = stmt.ColumnInt(0)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "bulletin_files.count", 1, bfCount)
 
 		// 15. Autopsies
 		var autopsyCount int
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT COUNT(*) FROM autopsies WHERE quest = 'q1'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					autopsyCount = stmt.ColumnInt(0)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "autopsies.count", 1, autopsyCount)
 
 		// Verify trigger_type mapping (JSON "trigger" -> DB "trigger_type")
 		var triggerType string
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT trigger_type FROM autopsies WHERE quest = 'q1'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					triggerType = stmt.ColumnText(0)
 					return nil
 				},
-			})
+			}); err != nil {
+			return err
+		}
 		assertEqual(t, "autopsies.trigger_type", "recovery", triggerType)
 
 		// 16. Autopsy files/modules/tags
 		var afCount, amCount, atCount int
-		sqlitex.Execute(conn,
+		if err := sqlitex.Execute(conn,
 			`SELECT COUNT(*) FROM autopsy_files`,
-			&sqlitex.ExecOptions{ResultFunc: func(stmt *sqlite.Stmt) error { afCount = stmt.ColumnInt(0); return nil }})
-		sqlitex.Execute(conn,
+			&sqlitex.ExecOptions{ResultFunc: func(stmt *sqlite.Stmt) error { afCount = stmt.ColumnInt(0); return nil }}); err != nil {
+			return err
+		}
+		if err := sqlitex.Execute(conn,
 			`SELECT COUNT(*) FROM autopsy_modules`,
-			&sqlitex.ExecOptions{ResultFunc: func(stmt *sqlite.Stmt) error { amCount = stmt.ColumnInt(0); return nil }})
-		sqlitex.Execute(conn,
+			&sqlitex.ExecOptions{ResultFunc: func(stmt *sqlite.Stmt) error { amCount = stmt.ColumnInt(0); return nil }}); err != nil {
+			return err
+		}
+		if err := sqlitex.Execute(conn,
 			`SELECT COUNT(*) FROM autopsy_tags`,
-			&sqlitex.ExecOptions{ResultFunc: func(stmt *sqlite.Stmt) error { atCount = stmt.ColumnInt(0); return nil }})
+			&sqlitex.ExecOptions{ResultFunc: func(stmt *sqlite.Stmt) error { atCount = stmt.ColumnInt(0); return nil }}); err != nil {
+			return err
+		}
 		assertEqual(t, "autopsy_files.count", 1, afCount)
 		assertEqual(t, "autopsy_modules.count", 1, amCount)
 		assertEqual(t, "autopsy_tags.count", 1, atCount)
 
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify backup directory created with correct structure
 	backupDir := filepath.Join(mainDataDir, "backup")

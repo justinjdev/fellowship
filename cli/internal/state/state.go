@@ -2,12 +2,16 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )
+
+// ErrNotFound is returned when a quest does not exist in the database.
+var ErrNotFound = errors.New("state: quest not found")
 
 type State struct {
 	QuestName        string   `json:"quest_name"`
@@ -70,7 +74,9 @@ func Load(conn *sqlite.Conn, questName string) (*State, error) {
 					s.HeldReason = &hr
 				}
 				if aa := stmt.ColumnText(10); aa != "" {
-					json.Unmarshal([]byte(aa), &s.AutoApproveGates)
+					if err := json.Unmarshal([]byte(aa), &s.AutoApproveGates); err != nil {
+						return fmt.Errorf("unmarshal auto_approve: %w", err)
+					}
 				}
 				return nil
 			},
@@ -79,7 +85,7 @@ func Load(conn *sqlite.Conn, questName string) (*State, error) {
 		return nil, fmt.Errorf("state: load %s: %w", questName, err)
 	}
 	if !found {
-		return nil, fmt.Errorf("state: quest %q not found", questName)
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, questName)
 	}
 	return &s, nil
 }
