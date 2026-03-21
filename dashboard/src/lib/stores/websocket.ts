@@ -7,7 +7,8 @@ export type WSEventType =
 	| 'herald-event'
 	| 'alert'
 	| 'command-queued'
-	| 'command-completed';
+	| 'command-completed'
+	| 'error-logged';
 
 export interface WSEvent {
 	type: WSEventType;

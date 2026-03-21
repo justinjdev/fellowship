@@ -268,6 +268,107 @@ func TestAPIGateReject_HeraldLogging(t *testing.T) {
 	}
 }
 
+func TestLogErrorAndReadErrors(t *testing.T) {
+	d, _ := setupTestDB(t)
+
+	// Log two errors
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		if err := LogError(conn, "api", "handleStatus", "db connection failed", ""); err != nil {
+			return err
+		}
+		return LogError(conn, "websocket", "HandleWS", "upgrade error: bad handshake", "client: 1.2.3.4")
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Read back
+	var errors []DashboardError
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		errors, err = ReadErrors(conn, 10)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(errors) != 2 {
+		t.Fatalf("expected 2 errors, got %d", len(errors))
+	}
+
+	// Newest first
+	if errors[0].Source != "websocket" {
+		t.Errorf("errors[0].Source = %q, want %q", errors[0].Source, "websocket")
+	}
+	if errors[1].Handler != "handleStatus" {
+		t.Errorf("errors[1].Handler = %q, want %q", errors[1].Handler, "handleStatus")
+	}
+}
+
+func TestAPIErrors(t *testing.T) {
+	d, _ := setupTestDB(t)
+	srv := mustNewServer(t, d)
+
+	// Log an error first
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		return LogError(conn, "api", "handleEagles", "sweep failed", "")
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/errors", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var errors []DashboardError
+	if err := json.NewDecoder(w.Body).Decode(&errors); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if len(errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(errors))
+	}
+	if errors[0].Handler != "handleEagles" {
+		t.Errorf("errors[0].Handler = %q, want %q", errors[0].Handler, "handleEagles")
+	}
+}
+
+func TestAPIClearErrors(t *testing.T) {
+	d, _ := setupTestDB(t)
+	srv := mustNewServer(t, d)
+
+	// Log an error
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		return LogError(conn, "api", "handleStatus", "test error", "")
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Clear
+	req := httptest.NewRequest("DELETE", "/api/errors", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	// Verify empty
+	var errors []DashboardError
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		errors, err = ReadErrors(conn, 10)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(errors) != 0 {
+		t.Errorf("expected 0 errors after clear, got %d", len(errors))
+	}
+}
+
 func TestAPIStatus_NotFound(t *testing.T) {
 	d, _ := setupTestDB(t)
 	srv := mustNewServer(t, d)
