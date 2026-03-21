@@ -34,7 +34,7 @@ function getWSUrl(): string {
 }
 
 function connect() {
-	if (ws?.readyState === WebSocket.OPEN) return;
+	if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
 	let socket: WebSocket;
 	try {
@@ -59,10 +59,12 @@ function connect() {
 	};
 
 	socket.onerror = () => {
+		if (ws !== socket) return;
 		socket.close();
 	};
 
 	socket.onmessage = (event) => {
+		if (ws !== socket) return;
 		try {
 			const data: WSEvent = JSON.parse(event.data);
 			lastEvent.set(data);
