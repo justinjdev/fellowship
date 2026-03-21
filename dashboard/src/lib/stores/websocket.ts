@@ -59,7 +59,6 @@ function connect() {
 	};
 
 	socket.onerror = () => {
-		if (ws !== socket) return;
 		socket.close();
 	};
 

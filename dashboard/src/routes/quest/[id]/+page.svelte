@@ -26,6 +26,15 @@
 
 	let loading = $state(false);
 
+	// Reset data when navigating between quests (component is reused)
+	$effect(() => {
+		questName;
+		dataLoaded = false;
+		loadFailed = false;
+		errandList = null;
+		tomeData = null;
+	});
+
 	$effect(() => {
 		if (quest && !dataLoaded && !loadFailed && !loading) {
 			loading = true;
