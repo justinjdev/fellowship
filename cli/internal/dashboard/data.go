@@ -29,6 +29,7 @@ func (s *Server) handleAutopsies(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
+		s.logError("api", "handleAutopsies", err.Error())
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]interface{}{})
 		return
@@ -43,12 +44,6 @@ func (s *Server) handleAutopsies(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		http.Error(w, "autopsy not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		s.logError("api", "handleAutopsies", err.Error())
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]interface{}{})
 		return
 	}
 	if records == nil {
