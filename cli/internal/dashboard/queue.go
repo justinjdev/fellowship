@@ -139,6 +139,11 @@ func EnqueueCommand(gitRoot string, action CommandAction, params json.RawMessage
 		Timestamp: time.Now().Unix(),
 	}
 	q.Commands = append(q.Commands, cmd)
+	// Prune old commands to prevent unbounded growth.
+	const maxCommands = 200
+	if len(q.Commands) > maxCommands {
+		q.Commands = q.Commands[len(q.Commands)-maxCommands:]
+	}
 	if err := SaveCommandQueue(gitRoot, q); err != nil {
 		return nil, err
 	}

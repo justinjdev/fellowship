@@ -128,6 +128,7 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	raw.SetReadLimit(4096) // we don't expect meaningful client messages
 	c := &wsConn{conn: raw}
 	h.add(c)
 

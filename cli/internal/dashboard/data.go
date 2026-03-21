@@ -8,11 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/justinjdev/fellowship/cli/internal/autopsy"
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
+
+var configMu sync.Mutex
 
 // GET /api/autopsies — list all autopsy records
 // GET /api/autopsies/<filename> — single autopsy detail
@@ -125,6 +128,9 @@ func (s *Server) handleConfigWrite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
+
+	configMu.Lock()
+	defer configMu.Unlock()
 
 	var configPath string
 	switch req.Scope {
