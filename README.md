@@ -171,6 +171,16 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 
 ## Changelog
 
+### v2.0.0
+
+- **SQLite storage** — All state (quests, gates, tome, errands, herald, bulletin, autopsy) migrated from JSON files to SQLite with WAL mode. Eliminates file locking issues and race conditions in parallel quests. Run `fellowship migrate` to upgrade existing data.
+- **Interactive `/guide`** — Rewrote the guide from a passive concept explainer to a learn-by-doing walkthrough. Walks beginners through a real quest on their own codebase, then introduces `/quest` and `/fellowship`.
+- **Concepts page** — New docs site page explaining agentic workflows, orchestration, isolation, context engineering, and human-in-the-loop.
+- **Quest autopsy** — Failure memory that persists across sessions. When a quest fails, records what went wrong so future quests can learn from past failures.
+- **Bulletin board** — Cross-quest knowledge sharing. Quests post discoveries to a shared bulletin during Research and Implement.
+- **Gate enrichment** — Gate submissions now include structured context (diff stats, test results, phase summary) for informed approval decisions.
+- **WorktreeGuard** — Blocks the lead session from accidentally `cd`-ing into quest worktrees.
+
 ### v1.9.2
 
 - **Stale gate state fix** — Gate guard hook no longer blocks Gandalf when a previous quest's gate state file is present in a fresh worktree. Prevents stale state from causing spurious tool blocks at session start. ([#56](https://github.com/justinjdev/fellowship/issues/56))

@@ -74,8 +74,8 @@
 		},
 		{
 			name: '/guide',
-			summary: 'Interactive guide to how fellowship works.',
-			details: 'Presents an overview of fellowship concepts — quests, gates, Gandalf, worktrees, lembas, scouts — then enters Q&A mode. Use when you\u2019re new to fellowship or need a refresher on how things fit together.'
+			summary: 'Learn fellowship by doing.',
+			details: 'Interactive walkthrough that teaches fellowship by running a real task on your codebase. Walks you through research, planning, and implementation with natural-language checkpoints at each stage. Produces a real PR. Afterward, introduces /quest and /fellowship for continued use. Designed for people new to agent orchestration.'
 		},
 		{
 			name: '/rekindle',

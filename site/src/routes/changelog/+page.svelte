@@ -10,6 +10,36 @@
 <div class="container page">
 	<h1>Changelog</h1>
 
+	<!-- v2.0.0 -->
+	<section class="version" id="v2-0-0">
+		<h2 class="version-heading"><a href="{base}/changelog#v2-0-0">v2.0.0</a></h2>
+		<ul class="changes">
+			<li>
+				<strong>SQLite storage</strong> — All state (quests, gates, tome, errands, herald, bulletin, autopsy) migrated from JSON files to SQLite with WAL mode. Eliminates file locking issues and race conditions in parallel quests. Run <code>fellowship migrate</code> to upgrade existing data.
+			</li>
+			<li>
+				<strong>Interactive <code>/guide</code></strong> — Rewrote the guide from a passive concept explainer to a learn-by-doing walkthrough. Walks beginners through a real quest (research &rarr; plan &rarr; implement &rarr; PR) on their own codebase, then introduces <code>/quest</code> and <code>/fellowship</code>.
+			</li>
+			<li>
+				<strong>Concepts page</strong> — New documentation site page explaining agentic workflows, orchestration, isolation, context engineering, and human-in-the-loop &mdash; with "In Fellowship" callouts connecting each concept to the product.
+			</li>
+			<li>
+				<strong>Quest autopsy</strong> — Failure memory that persists across sessions. When a quest fails, records what went wrong and why. Future quests in the same area can learn from past failures.
+			</li>
+			<li>
+				<strong>Bulletin board</strong> — Cross-quest knowledge sharing. Quests post discoveries to a shared bulletin during Research and Implement. Sibling quests scan the bulletin at Research start.
+			</li>
+			<li>
+				<strong>Gate enrichment</strong> — Gate submissions now include structured context (diff stats, test results, phase summary) so the lead can make informed approval decisions.
+			</li>
+			<li>
+				<strong>WorktreeGuard</strong> — Blocks the lead session from accidentally <code>cd</code>-ing into quest worktrees. Runs before state file checks in the hook runner.
+			</li>
+		</ul>
+	</section>
+
+	<div class="divider"><span class="divider-ring"></span></div>
+
 	<!-- v1.9.2 -->
 	<section class="version" id="v1-9-2">
 		<h2 class="version-heading"><a href="{base}/changelog#v1-9-2">v1.9.2</a></h2>
