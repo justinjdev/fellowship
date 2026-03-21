@@ -43,6 +43,7 @@ func NewServer(d *db.DB, gitRoot string, pollInterval int) (*Server, error) {
 		pollInterval: pollInterval,
 		hub:          NewHub(),
 	}
+	s.hub.SetLogFunc(s.logError)
 	s.mux.HandleFunc("GET /ws", s.hub.HandleWS)
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
 	s.mux.HandleFunc("GET /api/eagles", s.handleEagles)
@@ -63,6 +64,8 @@ func NewServer(d *db.DB, gitRoot string, pollInterval int) (*Server, error) {
 	s.mux.HandleFunc("GET /api/tome/", s.handleTome)
 	s.mux.HandleFunc("GET /api/config", s.handleConfigRead)
 	s.mux.HandleFunc("POST /api/config", s.handleConfigWrite)
+	s.mux.HandleFunc("GET /api/errors", s.handleErrors)
+	s.mux.HandleFunc("DELETE /api/errors", s.handleClearErrors)
 	fileServer := http.FileServer(http.FS(staticFS))
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/ws" {
@@ -126,6 +129,7 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if valid, err := s.validWorktreeDir(req.Dir); err != nil {
+		s.logError("api", "handleGateApprove", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	} else if !valid {
@@ -183,6 +187,7 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		if err.Error() == "no gate pending" {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		} else {
+			s.logError("api", "handleGateApprove", err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
@@ -219,6 +224,7 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if valid, err := s.validWorktreeDir(req.Dir); err != nil {
+		s.logError("api", "handleGateReject", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	} else if !valid {
@@ -264,6 +270,7 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		if err.Error() == "no gate pending" {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		} else {
+			s.logError("api", "handleGateReject", err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
@@ -336,6 +343,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(err.Error(), "company not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
 		} else {
+			s.logError("api", "handleCompanyApprove", err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
@@ -418,6 +426,7 @@ func (s *Server) handleEagles(w http.ResponseWriter, r *http.Request) {
 		return sweepErr
 	})
 	if err != nil {
+		s.logError("api", "handleEagles", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -441,6 +450,7 @@ func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
 	dir := string(dirBytes)
 
 	if valid, err := s.validWorktreeDir(dir); err != nil {
+		s.logError("api", "handleErrand", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	} else if !valid {
@@ -462,6 +472,7 @@ func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
 		return listErr
 	})
 	if err != nil {
+		s.logError("api", "handleErrand", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -498,6 +509,7 @@ func (s *Server) handleHerald(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
+		s.logError("api", "handleHerald", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -516,6 +528,7 @@ func (s *Server) handleProblems(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
+		s.logError("api", "handleProblems", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -534,6 +547,7 @@ func (s *Server) handleBulletin(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
+		s.logError("api", "handleBulletin", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -552,10 +566,48 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return e
 	})
 	if err != nil {
+		s.logError("api", "handleStatus", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	status.PollInterval = s.pollInterval
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)
+}
+
+// logError records a dashboard error to the database (best-effort) and
+// broadcasts an "error-logged" WS event so the frontend can refresh.
+func (s *Server) logError(source, handler, message string) {
+	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+		LogError(conn, source, handler, message, "")
+		return nil
+	})
+	s.hub.Broadcast(WSEvent{Type: "error-logged", Timestamp: time.Now().Unix()})
+}
+
+func (s *Server) handleErrors(w http.ResponseWriter, r *http.Request) {
+	var errors []DashboardError
+	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+		var e error
+		errors, e = ReadErrors(conn, 100)
+		return e
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(errors)
+}
+
+func (s *Server) handleClearErrors(w http.ResponseWriter, r *http.Request) {
+	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+		return ClearErrors(conn)
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }

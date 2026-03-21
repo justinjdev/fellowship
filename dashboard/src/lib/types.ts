@@ -109,3 +109,12 @@ export interface Command {
 	timestamp: number;
 	result?: string;
 }
+
+export interface DashboardError {
+	id: number;
+	timestamp: string;
+	source: string;
+	handler: string;
+	message: string;
+	detail?: string;
+}

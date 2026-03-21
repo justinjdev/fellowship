@@ -51,12 +51,18 @@ func (c *wsConn) close() {
 
 // Hub manages WebSocket connections and broadcasts events.
 type Hub struct {
-	mu    sync.RWMutex
-	conns map[*wsConn]struct{}
+	mu      sync.RWMutex
+	conns   map[*wsConn]struct{}
+	logFunc func(source, handler, message string)
 }
 
 func NewHub() *Hub {
 	return &Hub{conns: make(map[*wsConn]struct{})}
+}
+
+// SetLogFunc sets the error logging callback for the hub.
+func (h *Hub) SetLogFunc(fn func(source, handler, message string)) {
+	h.logFunc = fn
 }
 
 func (h *Hub) add(c *wsConn) {
@@ -79,6 +85,9 @@ func (h *Hub) Broadcast(event WSEvent) {
 	data, err := json.Marshal(event)
 	if err != nil {
 		log.Printf("ws: marshal error: %v", err)
+		if h.logFunc != nil {
+			h.logFunc("websocket", "Broadcast", "marshal error: "+err.Error())
+		}
 		return
 	}
 
@@ -112,6 +121,9 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 	raw, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("ws: upgrade error: %v", err)
+		if h.logFunc != nil {
+			h.logFunc("websocket", "HandleWS", "upgrade error: "+err.Error())
+		}
 		return
 	}
 	c := &wsConn{conn: raw}
