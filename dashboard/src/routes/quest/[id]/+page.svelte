@@ -1,13 +1,27 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { dashboardStatus, questHealths } from '$lib/stores/quests';
+	import { onMount, onDestroy } from 'svelte';
+	import { dashboardStatus, questHealths, startPolling, stopPolling } from '$lib/stores/quests';
+	import { startWebSocket, stopWebSocket } from '$lib/stores/websocket';
 	import { fetchErrands, fetchTome } from '$lib/api';
 	import PhaseTimeline from '$lib/components/PhaseTimeline.svelte';
 	import GateActions from '$lib/components/GateActions.svelte';
 	import ErrandList from '$lib/components/ErrandList.svelte';
 	import HeraldFeed from '$lib/components/HeraldFeed.svelte';
-	import { tidings } from '$lib/stores/herald';
+	import { tidings, startHeraldPolling, stopHeraldPolling } from '$lib/stores/herald';
 	import type { QuestStatus, QuestTome, QuestErrandList } from '$lib/types';
+
+	onMount(() => {
+		startWebSocket();
+		startPolling();
+		startHeraldPolling();
+	});
+
+	onDestroy(() => {
+		stopWebSocket();
+		stopPolling();
+		stopHeraldPolling();
+	});
 
 	let questName = $derived(decodeURIComponent(page.params.id));
 	let quest = $derived($dashboardStatus?.quests.find((q) => q.name === questName));
@@ -93,6 +107,8 @@
 					</div>
 				{/each}
 			</div>
+		{:else}
+			<p class="empty">Loading quest data...</p>
 		{/if}
 	</div>
 

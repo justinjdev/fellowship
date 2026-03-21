@@ -124,6 +124,10 @@ func (s *Server) handleConfigWrite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
+	if req.Key == "" {
+		http.Error(w, "key is required", http.StatusBadRequest)
+		return
+	}
 
 	s.configMu.Lock()
 	defer s.configMu.Unlock()
