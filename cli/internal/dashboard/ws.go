@@ -23,30 +23,53 @@ type WSEvent struct {
 }
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true }, // allow all origins (dashboard is localhost-only by design)
+	// Allow all origins — the dashboard binds to localhost but may be accessed
+	// from different ports or via forwarded connections during development.
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+// wsConn wraps a websocket.Conn with a per-connection write mutex and
+// idempotent Close. gorilla/websocket supports one concurrent reader and
+// one concurrent writer — the write mutex serializes all writes to this
+// connection across concurrent Broadcast calls.
+type wsConn struct {
+	conn    *websocket.Conn
+	writeMu sync.Mutex
+	once    sync.Once
+}
+
+func (c *wsConn) writeMessage(messageType int, data []byte, deadline time.Time) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	c.conn.SetWriteDeadline(deadline)
+	return c.conn.WriteMessage(messageType, data)
+}
+
+func (c *wsConn) close() {
+	c.once.Do(func() { c.conn.Close() })
 }
 
 // Hub manages WebSocket connections and broadcasts events.
 type Hub struct {
 	mu    sync.RWMutex
-	conns map[*websocket.Conn]struct{}
+	conns map[*wsConn]struct{}
 }
 
 func NewHub() *Hub {
-	return &Hub{conns: make(map[*websocket.Conn]struct{})}
+	return &Hub{conns: make(map[*wsConn]struct{})}
 }
 
-func (h *Hub) Add(conn *websocket.Conn) {
+func (h *Hub) add(c *wsConn) {
 	h.mu.Lock()
-	h.conns[conn] = struct{}{}
+	h.conns[c] = struct{}{}
 	h.mu.Unlock()
 }
 
-func (h *Hub) Remove(conn *websocket.Conn) {
+func (h *Hub) remove(c *wsConn) {
 	h.mu.Lock()
-	delete(h.conns, conn)
+	delete(h.conns, c)
 	h.mu.Unlock()
-	conn.Close()
+	c.close()
 }
 
 func (h *Hub) Broadcast(event WSEvent) {
@@ -59,30 +82,46 @@ func (h *Hub) Broadcast(event WSEvent) {
 		return
 	}
 
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	for conn := range h.conns {
-		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-			delete(h.conns, conn)
-			conn.Close()
+	// Snapshot connections under read lock to avoid holding the lock during writes.
+	h.mu.RLock()
+	snapshot := make([]*wsConn, 0, len(h.conns))
+	for c := range h.conns {
+		snapshot = append(snapshot, c)
+	}
+	h.mu.RUnlock()
+
+	var failed []*wsConn
+	deadline := time.Now().Add(5 * time.Second)
+	for _, c := range snapshot {
+		if err := c.writeMessage(websocket.TextMessage, data, deadline); err != nil {
+			failed = append(failed, c)
 		}
+	}
+
+	if len(failed) > 0 {
+		h.mu.Lock()
+		for _, c := range failed {
+			delete(h.conns, c)
+			c.close()
+		}
+		h.mu.Unlock()
 	}
 }
 
 func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	raw, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("ws: upgrade error: %v", err)
 		return
 	}
-	h.Add(conn)
+	c := &wsConn{conn: raw}
+	h.add(c)
 
 	// Read pump — just drain pings/pongs, we don't expect client messages
 	go func() {
-		defer h.Remove(conn)
+		defer h.remove(c)
 		for {
-			if _, _, err := conn.ReadMessage(); err != nil {
+			if _, _, err := raw.ReadMessage(); err != nil {
 				break
 			}
 		}

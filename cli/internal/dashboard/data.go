@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -27,6 +28,11 @@ func (s *Server) handleAutopsies(w http.ResponseWriter, r *http.Request) {
 		return loadErr
 	})
 
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]interface{}{})
+		return
+	}
 	if suffix != "" {
 		// Filter to matching record by quest name
 		for _, r := range records {
@@ -37,11 +43,6 @@ func (s *Server) handleAutopsies(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		http.Error(w, "autopsy not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]interface{}{})
 		return
 	}
 	if records == nil {
@@ -124,7 +125,11 @@ func (s *Server) handleConfigWrite(w http.ResponseWriter, r *http.Request) {
 	var configPath string
 	switch req.Scope {
 	case "global":
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			http.Error(w, "unable to determine home directory", http.StatusInternalServerError)
+			return
+		}
 		configPath = filepath.Join(home, ".claude", "fellowship.json")
 	case "project":
 		configPath = filepath.Join(s.gitRoot, ".fellowship", "config.json")
@@ -152,7 +157,7 @@ func (s *Server) handleConfigWrite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to marshal config", http.StatusInternalServerError)
 		return
 	}
-	tmp := configPath + ".tmp"
+	tmp := fmt.Sprintf("%s.tmp.%d", configPath, os.Getpid())
 	if err := os.WriteFile(tmp, data, 0644); err != nil {
 		http.Error(w, "failed to write config", http.StatusInternalServerError)
 		return
