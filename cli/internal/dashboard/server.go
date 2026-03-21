@@ -8,6 +8,7 @@ import (
 	iofs "io/fs"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/bulletin"
@@ -28,6 +29,7 @@ type Server struct {
 	gitRoot      string
 	pollInterval int
 	hub          *Hub
+	configMu     sync.Mutex
 }
 
 func NewServer(d *db.DB, gitRoot string, pollInterval int) (*Server, error) {
