@@ -51,7 +51,7 @@ func setupTestDB(t *testing.T) (*db.DB, string) {
 
 func TestAPIStatus(t *testing.T) {
 	d, _ := setupTestDB(t)
-	srv := NewServer(d, 5)
+	srv := NewServer(d, "", 5)
 
 	req := httptest.NewRequest("GET", "/api/status", nil)
 	w := httptest.NewRecorder()
@@ -98,7 +98,7 @@ func TestAPIStatus(t *testing.T) {
 
 func TestAPIGateApprove(t *testing.T) {
 	d, worktreeDir := setupTestDB(t)
-	srv := NewServer(d, 5)
+	srv := NewServer(d, "", 5)
 
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/approve", body)
@@ -127,7 +127,7 @@ func TestAPIGateApprove(t *testing.T) {
 
 func TestAPIGateReject(t *testing.T) {
 	d, worktreeDir := setupTestDB(t)
-	srv := NewServer(d, 5)
+	srv := NewServer(d, "", 5)
 
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/reject", body)
@@ -170,7 +170,7 @@ func TestAPIGateApprove_NoPending(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := NewServer(d, 5)
+	srv := NewServer(d, "", 5)
 
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/approve", body)
@@ -184,7 +184,7 @@ func TestAPIGateApprove_NoPending(t *testing.T) {
 
 func TestAPIGateApprove_HeraldLogging(t *testing.T) {
 	d, worktreeDir := setupTestDB(t)
-	srv := NewServer(d, 5)
+	srv := NewServer(d, "", 5)
 
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/approve", body)
@@ -228,7 +228,7 @@ func TestAPIGateApprove_HeraldLogging(t *testing.T) {
 
 func TestAPIGateReject_HeraldLogging(t *testing.T) {
 	d, worktreeDir := setupTestDB(t)
-	srv := NewServer(d, 5)
+	srv := NewServer(d, "", 5)
 
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/reject", body)
@@ -261,7 +261,7 @@ func TestAPIGateReject_HeraldLogging(t *testing.T) {
 
 func TestAPIStatus_NotFound(t *testing.T) {
 	d, _ := setupTestDB(t)
-	srv := NewServer(d, 5)
+	srv := NewServer(d, "", 5)
 
 	req := httptest.NewRequest("GET", "/api/nonexistent", nil)
 	w := httptest.NewRecorder()

@@ -1,15 +1,15 @@
 package dashboard
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/justinjdev/fellowship/cli/internal/autopsy"
-	"github.com/justinjdev/fellowship/cli/internal/datadir"
+	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
@@ -18,47 +18,35 @@ import (
 func (s *Server) handleAutopsies(w http.ResponseWriter, r *http.Request) {
 	suffix := strings.TrimPrefix(r.URL.Path, "/api/autopsies")
 	suffix = strings.TrimPrefix(suffix, "/")
+
+	// Individual autopsy lookup not supported via SQLite API; scan all and filter.
+	var records []autopsy.Autopsy
+	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+		var loadErr error
+		records, loadErr = autopsy.Scan(conn, autopsy.ScanOptions{}, autopsy.DefaultExpiryDays)
+		return loadErr
+	})
+
 	if suffix != "" {
-		// Sanitize: only allow base filenames to prevent directory traversal
-		if suffix != filepath.Base(suffix) || strings.Contains(suffix, "..") {
-			http.Error(w, "invalid filename", http.StatusBadRequest)
-			return
+		// Filter to matching record by quest name
+		for _, r := range records {
+			if r.Quest == suffix {
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(r)
+				return
+			}
 		}
-		filePath := filepath.Join(s.gitRoot, datadir.Name(), "autopsies", suffix)
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			http.Error(w, "autopsy not found", http.StatusNotFound)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(data)
+		http.Error(w, "autopsy not found", http.StatusNotFound)
 		return
 	}
-
-	autopsyDir := filepath.Join(s.gitRoot, datadir.Name(), "autopsies")
-	entries, err := os.ReadDir(autopsyDir)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]interface{}{})
 		return
 	}
-	var records []autopsy.Autopsy
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(autopsyDir, entry.Name()))
-		if err != nil {
-			continue
-		}
-		var a autopsy.Autopsy
-		if json.Unmarshal(data, &a) == nil {
-			records = append(records, a)
-		}
+	if records == nil {
+		records = []autopsy.Autopsy{}
 	}
-	sort.Slice(records, func(i, j int) bool {
-		return records[i].Timestamp > records[j].Timestamp
-	})
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(records)
 }
@@ -71,26 +59,13 @@ func (s *Server) handleTome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status, err := DiscoverQuests(s.gitRoot)
-	if err != nil {
-		http.Error(w, "failed to discover quests", http.StatusInternalServerError)
-		return
-	}
-	var worktree string
-	for _, q := range status.Quests {
-		if q.Name == questName {
-			worktree = q.Worktree
-			break
-		}
-	}
-	if worktree == "" {
-		http.Error(w, "quest not found", http.StatusNotFound)
-		return
-	}
-
-	tomePath := filepath.Join(worktree, datadir.Name(), "quest-tome.json")
-	t, err := tome.Load(tomePath)
-	if err != nil {
+	var t *tome.QuestTome
+	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+		var loadErr error
+		t, loadErr = tome.Load(conn, questName)
+		return loadErr
+	})
+	if err != nil || t == nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"quest_name":       questName,
