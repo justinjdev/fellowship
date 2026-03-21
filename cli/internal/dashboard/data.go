@@ -124,7 +124,11 @@ func (s *Server) handleConfigWrite(w http.ResponseWriter, r *http.Request) {
 	var configPath string
 	switch req.Scope {
 	case "global":
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			http.Error(w, "unable to determine home directory", http.StatusInternalServerError)
+			return
+		}
 		configPath = filepath.Join(home, ".claude", "fellowship.json")
 	case "project":
 		configPath = filepath.Join(s.gitRoot, ".fellowship", "config.json")

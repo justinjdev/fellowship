@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	iofs "io/fs"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -31,7 +30,12 @@ type Server struct {
 	hub          *Hub
 }
 
-func NewServer(d *db.DB, gitRoot string, pollInterval int) *Server {
+func NewServer(d *db.DB, gitRoot string, pollInterval int) (*Server, error) {
+	staticFS, err := iofs.Sub(staticFiles, "static")
+	if err != nil {
+		return nil, fmt.Errorf("dashboard: failed to load static assets: %w", err)
+	}
+
 	s := &Server{
 		mux:          http.NewServeMux(),
 		db:           d,
@@ -59,11 +63,6 @@ func NewServer(d *db.DB, gitRoot string, pollInterval int) *Server {
 	s.mux.HandleFunc("GET /api/tome/", s.handleTome)
 	s.mux.HandleFunc("GET /api/config", s.handleConfigRead)
 	s.mux.HandleFunc("POST /api/config", s.handleConfigWrite)
-
-	staticFS, err := iofs.Sub(staticFiles, "static")
-	if err != nil {
-		log.Fatalf("dashboard: failed to load static assets: %v", err)
-	}
 	fileServer := http.FileServer(http.FS(staticFS))
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/ws" {
@@ -94,7 +93,7 @@ func NewServer(d *db.DB, gitRoot string, pollInterval int) *Server {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(data)
 	})
-	return s
+	return s, nil
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

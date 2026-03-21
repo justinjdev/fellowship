@@ -23,7 +23,9 @@ type WSEvent struct {
 }
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true }, // allow all origins (dashboard is localhost-only by design)
+	// Allow all origins — the dashboard binds to localhost but may be accessed
+	// from different ports or via forwarded connections during development.
+	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
 // Hub manages WebSocket connections and broadcasts events.
@@ -59,14 +61,29 @@ func (h *Hub) Broadcast(event WSEvent) {
 		return
 	}
 
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	// Snapshot connections under read lock to avoid holding the lock during writes.
+	h.mu.RLock()
+	snapshot := make([]*websocket.Conn, 0, len(h.conns))
 	for conn := range h.conns {
+		snapshot = append(snapshot, conn)
+	}
+	h.mu.RUnlock()
+
+	var failed []*websocket.Conn
+	for _, conn := range snapshot {
 		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+			failed = append(failed, conn)
+		}
+	}
+
+	if len(failed) > 0 {
+		h.mu.Lock()
+		for _, conn := range failed {
 			delete(h.conns, conn)
 			conn.Close()
 		}
+		h.mu.Unlock()
 	}
 }
 

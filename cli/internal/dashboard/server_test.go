@@ -14,6 +14,15 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
+func mustNewServer(t *testing.T, d *db.DB) *Server {
+	t.Helper()
+	srv, err := NewServer(d, "", 5)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	return srv
+}
+
 func setupTestDB(t *testing.T) (*db.DB, string) {
 	t.Helper()
 	d := db.OpenTest(t)
@@ -51,7 +60,7 @@ func setupTestDB(t *testing.T) (*db.DB, string) {
 
 func TestAPIStatus(t *testing.T) {
 	d, _ := setupTestDB(t)
-	srv := NewServer(d, "", 5)
+	srv := mustNewServer(t, d)
 
 	req := httptest.NewRequest("GET", "/api/status", nil)
 	w := httptest.NewRecorder()
@@ -98,7 +107,7 @@ func TestAPIStatus(t *testing.T) {
 
 func TestAPIGateApprove(t *testing.T) {
 	d, worktreeDir := setupTestDB(t)
-	srv := NewServer(d, "", 5)
+	srv := mustNewServer(t, d)
 
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/approve", body)
@@ -127,7 +136,7 @@ func TestAPIGateApprove(t *testing.T) {
 
 func TestAPIGateReject(t *testing.T) {
 	d, worktreeDir := setupTestDB(t)
-	srv := NewServer(d, "", 5)
+	srv := mustNewServer(t, d)
 
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/reject", body)
@@ -170,7 +179,7 @@ func TestAPIGateApprove_NoPending(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := NewServer(d, "", 5)
+	srv := mustNewServer(t, d)
 
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/approve", body)
@@ -184,7 +193,7 @@ func TestAPIGateApprove_NoPending(t *testing.T) {
 
 func TestAPIGateApprove_HeraldLogging(t *testing.T) {
 	d, worktreeDir := setupTestDB(t)
-	srv := NewServer(d, "", 5)
+	srv := mustNewServer(t, d)
 
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/approve", body)
@@ -228,7 +237,7 @@ func TestAPIGateApprove_HeraldLogging(t *testing.T) {
 
 func TestAPIGateReject_HeraldLogging(t *testing.T) {
 	d, worktreeDir := setupTestDB(t)
-	srv := NewServer(d, "", 5)
+	srv := mustNewServer(t, d)
 
 	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
 	req := httptest.NewRequest("POST", "/api/gate/reject", body)
@@ -261,7 +270,7 @@ func TestAPIGateReject_HeraldLogging(t *testing.T) {
 
 func TestAPIStatus_NotFound(t *testing.T) {
 	d, _ := setupTestDB(t)
-	srv := NewServer(d, "", 5)
+	srv := mustNewServer(t, d)
 
 	req := httptest.NewRequest("GET", "/api/nonexistent", nil)
 	w := httptest.NewRecorder()
