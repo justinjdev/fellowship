@@ -26,14 +26,16 @@ type gateRequest struct {
 type Server struct {
 	mux          *http.ServeMux
 	db           *db.DB
+	gitRoot      string
 	pollInterval int
 	hub          *Hub
 }
 
-func NewServer(d *db.DB, pollInterval int) *Server {
+func NewServer(d *db.DB, gitRoot string, pollInterval int) *Server {
 	s := &Server{
 		mux:          http.NewServeMux(),
 		db:           d,
+		gitRoot:      gitRoot,
 		pollInterval: pollInterval,
 		hub:          NewHub(),
 	}
