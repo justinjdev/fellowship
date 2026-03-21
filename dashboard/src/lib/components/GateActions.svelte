@@ -3,23 +3,28 @@
 
 	let { worktree }: { worktree: string } = $props();
 	let loading = $state(false);
+	let submitting = false;
 
 	async function approve() {
-		if (loading) return;
+		if (submitting) return;
+		submitting = true;
 		loading = true;
 		try {
 			await approveGate(worktree);
 		} finally {
+			submitting = false;
 			loading = false;
 		}
 	}
 
 	async function reject() {
-		if (loading) return;
+		if (submitting) return;
+		submitting = true;
 		loading = true;
 		try {
 			await rejectGate(worktree);
 		} finally {
+			submitting = false;
 			loading = false;
 		}
 	}

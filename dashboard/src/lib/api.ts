@@ -66,7 +66,7 @@ export async function fetchErrands(worktree: string): Promise<unknown> {
 			.replace(/\+/g, '-')
 			.replace(/\//g, '_');
 		const res = await fetch(`/api/errand/${encoded}`);
-		if (res.ok) return res.json();
+		if (res.ok) return await res.json();
 		return null;
 	} catch {
 		return null;
@@ -76,7 +76,7 @@ export async function fetchErrands(worktree: string): Promise<unknown> {
 export async function fetchTome(questName: string): Promise<unknown> {
 	try {
 		const res = await fetch(`/api/tome/${encodeURIComponent(questName)}`);
-		if (res.ok) return res.json();
+		if (res.ok) return await res.json();
 		return null;
 	} catch {
 		return null;
@@ -86,7 +86,7 @@ export async function fetchTome(questName: string): Promise<unknown> {
 export async function fetchAutopsies(): Promise<unknown[]> {
 	try {
 		const res = await fetch('/api/autopsies');
-		if (res.ok) return res.json();
+		if (res.ok) return await res.json();
 		return [];
 	} catch {
 		return [];
@@ -96,7 +96,7 @@ export async function fetchAutopsies(): Promise<unknown[]> {
 export async function fetchConfig(): Promise<{ global: unknown; project: unknown }> {
 	try {
 		const res = await fetch('/api/config');
-		if (res.ok) return res.json();
+		if (res.ok) return await res.json();
 		return { global: null, project: null };
 	} catch {
 		return { global: null, project: null };
@@ -115,7 +115,7 @@ export async function saveConfig(key: string, value: unknown, scope: 'global' | 
 export async function fetchCommands(): Promise<unknown[]> {
 	try {
 		const res = await fetch('/api/commands');
-		if (res.ok) return res.json();
+		if (res.ok) return await res.json();
 		return [];
 	} catch {
 		return [];

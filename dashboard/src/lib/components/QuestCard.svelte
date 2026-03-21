@@ -11,51 +11,58 @@
 	}
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="quest-card" class:gate-pending={quest.gate_pending} onclick={navigateToQuest} onkeydown={(e) => e.key === 'Enter' && navigateToQuest()} role="link" tabindex="0">
-	<div class="card-header">
-		<span class="quest-name">{quest.name}</span>
-		{#if health}
-			<span class="health-badge {health.health}">{health.health}</span>
-		{/if}
+<div class="quest-card-wrapper" class:gate-pending={quest.gate_pending}>
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="quest-card" onclick={navigateToQuest} onkeydown={(e) => e.key === 'Enter' && navigateToQuest()} role="link" tabindex="0">
+		<div class="card-header">
+			<span class="quest-name">{quest.name}</span>
+			{#if health}
+				<span class="health-badge {health.health}">{health.health}</span>
+			{/if}
+		</div>
+
+		<PhaseTimeline phase={quest.phase} compact />
+
+		<div class="card-meta">
+			<span class="phase-label">{quest.phase}</span>
+			{#if quest.errands_total > 0}
+				<span class="errand-count">{quest.errands_done}/{quest.errands_total} errands</span>
+			{/if}
+		</div>
 	</div>
 
-	<PhaseTimeline phase={quest.phase} compact />
-
-	<div class="card-meta">
-		<span class="phase-label">{quest.phase}</span>
-		{#if quest.errands_total > 0}
-			<span class="errand-count">{quest.errands_done}/{quest.errands_total} errands</span>
-		{/if}
-	</div>
-
-	{#if quest.gate_pending}
-		<div class="gate-row" onclick={(e) => e.stopPropagation()}>
+	{#if quest.gate_pending && quest.worktree}
+		<div class="gate-row">
 			<GateActions worktree={quest.worktree} />
 		</div>
 	{/if}
 </div>
 
 <style>
-	.quest-card {
+	.quest-card-wrapper {
 		background: var(--bg-surface);
 		border: 1px solid var(--border);
 		border-radius: var(--radius-lg);
+		display: flex;
+		flex-direction: column;
+		transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+	}
+
+	.quest-card-wrapper:hover {
+		border-color: var(--border-hover);
+	}
+
+	.quest-card-wrapper.gate-pending {
+		border-color: var(--accent-gold-dim);
+		box-shadow: 0 0 12px var(--accent-gold-glow);
+	}
+
+	.quest-card {
 		padding: 14px 16px;
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
 		cursor: pointer;
-		transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-	}
-
-	.quest-card:hover {
-		border-color: var(--border-hover);
-	}
-
-	.quest-card.gate-pending {
-		border-color: var(--accent-gold-dim);
-		box-shadow: 0 0 12px var(--accent-gold-glow);
 	}
 
 	.card-header {
@@ -96,6 +103,6 @@
 
 	.gate-row {
 		border-top: 1px solid var(--border);
-		padding-top: 8px;
+		padding: 8px 16px 14px;
 	}
 </style>
