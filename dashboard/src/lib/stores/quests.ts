@@ -28,7 +28,10 @@ async function fetchStatus() {
 async function fetchHealth() {
 	try {
 		const res = await fetch('/api/eagles');
-		if (res.ok) questHealths.set(await res.json());
+		if (res.ok) {
+			const data = await res.json();
+			questHealths.set(Array.isArray(data?.quests) ? data.quests : []);
+		}
 	} catch { /* offline */ }
 }
 

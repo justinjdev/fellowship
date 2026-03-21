@@ -1,7 +1,7 @@
 <script lang="ts">
 	let { phase, compact = false }: { phase: string; compact?: boolean } = $props();
 
-	const phases = ['Onboard', 'Research', 'Plan', 'Implement', 'Review', 'Complete'];
+	const phases = ['Onboard', 'Research', 'Plan', 'Implement', 'Adversarial', 'Review', 'Complete'];
 
 	function getStatus(p: string): 'done' | 'current' | 'pending' {
 		const currentIdx = phases.indexOf(phase);
