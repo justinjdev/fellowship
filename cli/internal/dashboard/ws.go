@@ -85,7 +85,9 @@ func (h *Hub) Broadcast(event WSEvent) {
 	data, err := json.Marshal(event)
 	if err != nil {
 		log.Printf("ws: marshal error: %v", err)
-		if h.logFunc != nil {
+		// Skip logFunc for "error-logged" events to prevent infinite recursion:
+		// logError -> Broadcast("error-logged") -> marshal fails -> logFunc -> logError -> ...
+		if h.logFunc != nil && event.Type != "error-logged" {
 			h.logFunc("websocket", "Broadcast", "marshal error: "+err.Error())
 		}
 		return

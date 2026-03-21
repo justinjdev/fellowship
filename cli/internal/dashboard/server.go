@@ -585,6 +585,8 @@ func (s *Server) logError(source, handler, message string) {
 	s.hub.Broadcast(WSEvent{Type: "error-logged", Timestamp: time.Now().Unix()})
 }
 
+// handleErrors and handleClearErrors intentionally do not call s.logError()
+// on failure — logging an error about error-fetching would be circular and unhelpful.
 func (s *Server) handleErrors(w http.ResponseWriter, r *http.Request) {
 	var errors []DashboardError
 	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {

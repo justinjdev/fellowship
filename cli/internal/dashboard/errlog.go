@@ -20,16 +20,29 @@ type DashboardError struct {
 	Detail    string `json:"detail,omitempty"`
 }
 
-// LogError inserts a dashboard error into the database.
+// maxErrors is the retention limit for dashboard errors. Older entries are
+// pruned each time a new error is logged to prevent unbounded table growth.
+const maxErrors = 500
+
+// LogError inserts a dashboard error into the database and prunes old entries
+// beyond the retention limit.
 func LogError(conn *db.Conn, source, handler, message, detail string) error {
 	ts := time.Now().UTC().Format(time.RFC3339)
-	return sqlitex.Execute(conn,
+	if err := sqlitex.Execute(conn,
 		`INSERT INTO dashboard_errors (timestamp, source, handler, message, detail)
 		 VALUES (?, ?, ?, ?, ?)`,
 		&sqlitex.ExecOptions{
 			Args: []any{ts, source, handler, message, detail},
 		},
+	); err != nil {
+		return err
+	}
+	// Best-effort prune: keep only the most recent maxErrors rows.
+	sqlitex.Execute(conn,
+		`DELETE FROM dashboard_errors WHERE id NOT IN (SELECT id FROM dashboard_errors ORDER BY id DESC LIMIT ?)`,
+		&sqlitex.ExecOptions{Args: []any{maxErrors}},
 	)
+	return nil
 }
 
 // ReadErrors returns the last n errors in descending order (newest first).
