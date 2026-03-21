@@ -196,7 +196,7 @@ When the user says "wrap up" or "disband":
 
 1. Send `shutdown_request` to all active teammates (including palantir)
 2. Synthesize a summary: quests completed, PR URLs, any open items
-3. **Clear the bulletin board:** Run `fellowship bulletin clear` to remove ephemeral discoveries
+3. **Clear the bulletin board:** Run `~/.claude/fellowship/bin/fellowship bulletin clear` to remove ephemeral discoveries
 4. **Suggest retrospective (optional):** Mention to the user: "Consider running `/retro` for a retrospective analysis of this fellowship — it identifies patterns across quests and can recommend configuration improvements." This is a suggestion only — the user can skip it and proceed directly to cleanup.
 5. Run `TeamDelete` to clean up
 

@@ -23,7 +23,7 @@ Reconstructs fellowship state from on-disk artifacts after a session crash and t
 Run the CLI to discover fellowship artifacts:
 
 ```bash
-fellowship status --json
+~/.claude/fellowship/bin/fellowship status --json
 ```
 
 This scans all git worktrees for `.fellowship/quest-state.json` files, checks for checkpoints (`.fellowship/checkpoint.md`), detects merged branches, and reads `.fellowship/fellowship-state.json` from the main repo.
@@ -92,7 +92,7 @@ INSTRUCTIONS:
 1. Run /quest to resume this task
 2. In Phase 0 (Onboard), detect the RESUME CONTEXT block above and:
    - Skip worktree creation — you are already in your worktree
-   - Run `fellowship init` to reset gate state (clears gate_pending, preserves phase)
+   - Run `~/.claude/fellowship/bin/fellowship init` to reset gate state (clears gate_pending, preserves phase)
    - Store your worktree path in task metadata: TaskUpdate(taskId: "{task_id}", metadata: {"worktree_path": "{worktree_path}"})
    - If checkpoint exists, load .fellowship/checkpoint.md as your initial context
    - Skip /council — checkpoint replaces orientation
@@ -151,7 +151,7 @@ CONTEXT:
 
 | Placeholder | Source |
 |---|---|
-| `{worktree_path}` | From `fellowship status --json` output |
+| `{worktree_path}` | From `~/.claude/fellowship/bin/fellowship status --json` output |
 | `{phase}` | From quest state file |
 | `{classification}` | "resumable" or "stale" |
 
