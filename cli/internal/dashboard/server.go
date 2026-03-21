@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	iofs "io/fs"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -25,15 +26,20 @@ type gateRequest struct {
 type Server struct {
 	mux          *http.ServeMux
 	db           *db.DB
+	gitRoot      string
 	pollInterval int
+	hub          *Hub
 }
 
-func NewServer(d *db.DB, pollInterval int) *Server {
+func NewServer(d *db.DB, gitRoot string, pollInterval int) *Server {
 	s := &Server{
 		mux:          http.NewServeMux(),
 		db:           d,
+		gitRoot:      gitRoot,
 		pollInterval: pollInterval,
+		hub:          NewHub(),
 	}
+	s.mux.HandleFunc("GET /ws", s.hub.HandleWS)
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
 	s.mux.HandleFunc("GET /api/eagles", s.handleEagles)
 	s.mux.HandleFunc("GET /api/herald", s.handleHerald)
@@ -43,16 +49,49 @@ func NewServer(d *db.DB, pollInterval int) *Server {
 	s.mux.HandleFunc("POST /api/company/", s.handleCompanyApprove)
 	s.mux.HandleFunc("GET /api/errand/", s.handleErrand)
 	s.mux.HandleFunc("GET /api/bulletin", s.handleBulletin)
+	s.mux.HandleFunc("POST /api/quest/spawn", s.handleSpawnQuest)
+	s.mux.HandleFunc("POST /api/quest/kill", s.handleKillQuest)
+	s.mux.HandleFunc("POST /api/quest/restart", s.handleRestartQuest)
+	s.mux.HandleFunc("POST /api/scout/spawn", s.handleSpawnScout)
+	s.mux.HandleFunc("GET /api/commands", s.handleCommands)
+	s.mux.HandleFunc("GET /api/autopsies/", s.handleAutopsies)
+	s.mux.HandleFunc("GET /api/autopsies", s.handleAutopsies)
+	s.mux.HandleFunc("GET /api/tome/", s.handleTome)
+	s.mux.HandleFunc("GET /api/config", s.handleConfigRead)
+	s.mux.HandleFunc("POST /api/config", s.handleConfigWrite)
 
-	staticFS, _ := iofs.Sub(staticFiles, "static")
-	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
-	s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
+	staticFS, err := iofs.Sub(staticFiles, "static")
+	if err != nil {
+		log.Fatalf("dashboard: failed to load static assets: %v", err)
+	}
+	fileServer := http.FileServer(http.FS(staticFS))
+	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/ws" {
 			http.NotFound(w, r)
 			return
 		}
+
+		// Try to serve static file first
+		path := strings.TrimPrefix(r.URL.Path, "/")
+		if path == "" {
+			path = "index.html"
+		}
+		if f, err := staticFS.Open(path); err == nil {
+			stat, statErr := f.Stat()
+			f.Close()
+			if statErr == nil && !stat.IsDir() {
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		// SPA fallback: serve index.html for client-side routes
 		data, _ := staticFiles.ReadFile("static/index.html")
-		w.Header().Set("Content-Type", "text/html")
+		if data == nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(data)
 	})
 	return s
@@ -150,15 +189,20 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	now := time.Now().UTC()
+	ts := now.Unix()
+	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: result.Name, Action: "approved", Timestamp: ts})
+	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: result.Name, Timestamp: ts})
+
 	// Best-effort herald announcements after tx commits.
 	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
-		now := time.Now().UTC().Format(time.RFC3339)
+		nowStr := now.Format(time.RFC3339)
 		herald.Announce(conn, herald.Tiding{
-			Timestamp: now, Quest: result.Name, Type: herald.GateApproved,
+			Timestamp: nowStr, Quest: result.Name, Type: herald.GateApproved,
 			Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
 		})
 		herald.Announce(conn, herald.Tiding{
-			Timestamp: now, Quest: result.Name, Type: herald.PhaseTransition,
+			Timestamp: nowStr, Quest: result.Name, Type: herald.PhaseTransition,
 			Phase: result.Phase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, result.Phase),
 		})
 		return nil
@@ -226,10 +270,14 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rejectTS := time.Now().UTC()
+	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: result.Name, Action: "rejected", Timestamp: rejectTS.Unix()})
+	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: result.Name, Timestamp: rejectTS.Unix()})
+
 	// Best-effort herald announcement after tx commits.
 	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		herald.Announce(conn, herald.Tiding{
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Timestamp: rejectTS.Format(time.RFC3339),
 			Quest:     result.Name, Type: herald.GateRejected,
 			Phase: result.Phase, Detail: fmt.Sprintf("Gate rejected for %s", result.Phase),
 		})
@@ -275,7 +323,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("company not found: %s", name)
 		}
 
-		approved, errs := batchApproveCompany(conn, *target, fs)
+		approved, errs := batchApproveCompany(conn, *target, fs, s.hub)
 		resp.Approved = approved
 		if resp.Approved == nil {
 			resp.Approved = []string{}
@@ -299,7 +347,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 }
 
 // batchApproveCompany approves all pending gates within a company.
-func batchApproveCompany(conn *db.Conn, c CompanyEntry, fs *FellowshipState) (approved []string, errs []error) {
+func batchApproveCompany(conn *db.Conn, c CompanyEntry, fs *FellowshipState, hub *Hub) (approved []string, errs []error) {
 	for _, qName := range c.Quests {
 		// Find worktree from fellowship quests
 		var wt string
@@ -348,6 +396,12 @@ func batchApproveCompany(conn *db.Conn, c CompanyEntry, fs *FellowshipState) (ap
 			Timestamp: now, Quest: qName, Type: herald.PhaseTransition,
 			Phase: nextPhase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, nextPhase),
 		})
+
+		if hub != nil {
+			batchTS := time.Now().Unix()
+			hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: qName, Action: "approved", Timestamp: batchTS})
+			hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: qName, Timestamp: batchTS})
+		}
 
 		_ = wt // worktree used for context but not needed for DB operations
 		approved = append(approved, qName)

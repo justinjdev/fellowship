@@ -913,7 +913,7 @@ func runDashboard(d *db.DB, args []string) int {
 	poll := fs.Int("poll", 5, "Poll interval in seconds")
 	fs.Parse(args)
 
-	srv := dashboard.NewServer(d, *poll)
+	srv := dashboard.NewServer(d, gitRootOrCwd(), *poll)
 
 	addr := fmt.Sprintf("localhost:%d", *port)
 	url := fmt.Sprintf("http://%s", addr)
