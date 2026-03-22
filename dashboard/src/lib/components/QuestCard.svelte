@@ -1,19 +1,13 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import PhaseTimeline from './PhaseTimeline.svelte';
 	import GateActions from './GateActions.svelte';
 	import type { QuestStatus, QuestHealth } from '$lib/types';
 
 	let { quest, health }: { quest: QuestStatus; health?: QuestHealth } = $props();
-
-	function navigateToQuest() {
-		goto(`/quest/${encodeURIComponent(quest.name)}`);
-	}
 </script>
 
 <div class="quest-card-wrapper" class:gate-pending={quest.gate_pending}>
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="quest-card" onclick={navigateToQuest} onkeydown={(e) => e.key === 'Enter' && navigateToQuest()} role="link" tabindex="0">
+	<a class="quest-card" href={`/quest/${encodeURIComponent(quest.name)}`}>
 		<div class="card-header">
 			<span class="quest-name">{quest.name}</span>
 			{#if health}
@@ -29,7 +23,7 @@
 				<span class="errand-count">{quest.errands_done}/{quest.errands_total} errands</span>
 			{/if}
 		</div>
-	</div>
+	</a>
 
 	{#if quest.gate_pending && quest.worktree}
 		<div class="gate-row">
@@ -61,6 +55,8 @@
 		padding: 14px 16px;
 		display: flex;
 		flex-direction: column;
+		text-decoration: none;
+		color: inherit;
 		gap: 10px;
 		cursor: pointer;
 	}

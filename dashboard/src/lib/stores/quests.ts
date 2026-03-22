@@ -47,10 +47,19 @@ export async function refreshAll() {
 }
 
 let unsubscribe: (() => void) | null = null;
+let refreshInFlight: Promise<void> | null = null;
+
+function scheduleRefresh() {
+	if (refreshInFlight) return refreshInFlight;
+	refreshInFlight = refreshAll().finally(() => {
+		refreshInFlight = null;
+	});
+	return refreshInFlight;
+}
 
 export function startPolling() {
 	if (unsubscribe) return;
-	refreshAll();
+	void scheduleRefresh();
 	unsubscribe = lastEvent.subscribe((event) => {
 		if (!event) return;
 		switch (event.type) {
@@ -58,7 +67,7 @@ export function startPolling() {
 			case 'gate-submitted':
 			case 'gate-resolved':
 			case 'command-completed':
-				refreshAll();
+				void scheduleRefresh();
 				break;
 			case 'alert':
 				fetchProblems();

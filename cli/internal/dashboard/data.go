@@ -154,6 +154,9 @@ func (s *Server) handleConfigWrite(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "existing config file contains invalid JSON", http.StatusInternalServerError)
 			return
 		}
+	} else if !os.IsNotExist(err) {
+		http.Error(w, "failed to read existing config", http.StatusInternalServerError)
+		return
 	}
 
 	existing[req.Key] = req.Value
