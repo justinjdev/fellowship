@@ -23,7 +23,7 @@ Reconstructs fellowship state from on-disk artifacts after a session crash and t
 Run the CLI to discover fellowship artifacts:
 
 ```bash
-fellowship status --json
+~/.claude/fellowship/bin/fellowship status --json
 ```
 
 This scans all git worktrees for `.fellowship/quest-state.json` files, checks for checkpoints (`.fellowship/checkpoint.md`), detects merged branches, and reads `.fellowship/fellowship-state.json` from the main repo.
@@ -38,7 +38,8 @@ Each quest gets one classification:
 |---|---|---|
 | **Complete** | Branch merged into main | Skip — already shipped |
 | **Resumable** | Has `.fellowship/checkpoint.md` | Continue from current phase with checkpoint context |
-| **Stale** | No checkpoint | Restart current phase from scratch |
+| **Stale** | No checkpoint, quest-state.json exists | Restart current phase from scratch |
+| **Zombie** | No quest-state.json (corrupted/missing) | Write autopsy, clean up worktree |
 
 ### Step 3: Present Recovery Dashboard
 
@@ -67,7 +68,7 @@ On user confirmation, transition into Gandalf coordinator mode:
 1. **Load config:** Read `~/.claude/fellowship.json` if it exists (same as `/fellowship`)
 2. **Create team:** `TeamCreate` with name `fellowship-{timestamp}`
 3. **Write fellowship state:** Write `.fellowship/fellowship-state.json` with recovered quest list (same as `/fellowship` startup)
-4. **Write autopsies for dead quests:** Before respawning, run `~/.claude/fellowship/bin/fellowship autopsy infer --dir <worktree> --repo <main_repo>` for each quest classified as `stale`. This preserves failure knowledge from the crashed session for future quests to learn from.
+4. **Write autopsies for dead quests:** Before respawning, run `~/.claude/fellowship/bin/fellowship autopsy infer --dir <worktree> --repo <repo_root>` for each quest classified as `stale` or `zombie`. This preserves failure knowledge from the crashed session for future quests to learn from.
 5. **For each non-complete quest:**
    a. `TaskCreate` with the original task description (from `fellowship-state.json` or inferred from quest name)
    b. Spawn a quest runner teammate with the **resume spawn prompt** (see below)
@@ -91,7 +92,7 @@ INSTRUCTIONS:
 1. Run /quest to resume this task
 2. In Phase 0 (Onboard), detect the RESUME CONTEXT block above and:
    - Skip worktree creation — you are already in your worktree
-   - Run `fellowship init` to reset gate state (clears gate_pending, preserves phase)
+   - Run `~/.claude/fellowship/bin/fellowship init` to reset gate state (clears gate_pending, preserves phase)
    - Store your worktree path in task metadata: TaskUpdate(taskId: "{task_id}", metadata: {"worktree_path": "{worktree_path}"})
    - If checkpoint exists, load .fellowship/checkpoint.md as your initial context
    - Skip /council — checkpoint replaces orientation
@@ -150,7 +151,7 @@ CONTEXT:
 
 | Placeholder | Source |
 |---|---|
-| `{worktree_path}` | From `fellowship status --json` output |
+| `{worktree_path}` | From `~/.claude/fellowship/bin/fellowship status --json` output |
 | `{phase}` | From quest state file |
 | `{classification}` | "resumable" or "stale" |
 

@@ -196,7 +196,7 @@ When the user says "wrap up" or "disband":
 
 1. Send `shutdown_request` to all active teammates (including palantir)
 2. Synthesize a summary: quests completed, PR URLs, any open items
-3. **Clear the bulletin board:** Run `fellowship bulletin clear` to remove ephemeral discoveries
+3. **Clear the bulletin board:** Run `~/.claude/fellowship/bin/fellowship bulletin clear` to remove ephemeral discoveries
 4. **Suggest retrospective (optional):** Mention to the user: "Consider running `/retro` for a retrospective analysis of this fellowship — it identifies patterns across quests and can recommend configuration improvements." This is a suggestion only — the user can skip it and proceed directly to cleanup.
 5. Run `TeamDelete` to clean up
 
@@ -263,7 +263,7 @@ Keep it brief — one line, not a monologue. Functional information always comes
 
 - **Quest fails:** Report to user with context (which phase, what went wrong). Before respawning, write an autopsy to preserve failure knowledge for future quests:
   ```bash
-  fellowship autopsy infer --dir <worktree_path> --repo <main_repo>
+  ~/.claude/fellowship/bin/fellowship autopsy infer --dir <worktree_path> --repo <repo_root>
   ```
   This reconstructs a best-effort failure record from the quest's tome, herald, and eagles data. Then offer to respawn. Worktree is preserved.
   - **Respawn procedure:** Spawn a new teammate with the same task description, but add to the spawn prompt: `"You are resuming a failed quest. Your working directory is already set to the existing worktree at {worktree_path}. Skip worktree creation in quest Phase 0 — you're already isolated. Check .fellowship/checkpoint.md for a checkpoint from the previous attempt."` Set the new teammate's working directory to the failed quest's worktree path.

@@ -8,6 +8,7 @@ import (
 	iofs "io/fs"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/bulletin"
@@ -25,15 +26,27 @@ type gateRequest struct {
 type Server struct {
 	mux          *http.ServeMux
 	db           *db.DB
+	gitRoot      string
 	pollInterval int
+	hub          *Hub
+	configMu     sync.Mutex
 }
 
-func NewServer(d *db.DB, pollInterval int) *Server {
+func NewServer(d *db.DB, gitRoot string, pollInterval int) (*Server, error) {
+	staticFS, err := iofs.Sub(staticFiles, "static")
+	if err != nil {
+		return nil, fmt.Errorf("dashboard: failed to load static assets: %w", err)
+	}
+
 	s := &Server{
 		mux:          http.NewServeMux(),
 		db:           d,
+		gitRoot:      gitRoot,
 		pollInterval: pollInterval,
+		hub:          NewHub(),
 	}
+	s.hub.SetLogFunc(s.logError)
+	s.mux.HandleFunc("GET /ws", s.hub.HandleWS)
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
 	s.mux.HandleFunc("GET /api/eagles", s.handleEagles)
 	s.mux.HandleFunc("GET /api/herald", s.handleHerald)
@@ -43,19 +56,49 @@ func NewServer(d *db.DB, pollInterval int) *Server {
 	s.mux.HandleFunc("POST /api/company/", s.handleCompanyApprove)
 	s.mux.HandleFunc("GET /api/errand/", s.handleErrand)
 	s.mux.HandleFunc("GET /api/bulletin", s.handleBulletin)
-
-	staticFS, _ := iofs.Sub(staticFiles, "static")
-	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
-	s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
+	s.mux.HandleFunc("POST /api/quest/spawn", s.handleSpawnQuest)
+	s.mux.HandleFunc("POST /api/quest/kill", s.handleKillQuest)
+	s.mux.HandleFunc("POST /api/quest/restart", s.handleRestartQuest)
+	s.mux.HandleFunc("POST /api/scout/spawn", s.handleSpawnScout)
+	s.mux.HandleFunc("GET /api/commands", s.handleCommands)
+	s.mux.HandleFunc("GET /api/autopsies/", s.handleAutopsies)
+	s.mux.HandleFunc("GET /api/autopsies", s.handleAutopsies)
+	s.mux.HandleFunc("GET /api/tome/", s.handleTome)
+	s.mux.HandleFunc("GET /api/config", s.handleConfigRead)
+	s.mux.HandleFunc("POST /api/config", s.handleConfigWrite)
+	s.mux.HandleFunc("GET /api/errors", s.handleErrors)
+	s.mux.HandleFunc("DELETE /api/errors", s.handleClearErrors)
+	fileServer := http.FileServer(http.FS(staticFS))
+	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/ws" {
 			http.NotFound(w, r)
 			return
 		}
+
+		// Try to serve static file first
+		path := strings.TrimPrefix(r.URL.Path, "/")
+		if path == "" {
+			path = "index.html"
+		}
+		if f, err := staticFS.Open(path); err == nil {
+			stat, statErr := f.Stat()
+			f.Close()
+			if statErr == nil && !stat.IsDir() {
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		// SPA fallback: serve index.html for client-side routes
 		data, _ := staticFiles.ReadFile("static/index.html")
-		w.Header().Set("Content-Type", "text/html")
+		if data == nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(data)
 	})
-	return s
+	return s, nil
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +131,7 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if valid, err := s.validWorktreeDir(req.Dir); err != nil {
+		s.logError("api", "handleGateApprove", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	} else if !valid {
@@ -145,20 +189,26 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		if err.Error() == "no gate pending" {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		} else {
+			s.logError("api", "handleGateApprove", err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
 
+	now := time.Now().UTC()
+	ts := now.Unix()
+	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: result.Name, Action: "approved", Timestamp: ts})
+	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: result.Name, Timestamp: ts})
+
 	// Best-effort herald announcements after tx commits.
 	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
-		now := time.Now().UTC().Format(time.RFC3339)
+		nowStr := now.Format(time.RFC3339)
 		herald.Announce(conn, herald.Tiding{
-			Timestamp: now, Quest: result.Name, Type: herald.GateApproved,
+			Timestamp: nowStr, Quest: result.Name, Type: herald.GateApproved,
 			Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
 		})
 		herald.Announce(conn, herald.Tiding{
-			Timestamp: now, Quest: result.Name, Type: herald.PhaseTransition,
+			Timestamp: nowStr, Quest: result.Name, Type: herald.PhaseTransition,
 			Phase: result.Phase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, result.Phase),
 		})
 		return nil
@@ -176,6 +226,7 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if valid, err := s.validWorktreeDir(req.Dir); err != nil {
+		s.logError("api", "handleGateReject", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	} else if !valid {
@@ -221,15 +272,20 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		if err.Error() == "no gate pending" {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		} else {
+			s.logError("api", "handleGateReject", err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
 
+	rejectTS := time.Now().UTC()
+	s.hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: result.Name, Action: "rejected", Timestamp: rejectTS.Unix()})
+	s.hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: result.Name, Timestamp: rejectTS.Unix()})
+
 	// Best-effort herald announcement after tx commits.
 	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		herald.Announce(conn, herald.Tiding{
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Timestamp: rejectTS.Format(time.RFC3339),
 			Quest:     result.Name, Type: herald.GateRejected,
 			Phase: result.Phase, Detail: fmt.Sprintf("Gate rejected for %s", result.Phase),
 		})
@@ -275,7 +331,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("company not found: %s", name)
 		}
 
-		approved, errs := batchApproveCompany(conn, *target, fs)
+		approved, errs := batchApproveCompany(conn, *target, fs, s.hub)
 		resp.Approved = approved
 		if resp.Approved == nil {
 			resp.Approved = []string{}
@@ -289,6 +345,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(err.Error(), "company not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
 		} else {
+			s.logError("api", "handleCompanyApprove", err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
@@ -299,7 +356,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 }
 
 // batchApproveCompany approves all pending gates within a company.
-func batchApproveCompany(conn *db.Conn, c CompanyEntry, fs *FellowshipState) (approved []string, errs []error) {
+func batchApproveCompany(conn *db.Conn, c CompanyEntry, fs *FellowshipState, hub *Hub) (approved []string, errs []error) {
 	for _, qName := range c.Quests {
 		// Find worktree from fellowship quests
 		var wt string
@@ -349,6 +406,12 @@ func batchApproveCompany(conn *db.Conn, c CompanyEntry, fs *FellowshipState) (ap
 			Phase: nextPhase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, nextPhase),
 		})
 
+		if hub != nil {
+			batchTS := time.Now().Unix()
+			hub.Broadcast(WSEvent{Type: "gate-resolved", QuestID: qName, Action: "approved", Timestamp: batchTS})
+			hub.Broadcast(WSEvent{Type: "quest-changed", QuestID: qName, Timestamp: batchTS})
+		}
+
 		_ = wt // worktree used for context but not needed for DB operations
 		approved = append(approved, qName)
 	}
@@ -365,6 +428,7 @@ func (s *Server) handleEagles(w http.ResponseWriter, r *http.Request) {
 		return sweepErr
 	})
 	if err != nil {
+		s.logError("api", "handleEagles", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -388,6 +452,7 @@ func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
 	dir := string(dirBytes)
 
 	if valid, err := s.validWorktreeDir(dir); err != nil {
+		s.logError("api", "handleErrand", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	} else if !valid {
@@ -409,6 +474,7 @@ func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
 		return listErr
 	})
 	if err != nil {
+		s.logError("api", "handleErrand", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -445,6 +511,7 @@ func (s *Server) handleHerald(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
+		s.logError("api", "handleHerald", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -463,6 +530,7 @@ func (s *Server) handleProblems(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
+		s.logError("api", "handleProblems", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -481,6 +549,7 @@ func (s *Server) handleBulletin(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
+		s.logError("api", "handleBulletin", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -499,10 +568,50 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return e
 	})
 	if err != nil {
+		s.logError("api", "handleStatus", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	status.PollInterval = s.pollInterval
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)
+}
+
+// logError records a dashboard error to the database (best-effort) and
+// broadcasts an "error-logged" WS event so the frontend can refresh.
+func (s *Server) logError(source, handler, message string) {
+	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+		LogError(conn, source, handler, message, "")
+		return nil
+	})
+	s.hub.Broadcast(WSEvent{Type: "error-logged", Timestamp: time.Now().Unix()})
+}
+
+// handleErrors and handleClearErrors intentionally do not call s.logError()
+// on failure — logging an error about error-fetching would be circular and unhelpful.
+func (s *Server) handleErrors(w http.ResponseWriter, r *http.Request) {
+	var errors []DashboardError
+	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+		var e error
+		errors, e = ReadErrors(conn, 100)
+		return e
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(errors)
+}
+
+func (s *Server) handleClearErrors(w http.ResponseWriter, r *http.Request) {
+	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
+		return ClearErrors(conn)
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }
