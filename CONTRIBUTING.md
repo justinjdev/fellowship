@@ -4,60 +4,80 @@ Thanks for your interest in contributing to Fellowship — a Claude Code plugin 
 
 ## What This Repo Is
 
-Fellowship is a Claude Code plugin. Skills, agents, and docs are markdown. Gate enforcement hooks are bash scripts. There is no build system and no dependencies beyond `jq` (for hooks).
+Fellowship is a Claude Code plugin with two parts:
+
+- **Prompt layer** — skills, agents, and commands are pure markdown under `plugin/`. No runtime code.
+- **Enforcement layer** — gate enforcement, worktree isolation, and quest state live in a Go CLI (`cli/`). Claude Code hooks shell out to the `fellowship` binary, which reads the hook payload as JSON on stdin and signals allow/block via its exit code.
+
+The binary is built from `cli/` and distributed via GitHub releases (goreleaser on tag push). End users never build it — `plugin/hooks/scripts/ensure-binary.sh` downloads the matching release on first use (wired as a `SessionStart` hook), installing it at `~/.claude/fellowship/bin/fellowship`.
 
 ## Getting Started
 
 1. Clone the repo
-2. Test locally: `claude --plugin-dir .`
-3. Run hook tests: `./hooks/test-hooks.sh`
+2. Test the plugin locally: `claude --plugin-dir .`
+3. Build and test the CLI (from `cli/`):
 
-## What We're Looking For
+   ```bash
+   go build ./...
+   go test ./...
+   ```
 
-- **Bug reports** — especially around gate enforcement, quest lifecycle, and fellowship coordination
-- **Skill improvements** — clearer prompts, better phase transitions, edge case handling
-- **Hook hardening** — error handling, new test cases, edge case coverage
-- **Documentation** — README clarity, config examples, usage guides
+You need a recent Go toolchain (see the `go` directive in `cli/go.mod`).
+
+## How Hooks Work
+
+Hooks are subcommands of the CLI, not standalone scripts. `plugin/hooks/hooks.json` maps Claude Code hook events to `fellowship hook <name>` invocations; each handler lives in `cli/internal/hooks/` and is dispatched from `runHook` in `cli/cmd/fellowship/main.go`.
+
+- Input: the hook payload is JSON on stdin, parsed by `hooks.ParseInput`.
+- Output: **exit 0 allows** the tool call; **exit 2 blocks** it (the message on stderr is surfaced to Claude). Some hooks emit a JSON decision on stdout instead (e.g. gate-submit).
+- Posture: gate hooks fail *closed* (block on internal error) so enforcement can't be silently skipped. The `worktree-guard` backstop is the exception — it is defense-in-depth behind lead-provisioned isolation, so it fails *open* (allow) on any resolution failure and blocks only on a positive main-tree mis-placement detection.
+
+Current hooks: `gate-guard`, `gate-submit`, `gate-prereq`, `completion-guard`, `metadata-track`, `file-track`, `worktree-guard`. Run `fellowship` with no args for the full command reference.
 
 ## How to Contribute
 
 1. Open an issue first for non-trivial changes so we can discuss the approach
 2. Fork the repo and create a branch from `main`
 3. Make your changes
-4. Run `./hooks/test-hooks.sh` and confirm all tests pass
+4. For CLI changes, run the checks below and confirm they pass
 5. Open a PR with a clear description of what and why
 
 ## Conventions
 
 - **Commits**: use conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`)
-- **Skills**: SKILL.md files with YAML frontmatter (`name` and `description` fields)
-- **Skill names**: must not collide with Claude Code built-in commands (`help`, `clear`, etc.)
-- **Hooks**: bash scripts in `hooks/scripts/`, sourcing `_common.sh` for shared state file logic
-- **Tests**: add test cases to `hooks/test-hooks.sh` for any hook behavior changes
-- **Changelog**: don't edit — maintainer updates it at release time
+- **Go**: idiomatic Go, standard library where practical, clear error handling. Keep hook decision logic pure and table-test it (see `cli/internal/hooks/*_test.go`).
+- **Skills**: `SKILL.md` files with YAML frontmatter (`name` and `description`). Commands use `description` only.
+- **Skill names**: must not collide with Claude Code built-in commands (`help`, `clear`, `config`, etc.)
+- **Changelog**: the README `## Changelog` is append-only per version and updated by the maintainer at release time. Don't edit historical entries.
 
 ## Repo Structure
 
 ```
-.claude-plugin/plugin.json   # Plugin manifest
-skills/<name>/SKILL.md       # Skills (markdown with YAML frontmatter)
-agents/<name>.md             # Agent definitions
-hooks/hooks.json             # Plugin hook definitions
-hooks/scripts/*.sh           # Gate enforcement scripts (require jq)
-hooks/test-hooks.sh          # Hook test suite
-README.md                    # User-facing docs
-CLAUDE.md                    # AI assistant conventions
+.claude-plugin/plugin.json          # Plugin manifest (repo root; points to plugin/ paths)
+plugin/skills/<name>/SKILL.md       # Skills — auto-invocable by Claude
+plugin/commands/<name>.md           # Commands — user-invoked only
+plugin/agents/<name>.md             # Agent definitions
+plugin/hooks/hooks.json             # Maps hook events to `fellowship hook <name>`
+plugin/hooks/scripts/ensure-binary.sh  # Downloads the CLI binary from GitHub releases
+plugin/hooks/scripts/fellowship.sh  # Thin wrapper — ensures binary, then exec's it
+cli/cmd/fellowship/main.go          # CLI entrypoint and subcommand dispatch
+cli/internal/hooks/                 # Hook decision logic (pure, table-tested)
+cli/internal/                       # State, db (SQLite), dashboard, herald, etc.
+README.md                           # User-facing docs and changelog
+CLAUDE.md                           # AI assistant conventions
 ```
 
 ## Testing
 
-The hook test suite is the primary automated test:
+For CLI changes, run from `cli/`:
 
 ```bash
-./hooks/test-hooks.sh
+gofmt -l .        # formatting — must report no files
+go vet ./...      # static checks
+go test ./...     # unit tests
 ```
 
-For end-to-end testing, run a fellowship or quest locally with `claude --plugin-dir .` and verify gate behavior manually.
+For plugin (prompt-layer) changes, run a fellowship or quest locally with `claude --plugin-dir .` and verify behavior manually.
 
 ## Questions?
 

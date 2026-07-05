@@ -121,9 +121,42 @@ No built-in templates ship with fellowship. Use `/scribe` to create them. Parse 
 
 **Template selection:** Explicit (`template: <name>`) > auto-suggest (keyword matching) > no template.
 
-### Gate Hook Propagation
+### Gate Hook Propagation & Isolation Pre-flight (REQUIRED before spawning)
 
-Plugin hooks only fire in Gandalf's session — teammates spawned via the Agent tool do not inherit them. A `SessionStart` hook in the plugin automatically creates `.claude/settings.json` with project-level hooks when the plugin loads. This ensures teammates inherit gate enforcement without any manual setup.
+Plugin hooks only fire in Gandalf's session — teammates spawned via the Agent
+tool do NOT inherit them. For the `worktree-guard` to fire in a session, a
+`.claude/settings.local.json` registering it must be present at that session's
+root.
+
+`fellowship state init` writes that file for you: it merges the `worktree-guard`
+PreToolUse hook into the project `.claude/settings.local.json` (preserving any
+existing settings; idempotent). `settings.local.json` is **git-ignored**, so
+this touches no git history and leaves no untracked file. Pass
+`--skip-hook-install` to opt out (e.g. if you manage settings yourself).
+
+This alone catches the primary bug: a teammate that lands in the **main repo
+root** (the isolation failure) reads the main tree's `settings.local.json`, so
+the guard fires and blocks. To also arm correctly-placed teammates, the lead
+copies `.claude/settings.local.json` into each new worktree right after
+`git worktree add` (see "Spawn a Quest"). No commit, ever.
+
+Before spawning any quest, Gandalf MUST:
+
+1. Confirm `state init` wrote the hook — its output reads "Registered
+   worktree-guard hook in .claude/settings.local.json" (or the file already had
+   it).
+2. Confirm the guard binary is present — `~/.claude/fellowship/bin/fellowship
+   version` should succeed.
+3. Confirm the fellowship state store exists (a fellowship has been initialized
+   via `fellowship state init`).
+
+The guard is **inert unless a fellowship is active**, so installing it is always
+safe — it never blocks work outside a fellowship. Isolation itself is provisioned
+and VERIFIED by the lead (explicit `git worktree add` is the reliable path — the
+harness `isolation` flag can silently no-op; see "Spawn a Quest"). The
+`worktree-guard` hook and the teammate's self-check are the fail-closed
+backstops that catch a mis-placed teammate regardless of how isolation was
+provisioned.
 
 ### Spawn a Quest
 
@@ -143,7 +176,32 @@ If no issue references are found, `{issue_context}` is substituted with an empty
    - `team_name`: the fellowship team name
    - `subagent_type: "general-purpose"`
    - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
-   - Do NOT pass `isolation: "worktree"` — the teammate creates its own worktree during quest Phase 0.
+   - **Isolation is the LEAD's job to PROVISION and VERIFY — never a flag to
+     trust.** The `Task`/Agent `isolation: "worktree"` param has been observed to
+     silently no-op for background quest teammates (no worktree is created; the
+     teammate lands in the main repo root). Do NOT assume it worked, and do NOT
+     rely on the teammate creating its own worktree in quest Phase 0 — that is
+     advisory and fails silently if skipped, dropping the quest into the shared
+     main tree.
+   - **Preferred reliable mechanism:** before spawning, the lead explicitly runs
+     `git worktree add -b <branch> <path> <base>` with `<path>` OUTSIDE the main
+     tree, provisions dependencies so the teammate's tests run (e.g. symlink or
+     install `node_modules`), copies `.claude/settings.local.json` into the new
+     worktree (`mkdir -p <path>/.claude && cp .claude/settings.local.json
+     <path>/.claude/`) so the `worktree-guard` hook is armed there, and directs
+     the teammate into that worktree via its spawn prompt. Passing the harness
+     `isolation` flag MAY additionally work but MUST be verified with
+     `git worktree list` (and the teammate's self-check) — never assumed.
+   - **Then VERIFY before the teammate writes.** After provisioning, confirm the
+     worktree exists (`git worktree list`) and that its path is not the main root.
+     Never tell a teammate it is "already isolated" unless you have verified its
+     worktree exists.
+   - **Two safeguards catch the bug regardless of how isolation was provisioned:**
+     (1) the teammate's mandatory isolation SELF-CHECK before its first write —
+     top-level must differ from the main root, else STOP and message the lead
+     (see spawn-prompts.md); and (2) the fail-closed `worktree-guard` PreToolUse
+     hook, which blocks source writes from the main tree during an active
+     fellowship. These are what actually prevent the regression.
 
 **Errand persistence:** After spawning, write initial errands via `~/.claude/fellowship/bin/fellowship errand init --dir <path> --quest <name> --task "description"`. Add errands to running quests: `~/.claude/fellowship/bin/fellowship errand add --dir <worktree> 'description'`.
 

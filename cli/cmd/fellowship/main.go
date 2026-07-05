@@ -25,6 +25,7 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
+	"github.com/justinjdev/fellowship/cli/internal/install"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/status"
 	"github.com/justinjdev/fellowship/cli/internal/tome"
@@ -135,6 +136,7 @@ Hook commands (called by Claude Code hooks, read stdin):
   hook metadata-track    Track phase metadata updates
   hook completion-guard  Block task completion unless phase is Complete
   hook file-track        Record file touches in quest tome
+  hook worktree-guard    Block source writes to the main tree during a fellowship
 
 Agent/lead commands:
   gate status            Show current phase, prereqs, pending/held state
@@ -168,6 +170,7 @@ Fellowship state:
   state init              Initialize fellowship in DB
     --name NAME           Fellowship name (required)
     --base-branch BRANCH  Base branch for quest worktrees (default: auto-detected)
+    --skip-hook-install   Skip registering the worktree-guard hook in settings.local.json
   state add-quest         Add a quest entry to fellowship state
     --name NAME           Quest name (required)
     --task "DESC"         Task description (required)
@@ -250,6 +253,13 @@ func runHook(d *db.DB, name string) int {
 	cwd, _ := os.Getwd()
 	gitRoot := gitRootFrom(cwd)
 
+	// Worktree isolation guard: self-contained, independent of quest state.
+	// Runs in teammate sessions (inherited via project settings), so it must
+	// not depend on quest lookup keyed to this worktree.
+	if name == "worktree-guard" {
+		return runWorktreeGuard(ctx, d, cwd)
+	}
+
 	// Find quest name for this worktree.
 	var questName string
 	var lookupErr error
@@ -272,7 +282,13 @@ func runHook(d *db.DB, name string) int {
 			if err != nil {
 				input = &hooks.HookInput{}
 			}
-			if result := hooks.WorktreeGuard(input); result.Block {
+			// Only enumerate worktrees when the command looks like a cd/pushd,
+			// so the extra git call is off the common hot path.
+			var worktrees []string
+			if c := strings.TrimSpace(input.ToolInput.Command); strings.HasPrefix(c, "cd ") || strings.HasPrefix(c, "pushd ") {
+				worktrees = listQuestWorktrees(cwd)
+			}
+			if result := hooks.WorktreeGuard(input, hooks.CanonicalPath(cwd), worktrees); result.Block {
 				fmt.Fprintln(os.Stderr, result.Message)
 				return 2
 			}
@@ -464,6 +480,83 @@ func runHook(d *db.DB, name string) int {
 		fmt.Fprintf(os.Stderr, "fellowship: unknown hook %q\n", name)
 		return 2
 	}
+}
+
+// runWorktreeGuard is the fail-closed backstop that keeps quest teammates from
+// writing source into the MAIN working tree during an active fellowship. It is
+// defense-in-depth behind lead-created `isolation: "worktree"`, so any internal
+// resolution failure allows the action (exit 0) rather than hard-blocking
+// unrelated work. Only a positive mis-placement detection blocks (exit 2).
+func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string) int {
+	input, err := hooks.ParseInput(os.Stdin)
+	if err != nil {
+		return 0 // malformed input — allow (defense-in-depth, not primary gate)
+	}
+
+	mainRoot, err := resolveMainRepoFromCwd(cwd)
+	if err != nil {
+		return 0
+	}
+
+	// Inert unless a fellowship is actually running in the main repo's store.
+	active := false
+	d.WithConn(ctx, func(conn *db.Conn) error {
+		fs, err := dashboard.LoadFellowship(conn)
+		if err != nil {
+			return nil
+		}
+		active = fellowshipRunning(fs)
+		return nil
+	})
+
+	filePath := input.ToolInput.FilePath
+	if filePath == "" {
+		filePath = input.ToolInput.NotebookPath
+	}
+	if filePath != "" && !filepath.IsAbs(filePath) {
+		filePath = filepath.Join(cwd, filePath)
+	}
+
+	// Canonicalize all paths so symlinked repo roots (e.g. macOS /tmp ->
+	// /private/tmp) don't defeat the main-root comparison. `git --show-toplevel`
+	// returns a resolved path; the cwd-derived main root does not.
+	result := hooks.IsolationGuard(hooks.IsolationParams{
+		FellowshipActive: active,
+		MainRoot:         hooks.CanonicalPath(mainRoot),
+		SessionTopLevel:  hooks.CanonicalPath(gitRootFrom(cwd)),
+		ToolName:         input.ToolName,
+		FilePath:         hooks.CanonicalPath(filePath),
+		DataDirName:      datadir.Name(),
+	})
+	if result.Block {
+		fmt.Fprintln(os.Stderr, result.Message)
+		return 2
+	}
+	return 0
+}
+
+// fellowshipRunning reports whether a fellowship is actually in progress, as
+// opposed to merely initialized once. The fellowship DB row is never deleted,
+// so "a row exists" is a sticky signal that would block ordinary main-tree
+// edits forever after a single `state init`. Quest worktrees, by contrast, are
+// created when teammates spawn and removed when their work merges — so a live
+// quest worktree on disk is the signal that teammates may currently be running
+// and the guard should be armed. A finished (or never-started) fellowship whose
+// row lingers has no live worktree and reads as inert.
+func fellowshipRunning(fs *dashboard.FellowshipState) bool {
+	for _, q := range fs.Quests {
+		switch dashboard.QuestEntryStatus(q) {
+		case "completed", "cancelled":
+			continue
+		}
+		if q.Worktree == "" {
+			continue
+		}
+		if info, err := os.Stat(q.Worktree); err == nil && info.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 func runGate(d *db.DB, args []string) int {
@@ -1473,10 +1566,11 @@ func runStateInit(d *db.DB, args []string) int {
 	fs := flag.NewFlagSet("state init", flag.ExitOnError)
 	name := fs.String("name", "", "Fellowship name (required)")
 	baseBranch := fs.String("base-branch", "", "Base branch for quest worktrees (Gandalf detects automatically; use this to override)")
+	skipHookInstall := fs.Bool("skip-hook-install", false, "Do not register the worktree-guard hook in .claude/settings.local.json")
 	fs.Parse(args)
 
 	if *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship state init --name <name> [--base-branch BRANCH]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship state init --name <name> [--base-branch BRANCH] [--skip-hook-install]")
 		return 1
 	}
 
@@ -1498,7 +1592,34 @@ func runStateInit(d *db.DB, args []string) int {
 		return 1
 	}
 	fmt.Printf("Fellowship %q initialized\n", *name)
+
+	// Register the worktree-guard hook in the project's .claude/settings.local.json.
+	// Teammate sessions do NOT inherit plugin hooks, so this settings file is
+	// what makes a session enforce isolation. settings.local.json is git-ignored,
+	// so this touches no git history and leaves no untracked file — the lead
+	// copies it into each worktree at spawn (see the fellowship skill).
+	// Best-effort — a hook-install hiccup must not fail init.
+	if !*skipHookInstall {
+		installWorktreeGuardHook(root)
+	}
 	return 0
+}
+
+// installWorktreeGuardHook merges the worktree-guard hook into the project's
+// git-ignored .claude/settings.local.json (idempotent, preserving existing
+// settings). The lead copies that file into each worktree at spawn. Any failure
+// is a warning, never fatal — the hook is defense-in-depth behind
+// lead-provisioned isolation and the teammate self-check.
+func installWorktreeGuardHook(root string) {
+	changed, err := install.EnsureWorktreeGuardHook(root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: warning: could not register worktree-guard hook: %v\n", err)
+		return
+	}
+	if changed {
+		fmt.Println("Registered worktree-guard hook in .claude/settings.local.json.")
+	}
+	fmt.Println("Copy .claude/settings.local.json into each quest worktree at spawn so teammates inherit the guard.")
 }
 
 func runStateAddQuest(d *db.DB, args []string) int {
@@ -1661,9 +1782,9 @@ func runStateCleanWorktrees(d *db.DB, args []string) int {
 	fs.Parse(args)
 
 	type cleanResult struct {
-		name        string
-		wasPending  bool
-		wasHeld     bool
+		name       string
+		wasPending bool
+		wasHeld    bool
 	}
 
 	var cleaned []cleanResult
@@ -1922,6 +2043,35 @@ func gitRootOrCwd() string {
 		return cwd
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// listQuestWorktrees returns the canonicalized roots of all git worktrees for
+// the repo containing dir, excluding the main worktree. Used by the lead's
+// cd-guard to recognize quest worktrees created OUTSIDE the main tree (not just
+// the legacy .claude/worktrees location). Returns nil if git is unavailable.
+func listQuestWorktrees(dir string) []string {
+	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	mainRoot := ""
+	if mr, err := resolveMainRepoFromCwd(dir); err == nil {
+		mainRoot = hooks.CanonicalPath(mr)
+	}
+	var paths []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.HasPrefix(line, "worktree ") {
+			continue
+		}
+		p := hooks.CanonicalPath(strings.TrimSpace(strings.TrimPrefix(line, "worktree ")))
+		if p == "" || p == mainRoot {
+			continue
+		}
+		paths = append(paths, p)
+	}
+	return paths
 }
 
 // gitRootFrom returns the git root for a given directory.

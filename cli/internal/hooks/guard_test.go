@@ -170,9 +170,9 @@ func TestGateGuard_BlocksChainedCommandsWithFellowshipEscape(t *testing.T) {
 		"fellowship gate reject; rm -rf /",
 		"fellowship gate reject || evil",
 		"echo foo | fellowship gate reject",
-		"echo fellowship gate reject",    // first token is echo, not fellowship
+		"echo fellowship gate reject",      // first token is echo, not fellowship
 		"fellowship gate reject\nrm -rf /", // newline-separated second command
-		"$(fellowship gate reject)",      // subshell
+		"$(fellowship gate reject)",        // subshell
 	} {
 		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
 		result := GateGuard(s, input)
@@ -198,7 +198,7 @@ func TestWorktreeGuard_BlocksBareCD(t *testing.T) {
 		"cd .claude/worktrees/quest-1/src",
 	} {
 		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
-		result := WorktreeGuard(input)
+		result := WorktreeGuard(input, "", nil)
 		if !result.Block {
 			t.Errorf("should block bare cd into worktree, cmd=%q", cmd)
 		}
@@ -207,7 +207,7 @@ func TestWorktreeGuard_BlocksBareCD(t *testing.T) {
 
 func TestWorktreeGuard_BlocksPushd(t *testing.T) {
 	input := &HookInput{ToolInput: ToolInput{Command: "pushd .claude/worktrees/quest-1"}}
-	result := WorktreeGuard(input)
+	result := WorktreeGuard(input, "", nil)
 	if !result.Block {
 		t.Error("should block pushd into worktree")
 	}
@@ -220,7 +220,7 @@ func TestWorktreeGuard_AllowsScopedCD(t *testing.T) {
 		"cd .claude/worktrees/quest-1 || echo fail",
 	} {
 		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
-		result := WorktreeGuard(input)
+		result := WorktreeGuard(input, "", nil)
 		if result.Block {
 			t.Errorf("should allow scoped cd, cmd=%q", cmd)
 		}
@@ -234,7 +234,7 @@ func TestWorktreeGuard_AllowsNonWorktreeCD(t *testing.T) {
 		"cd ..",
 	} {
 		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
-		result := WorktreeGuard(input)
+		result := WorktreeGuard(input, "", nil)
 		if result.Block {
 			t.Errorf("should allow cd to non-worktree path, cmd=%q", cmd)
 		}
@@ -248,7 +248,7 @@ func TestWorktreeGuard_AllowsNonCDCommands(t *testing.T) {
 		"grep -r foo .claude/worktrees/quest-1",
 	} {
 		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
-		result := WorktreeGuard(input)
+		result := WorktreeGuard(input, "", nil)
 		if result.Block {
 			t.Errorf("should allow non-cd commands referencing worktrees, cmd=%q", cmd)
 		}
@@ -262,7 +262,7 @@ func TestWorktreeGuard_BlocksWorktreeRoot(t *testing.T) {
 		"pushd .claude/worktrees",
 	} {
 		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
-		result := WorktreeGuard(input)
+		result := WorktreeGuard(input, "", nil)
 		if !result.Block {
 			t.Errorf("should block cd into worktree root, cmd=%q", cmd)
 		}
@@ -275,7 +275,7 @@ func TestWorktreeGuard_BlocksQuotedTarget(t *testing.T) {
 		`cd '.claude/worktrees/quest-1'`,
 	} {
 		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
-		result := WorktreeGuard(input)
+		result := WorktreeGuard(input, "", nil)
 		if !result.Block {
 			t.Errorf("should block quoted cd into worktree, cmd=%q", cmd)
 		}
@@ -284,7 +284,7 @@ func TestWorktreeGuard_BlocksQuotedTarget(t *testing.T) {
 
 func TestWorktreeGuard_BlocksTrailingSemicolon(t *testing.T) {
 	input := &HookInput{ToolInput: ToolInput{Command: "cd .claude/worktrees/quest-1;"}}
-	result := WorktreeGuard(input)
+	result := WorktreeGuard(input, "", nil)
 	if !result.Block {
 		t.Errorf("should block cd with trailing semicolon")
 	}
@@ -292,15 +292,61 @@ func TestWorktreeGuard_BlocksTrailingSemicolon(t *testing.T) {
 
 func TestWorktreeGuard_AllowsEmptyCommand(t *testing.T) {
 	input := &HookInput{ToolInput: ToolInput{Command: ""}}
-	result := WorktreeGuard(input)
+	result := WorktreeGuard(input, "", nil)
 	if result.Block {
 		t.Error("should allow empty command")
 	}
 }
 
 func TestWorktreeGuard_AllowsNilInput(t *testing.T) {
-	result := WorktreeGuard(nil)
+	result := WorktreeGuard(nil, "", nil)
 	if result.Block {
 		t.Error("should allow nil input")
+	}
+}
+
+func TestWorktreeGuard_BlocksOutOfTreeWorktree(t *testing.T) {
+	worktrees := []string{"/repo/.worktrees/quest-1", "/repo-worktrees/quest-2"}
+	cases := []struct {
+		cmd string
+		cwd string
+	}{
+		{"cd /repo/.worktrees/quest-1", "/repo"},   // absolute
+		{"cd .worktrees/quest-1", "/repo"},         // relative to cwd
+		{"cd .worktrees/quest-1/src", "/repo"},     // subdir of a worktree
+		{"cd ../repo-worktrees/quest-2", "/repo"},  // sibling dir, relative
+		{"pushd /repo-worktrees/quest-2", "/repo"}, // absolute pushd
+	}
+	for _, c := range cases {
+		input := &HookInput{ToolInput: ToolInput{Command: c.cmd}}
+		result := WorktreeGuard(input, c.cwd, worktrees)
+		if !result.Block {
+			t.Errorf("should block cd into out-of-tree worktree, cmd=%q", c.cmd)
+		}
+	}
+}
+
+func TestWorktreeGuard_AllowsNonWorktreeCDWithWorktrees(t *testing.T) {
+	worktrees := []string{"/repo/.worktrees/quest-1"}
+	for _, cmd := range []string{
+		"cd /repo/src",                 // sibling of, not inside, a worktree
+		"cd src/auth",                  // ordinary relative dir
+		"cd /repo/.worktrees-backup/x", // prefix-adjacent but not a real child
+	} {
+		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
+		result := WorktreeGuard(input, "/repo", worktrees)
+		if result.Block {
+			t.Errorf("should allow cd to non-worktree path, cmd=%q", cmd)
+		}
+	}
+}
+
+func TestWorktreeGuard_AllowsScopedOutOfTreeCD(t *testing.T) {
+	// Scoped commands remain safe — CWD doesn't persist between Bash calls.
+	worktrees := []string{"/repo/.worktrees/quest-1"}
+	input := &HookInput{ToolInput: ToolInput{Command: "cd /repo/.worktrees/quest-1 && go test ./..."}}
+	result := WorktreeGuard(input, "/repo", worktrees)
+	if result.Block {
+		t.Error("scoped cd into an out-of-tree worktree should be allowed")
 	}
 }
