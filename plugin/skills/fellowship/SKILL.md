@@ -141,10 +141,12 @@ Before spawning any quest, Gandalf MUST:
    via `fellowship state init`).
 
 The guard is **inert unless a fellowship is active**, so installing it is always
-safe — it never blocks work outside a fellowship. Note that `isolation:
-"worktree"` (see "Spawn a Quest") is the **primary** isolation guarantee; the
-`worktree-guard` hook is defense-in-depth for the case where a teammate is
-mis-placed in the main tree.
+safe — it never blocks work outside a fellowship. Isolation itself is provisioned
+and VERIFIED by the lead (explicit `git worktree add` is the reliable path — the
+harness `isolation` flag can silently no-op; see "Spawn a Quest"). The
+`worktree-guard` hook and the teammate's self-check are the fail-closed
+backstops that catch a mis-placed teammate regardless of how isolation was
+provisioned.
 
 ### Spawn a Quest
 
@@ -164,17 +166,30 @@ If no issue references are found, `{issue_context}` is substituted with an empty
    - `team_name`: the fellowship team name
    - `subagent_type: "general-purpose"`
    - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
-   - **`isolation: "worktree"` — REQUIRED.** The lead creates the teammate's
-     isolation via the harness; the teammate is placed in its own git worktree
-     off the base branch and physically cannot touch the main working tree.
-     Do NOT rely on the teammate creating its own worktree in quest Phase 0 —
-     that is advisory and fails silently if the teammate skips it, dropping the
-     quest into the shared main tree. Isolation is the lead's responsibility and
-     must be structural, not trusted.
-   - **Never tell a teammate it is "already isolated" unless you actually
-     created its worktree.** The spawn prompt requires the teammate to
-     self-verify isolation before its first write (see spawn-prompts.md); the
-     `worktree-guard` PreToolUse hook is the fail-closed backstop.
+   - **Isolation is the LEAD's job to PROVISION and VERIFY — never a flag to
+     trust.** The `Task`/Agent `isolation: "worktree"` param has been observed to
+     silently no-op for background quest teammates (no worktree is created; the
+     teammate lands in the main repo root). Do NOT assume it worked, and do NOT
+     rely on the teammate creating its own worktree in quest Phase 0 — that is
+     advisory and fails silently if skipped, dropping the quest into the shared
+     main tree.
+   - **Preferred reliable mechanism:** before spawning, the lead explicitly runs
+     `git worktree add -b <branch> <path> <base>` with `<path>` OUTSIDE the main
+     tree, provisions dependencies so the teammate's tests run (e.g. symlink or
+     install `node_modules`), and directs the teammate into that worktree via its
+     spawn prompt. Passing the harness `isolation` flag MAY additionally work but
+     MUST be verified with `git worktree list` (and the teammate's self-check) —
+     never assumed.
+   - **Then VERIFY before the teammate writes.** After provisioning, confirm the
+     worktree exists (`git worktree list`) and that its path is not the main root.
+     Never tell a teammate it is "already isolated" unless you have verified its
+     worktree exists.
+   - **Two safeguards catch the bug regardless of how isolation was provisioned:**
+     (1) the teammate's mandatory isolation SELF-CHECK before its first write —
+     top-level must differ from the main root, else STOP and message the lead
+     (see spawn-prompts.md); and (2) the fail-closed `worktree-guard` PreToolUse
+     hook, which blocks source writes from the main tree during an active
+     fellowship. These are what actually prevent the regression.
 
 **Errand persistence:** After spawning, write initial errands via `~/.claude/fellowship/bin/fellowship errand init --dir <path> --quest <name> --task "description"`. Add errands to running quests: `~/.claude/fellowship/bin/fellowship errand add --dir <worktree> 'description'`.
 

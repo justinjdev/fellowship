@@ -10,8 +10,9 @@ YOUR TASK: {task_description}
 
 INSTRUCTIONS:
 1. Run /quest to execute this task through the full quest lifecycle
-2. ISOLATION SELF-CHECK (do this BEFORE any Edit/Write/commit): the lead
-   spawned you in your own git worktree. Confirm it before touching anything.
+2. ISOLATION SELF-CHECK (do this BEFORE any Edit/Write/commit): the lead should
+   have placed you in your own git worktree, but isolation provisioning can
+   silently fail — do NOT assume it worked. Verify before touching anything.
    Run `git rev-parse --show-toplevel` and `git rev-parse --git-common-dir`.
    The main repo root is the PARENT of the common git dir. Your top-level MUST
    NOT equal the main repo root. If it IS the main root, STOP — do not edit,
@@ -125,8 +126,9 @@ INSTRUCTIONS:
    - In Phase 0 (Onboard), copy the plan file to .fellowship/plan.md
    - The quest skill will detect this file and skip Research + Plan,
      starting directly at Phase 3 (Implement)
-2. ISOLATION SELF-CHECK (do this BEFORE any Edit/Write/commit): the lead
-   spawned you in your own git worktree. Confirm it before touching anything.
+2. ISOLATION SELF-CHECK (do this BEFORE any Edit/Write/commit): the lead should
+   have placed you in your own git worktree, but isolation provisioning can
+   silently fail — do NOT assume it worked. Verify before touching anything.
    Run `git rev-parse --show-toplevel` and `git rev-parse --git-common-dir`.
    The main repo root is the PARENT of the common git dir. Your top-level MUST
    NOT equal the main repo root. If it IS the main root, STOP — do not edit,
@@ -216,8 +218,9 @@ SCOUT FINDINGS CONTENT:
 
 INSTRUCTIONS:
 1. Run /quest to execute this task through the full quest lifecycle
-2. ISOLATION SELF-CHECK (do this BEFORE any Edit/Write/commit): the lead
-   spawned you in your own git worktree. Confirm it before touching anything.
+2. ISOLATION SELF-CHECK (do this BEFORE any Edit/Write/commit): the lead should
+   have placed you in your own git worktree, but isolation provisioning can
+   silently fail — do NOT assume it worked. Verify before touching anything.
    Run `git rev-parse --show-toplevel` and `git rev-parse --git-common-dir`.
    The main repo root is the PARENT of the common git dir. Your top-level MUST
    NOT equal the main repo root. If it IS the main root, STOP — do not edit,
