@@ -25,6 +25,7 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
+	"github.com/justinjdev/fellowship/cli/internal/install"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/status"
 	"github.com/justinjdev/fellowship/cli/internal/tome"
@@ -169,6 +170,7 @@ Fellowship state:
   state init              Initialize fellowship in DB
     --name NAME           Fellowship name (required)
     --base-branch BRANCH  Base branch for quest worktrees (default: auto-detected)
+    --skip-hook-install   Skip registering/committing the worktree-guard hook
   state add-quest         Add a quest entry to fellowship state
     --name NAME           Quest name (required)
     --task "DESC"         Task description (required)
@@ -1558,10 +1560,11 @@ func runStateInit(d *db.DB, args []string) int {
 	fs := flag.NewFlagSet("state init", flag.ExitOnError)
 	name := fs.String("name", "", "Fellowship name (required)")
 	baseBranch := fs.String("base-branch", "", "Base branch for quest worktrees (Gandalf detects automatically; use this to override)")
+	skipHookInstall := fs.Bool("skip-hook-install", false, "Do not register/commit the worktree-guard hook in .claude/settings.json")
 	fs.Parse(args)
 
 	if *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship state init --name <name> [--base-branch BRANCH]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship state init --name <name> [--base-branch BRANCH] [--skip-hook-install]")
 		return 1
 	}
 
@@ -1583,7 +1586,34 @@ func runStateInit(d *db.DB, args []string) int {
 		return 1
 	}
 	fmt.Printf("Fellowship %q initialized\n", *name)
+
+	// Register the worktree-guard hook in the project's .claude/settings.local.json.
+	// Teammate sessions do NOT inherit plugin hooks, so this settings file is
+	// what makes a session enforce isolation. settings.local.json is git-ignored,
+	// so this touches no git history and leaves no untracked file — the lead
+	// copies it into each worktree at spawn (see the fellowship skill).
+	// Best-effort — a hook-install hiccup must not fail init.
+	if !*skipHookInstall {
+		installWorktreeGuardHook(root)
+	}
 	return 0
+}
+
+// installWorktreeGuardHook merges the worktree-guard hook into the project's
+// git-ignored .claude/settings.local.json (idempotent, preserving existing
+// settings). The lead copies that file into each worktree at spawn. Any failure
+// is a warning, never fatal — the hook is defense-in-depth behind
+// lead-provisioned isolation and the teammate self-check.
+func installWorktreeGuardHook(root string) {
+	changed, err := install.EnsureWorktreeGuardHook(root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: warning: could not register worktree-guard hook: %v\n", err)
+		return
+	}
+	if changed {
+		fmt.Println("Registered worktree-guard hook in .claude/settings.local.json.")
+	}
+	fmt.Println("Copy .claude/settings.local.json into each quest worktree at spawn so teammates inherit the guard.")
 }
 
 func runStateAddQuest(d *db.DB, args []string) int {
@@ -1746,9 +1776,9 @@ func runStateCleanWorktrees(d *db.DB, args []string) int {
 	fs.Parse(args)
 
 	type cleanResult struct {
-		name        string
-		wasPending  bool
-		wasHeld     bool
+		name       string
+		wasPending bool
+		wasHeld    bool
 	}
 
 	var cleaned []cleanResult
