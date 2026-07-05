@@ -10,8 +10,16 @@ YOUR TASK: {task_description}
 
 INSTRUCTIONS:
 1. Run /quest to execute this task through the full quest lifecycle
-2. Quest Phase 0 will create your isolated worktree using the branch
-   naming config — make changes freely once isolation is set up
+2. ISOLATION SELF-CHECK (do this BEFORE any Edit/Write/commit): the lead
+   spawned you in your own git worktree. Confirm it before touching anything.
+   Run `git rev-parse --show-toplevel` and `git rev-parse --git-common-dir`.
+   The main repo root is the PARENT of the common git dir. Your top-level MUST
+   NOT equal the main repo root. If it IS the main root, STOP — do not edit,
+   do not commit — and message the lead that you were not isolated. Only
+   proceed once you have confirmed your top-level is a distinct worktree path.
+   Note: the fail-closed `worktree-guard` hook blocks source writes from the
+   main tree — a block is PROOF you are mis-placed, not an obstacle to route
+   around.
 3. Gate handling — gates are enforced by plugin hooks via a state file
    (.fellowship/quest-state.json). The hooks structurally block your tools
    after gate submission. Here is how it works:
@@ -117,8 +125,16 @@ INSTRUCTIONS:
    - In Phase 0 (Onboard), copy the plan file to .fellowship/plan.md
    - The quest skill will detect this file and skip Research + Plan,
      starting directly at Phase 3 (Implement)
-2. Quest Phase 0 will create your isolated worktree using the branch
-   naming config — make changes freely once isolation is set up
+2. ISOLATION SELF-CHECK (do this BEFORE any Edit/Write/commit): the lead
+   spawned you in your own git worktree. Confirm it before touching anything.
+   Run `git rev-parse --show-toplevel` and `git rev-parse --git-common-dir`.
+   The main repo root is the PARENT of the common git dir. Your top-level MUST
+   NOT equal the main repo root. If it IS the main root, STOP — do not edit,
+   do not commit — and message the lead that you were not isolated. Only
+   proceed once you have confirmed your top-level is a distinct worktree path.
+   Note: the fail-closed `worktree-guard` hook blocks source writes from the
+   main tree — a block is PROOF you are mis-placed, not an obstacle to route
+   around.
 3. Gate handling — gates are enforced by plugin hooks via a state file
    (.fellowship/quest-state.json). The hooks structurally block your tools
    after gate submission. Here is how it works:
@@ -200,8 +216,16 @@ SCOUT FINDINGS CONTENT:
 
 INSTRUCTIONS:
 1. Run /quest to execute this task through the full quest lifecycle
-2. Quest Phase 0 will create your isolated worktree using the branch
-   naming config — make changes freely once isolation is set up
+2. ISOLATION SELF-CHECK (do this BEFORE any Edit/Write/commit): the lead
+   spawned you in your own git worktree. Confirm it before touching anything.
+   Run `git rev-parse --show-toplevel` and `git rev-parse --git-common-dir`.
+   The main repo root is the PARENT of the common git dir. Your top-level MUST
+   NOT equal the main repo root. If it IS the main root, STOP — do not edit,
+   do not commit — and message the lead that you were not isolated. Only
+   proceed once you have confirmed your top-level is a distinct worktree path.
+   Note: the fail-closed `worktree-guard` hook blocks source writes from the
+   main tree — a block is PROOF you are mis-placed, not an obstacle to route
+   around.
 3. Gate handling — gates are enforced by plugin hooks via a state file
    (.fellowship/quest-state.json). The hooks structurally block your tools
    after gate submission. Here is how it works:

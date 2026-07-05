@@ -121,9 +121,30 @@ No built-in templates ship with fellowship. Use `/scribe` to create them. Parse 
 
 **Template selection:** Explicit (`template: <name>`) > auto-suggest (keyword matching) > no template.
 
-### Gate Hook Propagation
+### Gate Hook Propagation & Isolation Pre-flight (REQUIRED before spawning)
 
-Plugin hooks only fire in Gandalf's session — teammates spawned via the Agent tool do not inherit them. A `SessionStart` hook in the plugin automatically creates `.claude/settings.json` with project-level hooks when the plugin loads. This ensures teammates inherit gate enforcement without any manual setup.
+Plugin hooks only fire in Gandalf's session — teammates spawned via the Agent
+tool do NOT inherit them, and there is **no auto-install** of teammate hooks.
+For hooks to fire in teammate sessions they must be registered in a project
+`.claude/settings.json` that lives on the base branch, so fresh worktrees
+contain it.
+
+Before spawning any quest, Gandalf MUST:
+
+1. Verify (or create) a project `.claude/settings.json` that registers the
+   `worktree-guard` PreToolUse hook (matcher `Edit|Write|NotebookEdit`, command
+   `${HOME}/.claude/fellowship/bin/fellowship hook worktree-guard`). Commit it to
+   the base branch so every worktree branched from it inherits the hook.
+2. Confirm the guard binary is on PATH — `~/.claude/fellowship/bin/fellowship
+   version` should succeed.
+3. Confirm the fellowship state store exists (a fellowship has been initialized
+   via `fellowship state init`).
+
+The guard is **inert unless a fellowship is active**, so installing it is always
+safe — it never blocks work outside a fellowship. Note that `isolation:
+"worktree"` (see "Spawn a Quest") is the **primary** isolation guarantee; the
+`worktree-guard` hook is defense-in-depth for the case where a teammate is
+mis-placed in the main tree.
 
 ### Spawn a Quest
 
@@ -143,7 +164,17 @@ If no issue references are found, `{issue_context}` is substituted with an empty
    - `team_name`: the fellowship team name
    - `subagent_type: "general-purpose"`
    - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
-   - Do NOT pass `isolation: "worktree"` — the teammate creates its own worktree during quest Phase 0.
+   - **`isolation: "worktree"` — REQUIRED.** The lead creates the teammate's
+     isolation via the harness; the teammate is placed in its own git worktree
+     off the base branch and physically cannot touch the main working tree.
+     Do NOT rely on the teammate creating its own worktree in quest Phase 0 —
+     that is advisory and fails silently if the teammate skips it, dropping the
+     quest into the shared main tree. Isolation is the lead's responsibility and
+     must be structural, not trusted.
+   - **Never tell a teammate it is "already isolated" unless you actually
+     created its worktree.** The spawn prompt requires the teammate to
+     self-verify isolation before its first write (see spawn-prompts.md); the
+     `worktree-guard` PreToolUse hook is the fail-closed backstop.
 
 **Errand persistence:** After spawning, write initial errands via `~/.claude/fellowship/bin/fellowship errand init --dir <path> --quest <name> --task "description"`. Add errands to running quests: `~/.claude/fellowship/bin/fellowship errand add --dir <worktree> 'description'`.
 
