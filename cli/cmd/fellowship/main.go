@@ -282,7 +282,13 @@ func runHook(d *db.DB, name string) int {
 			if err != nil {
 				input = &hooks.HookInput{}
 			}
-			if result := hooks.WorktreeGuard(input); result.Block {
+			// Only enumerate worktrees when the command looks like a cd/pushd,
+			// so the extra git call is off the common hot path.
+			var worktrees []string
+			if c := strings.TrimSpace(input.ToolInput.Command); strings.HasPrefix(c, "cd ") || strings.HasPrefix(c, "pushd ") {
+				worktrees = listQuestWorktrees(cwd)
+			}
+			if result := hooks.WorktreeGuard(input, hooks.CanonicalPath(cwd), worktrees); result.Block {
 				fmt.Fprintln(os.Stderr, result.Message)
 				return 2
 			}
@@ -516,10 +522,10 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string) int {
 	// returns a resolved path; the cwd-derived main root does not.
 	result := hooks.IsolationGuard(hooks.IsolationParams{
 		FellowshipActive: active,
-		MainRoot:         canonicalPath(mainRoot),
-		SessionTopLevel:  canonicalPath(gitRootFrom(cwd)),
+		MainRoot:         hooks.CanonicalPath(mainRoot),
+		SessionTopLevel:  hooks.CanonicalPath(gitRootFrom(cwd)),
 		ToolName:         input.ToolName,
-		FilePath:         canonicalPath(filePath),
+		FilePath:         hooks.CanonicalPath(filePath),
 		DataDirName:      datadir.Name(),
 	})
 	if result.Block {
@@ -551,33 +557,6 @@ func fellowshipRunning(fs *dashboard.FellowshipState) bool {
 		}
 	}
 	return false
-}
-
-// canonicalPath resolves symlinks in p, falling back gracefully for paths that
-// don't exist yet (e.g. a Write target): it resolves the longest existing
-// ancestor and re-appends the missing remainder. Returns a cleaned absolute
-// path. An empty input returns empty.
-func canonicalPath(p string) string {
-	if p == "" {
-		return ""
-	}
-	p = filepath.Clean(p)
-	rem := ""
-	cur := p
-	for {
-		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
-			if rem == "" {
-				return resolved
-			}
-			return filepath.Join(resolved, rem)
-		}
-		parent := filepath.Dir(cur)
-		if parent == cur {
-			return p // reached the root without resolving; use as-is
-		}
-		rem = filepath.Join(filepath.Base(cur), rem)
-		cur = parent
-	}
 }
 
 func runGate(d *db.DB, args []string) int {
@@ -2064,6 +2043,35 @@ func gitRootOrCwd() string {
 		return cwd
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// listQuestWorktrees returns the canonicalized roots of all git worktrees for
+// the repo containing dir, excluding the main worktree. Used by the lead's
+// cd-guard to recognize quest worktrees created OUTSIDE the main tree (not just
+// the legacy .claude/worktrees location). Returns nil if git is unavailable.
+func listQuestWorktrees(dir string) []string {
+	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	mainRoot := ""
+	if mr, err := resolveMainRepoFromCwd(dir); err == nil {
+		mainRoot = hooks.CanonicalPath(mr)
+	}
+	var paths []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.HasPrefix(line, "worktree ") {
+			continue
+		}
+		p := hooks.CanonicalPath(strings.TrimSpace(strings.TrimPrefix(line, "worktree ")))
+		if p == "" || p == mainRoot {
+			continue
+		}
+		paths = append(paths, p)
+	}
+	return paths
 }
 
 // gitRootFrom returns the git root for a given directory.

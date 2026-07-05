@@ -50,11 +50,20 @@ func GateGuard(s *state.State, input *HookInput) HookResult {
 	return HookResult{}
 }
 
-// WorktreeGuard blocks the lead session from cd'ing into quest worktrees.
-// It is called when no quest state file exists (indicating this is the lead session).
-// Scoped commands (cd path && ...) are allowed since CWD doesn't persist between
-// Bash tool calls.
-func WorktreeGuard(input *HookInput) HookResult {
+// WorktreeGuard blocks the lead session from cd'ing into a quest worktree.
+// It is called when no quest state exists for the cwd (indicating the lead
+// session). A bare "cd <worktree>"/"pushd <worktree>" would move the lead onto
+// quest state and subject it to that quest's gate/hold blocks; scoped commands
+// ("cd <path> && <cmd>") are allowed since CWD doesn't persist between Bash
+// tool calls.
+//
+// worktreePaths is the set of live git worktree roots (absolute, main root
+// excluded) that the caller enumerates; a cd target equal to or under any of
+// them is blocked. This covers lead-provisioned worktrees created OUTSIDE the
+// main tree. The legacy ".claude/worktrees" location is always recognized even
+// when worktreePaths is empty. cwd resolves relative cd targets; pass "" to
+// match on the raw target only.
+func WorktreeGuard(input *HookInput, cwd string, worktreePaths []string) HookResult {
 	if input == nil {
 		return HookResult{}
 	}
@@ -62,8 +71,11 @@ func WorktreeGuard(input *HookInput) HookResult {
 	if cmd == "" {
 		return HookResult{}
 	}
-
-	if isWorktreeCD(cmd) {
+	target, ok := bareCDTarget(cmd)
+	if !ok {
+		return HookResult{}
+	}
+	if isWorktreeTarget(target, cwd, worktreePaths) {
 		return HookResult{
 			Block:   true,
 			Message: "Gandalf must not cd into quest worktrees. Use --dir <path> for fellowship commands, or absolute paths for reading files.",
@@ -72,35 +84,49 @@ func WorktreeGuard(input *HookInput) HookResult {
 	return HookResult{}
 }
 
-// isWorktreeCD detects bare "cd <worktree>" or "pushd <worktree>" commands.
-// Scoped commands like "cd <worktree> && <cmd>" are allowed.
-func isWorktreeCD(command string) bool {
+// bareCDTarget returns the target of an unscoped "cd"/"pushd" command. ok is
+// false for non-cd commands and for scoped commands like "cd path && cmd"
+// (safe — CWD does not persist between Bash tool calls).
+func bareCDTarget(command string) (string, bool) {
 	fields := strings.Fields(command)
-	if len(fields) < 2 {
-		return false
+	if len(fields) != 2 {
+		return "", false
 	}
-
-	verb := fields[0]
-	if verb != "cd" && verb != "pushd" {
-		return false
+	if fields[0] != "cd" && fields[0] != "pushd" {
+		return "", false
 	}
-
 	target := strings.Trim(fields[1], `"'`)
 	target = strings.TrimSuffix(target, ";")
-	if !isWorktreePath(target) {
-		return false
-	}
-
-	// If there's anything after the target, it's a scoped command — allow it.
-	// e.g., "cd path && git log" has fields[2] == "&&"
-	if len(fields) > 2 {
-		return false
-	}
-	return true
+	return target, true
 }
 
-// isWorktreePath checks if a path leads into or is the worktree directory.
-func isWorktreePath(path string) bool {
+// isWorktreeTarget reports whether a bare cd target points into a quest
+// worktree — either the legacy ".claude/worktrees" location, or (resolved
+// against cwd) a path equal to or under one of the supplied worktree roots.
+func isWorktreeTarget(target, cwd string, worktreePaths []string) bool {
+	if isLegacyWorktreePath(target) {
+		return true
+	}
+	if len(worktreePaths) == 0 {
+		return false
+	}
+	abs := target
+	if !filepath.IsAbs(abs) && cwd != "" {
+		abs = filepath.Join(cwd, abs)
+	}
+	abs = CanonicalPath(abs)
+	for _, wt := range worktreePaths {
+		wt = CanonicalPath(wt)
+		if abs == wt || strings.HasPrefix(abs, wt+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
+}
+
+// isLegacyWorktreePath checks the historical ".claude/worktrees" location,
+// which predates lead-provisioned out-of-tree worktrees.
+func isLegacyWorktreePath(path string) bool {
 	normalized := strings.TrimSuffix(filepath.ToSlash(filepath.Clean(path)), "/")
 	return normalized == ".claude/worktrees" ||
 		strings.HasPrefix(normalized, ".claude/worktrees/") ||
