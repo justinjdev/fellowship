@@ -22,12 +22,11 @@ type IsolationParams struct {
 	ToolName string
 	// FilePath is the absolute, cleaned path to the tool's target file.
 	FilePath string
+	// DataDirName is the configured fellowship data directory name
+	// (datadir.Name(), e.g. ".fellowship" or a user override). Writes under it
+	// are coordination state, always allowed even in the main tree.
+	DataDirName string
 }
-
-// coordinationDirs are top-level directories in the main worktree that hold
-// fellowship coordination state or git metadata. Writes here are always allowed
-// even in the main tree — Gandalf legitimately manages them.
-var coordinationDirs = []string{".fellowship", ".git", ".claude"}
 
 // IsolationGuard is the fail-closed backstop for worktree isolation. During an
 // active fellowship, a quest teammate must operate inside its own git worktree.
@@ -57,7 +56,7 @@ func IsolationGuard(p IsolationParams) HookResult {
 		// Target lives outside the main worktree — not our concern.
 		return HookResult{}
 	}
-	if isCoordinationPath(rel) {
+	if isCoordinationPath(rel, p.DataDirName) {
 		return HookResult{}
 	}
 	return HookResult{
@@ -102,13 +101,14 @@ func relWithin(root, target string) (string, bool) {
 }
 
 // isCoordinationPath reports whether a root-relative path lives under a
-// coordination or git-metadata directory that is exempt from the guard.
-func isCoordinationPath(rel string) bool {
+// coordination or git-metadata directory that is exempt from the guard. Gandalf
+// legitimately manages these even in the main tree. The data directory is
+// user-configurable (datadir.Name), so the caller passes its resolved name
+// rather than assuming the ".fellowship" default; .git and .claude are fixed.
+func isCoordinationPath(rel, dataDirName string) bool {
 	first := strings.SplitN(filepath.ToSlash(rel), "/", 2)[0]
-	for _, dir := range coordinationDirs {
-		if first == dir {
-			return true
-		}
+	if first == ".git" || first == ".claude" {
+		return true
 	}
-	return false
+	return dataDirName != "" && first == dataDirName
 }

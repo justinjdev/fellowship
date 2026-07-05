@@ -50,10 +50,42 @@ func TestIsolationGuard_AllowsCoordinationDirWrite(t *testing.T) {
 			SessionTopLevel:  "/repo",
 			ToolName:         "Write",
 			FilePath:         path,
+			DataDirName:      ".fellowship",
 		})
 		if result.Block {
 			t.Errorf("coordination-dir write must be allowed: %s", path)
 		}
+	}
+}
+
+func TestIsolationGuard_AllowsCustomDataDirWrite(t *testing.T) {
+	// A user-configured dataDir must be exempt just like the default.
+	result := IsolationGuard(IsolationParams{
+		FellowshipActive: true,
+		MainRoot:         "/repo",
+		SessionTopLevel:  "/repo",
+		ToolName:         "Write",
+		FilePath:         "/repo/queststate/checkpoint.md",
+		DataDirName:      "queststate",
+	})
+	if result.Block {
+		t.Error("write under a custom dataDir must be allowed")
+	}
+}
+
+func TestIsolationGuard_BlocksDefaultDataDirNameWhenCustomConfigured(t *testing.T) {
+	// If the user renamed the data dir, ".fellowship" is now an ordinary source
+	// path in the main tree and must be blocked.
+	result := IsolationGuard(IsolationParams{
+		FellowshipActive: true,
+		MainRoot:         "/repo",
+		SessionTopLevel:  "/repo",
+		ToolName:         "Write",
+		FilePath:         "/repo/.fellowship/notes.md",
+		DataDirName:      "queststate",
+	})
+	if !result.Block {
+		t.Error("stale .fellowship path should not be exempt when dataDir is customized")
 	}
 }
 

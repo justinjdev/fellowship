@@ -170,7 +170,7 @@ Fellowship state:
   state init              Initialize fellowship in DB
     --name NAME           Fellowship name (required)
     --base-branch BRANCH  Base branch for quest worktrees (default: auto-detected)
-    --skip-hook-install   Skip registering/committing the worktree-guard hook
+    --skip-hook-install   Skip registering the worktree-guard hook in settings.local.json
   state add-quest         Add a quest entry to fellowship state
     --name NAME           Quest name (required)
     --task "DESC"         Task description (required)
@@ -492,12 +492,14 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string) int {
 		return 0
 	}
 
-	// Inert unless a fellowship is initialized in the main repo's store.
+	// Inert unless a fellowship is actually running in the main repo's store.
 	active := false
 	d.WithConn(ctx, func(conn *db.Conn) error {
-		if _, err := dashboard.LoadFellowship(conn); err == nil {
-			active = true
+		fs, err := dashboard.LoadFellowship(conn)
+		if err != nil {
+			return nil
 		}
+		active = fellowshipRunning(fs)
 		return nil
 	})
 
@@ -518,12 +520,37 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string) int {
 		SessionTopLevel:  canonicalPath(gitRootFrom(cwd)),
 		ToolName:         input.ToolName,
 		FilePath:         canonicalPath(filePath),
+		DataDirName:      datadir.Name(),
 	})
 	if result.Block {
 		fmt.Fprintln(os.Stderr, result.Message)
 		return 2
 	}
 	return 0
+}
+
+// fellowshipRunning reports whether a fellowship is actually in progress, as
+// opposed to merely initialized once. The fellowship DB row is never deleted,
+// so "a row exists" is a sticky signal that would block ordinary main-tree
+// edits forever after a single `state init`. Quest worktrees, by contrast, are
+// created when teammates spawn and removed when their work merges — so a live
+// quest worktree on disk is the signal that teammates may currently be running
+// and the guard should be armed. A finished (or never-started) fellowship whose
+// row lingers has no live worktree and reads as inert.
+func fellowshipRunning(fs *dashboard.FellowshipState) bool {
+	for _, q := range fs.Quests {
+		switch dashboard.QuestEntryStatus(q) {
+		case "completed", "cancelled":
+			continue
+		}
+		if q.Worktree == "" {
+			continue
+		}
+		if info, err := os.Stat(q.Worktree); err == nil && info.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 // canonicalPath resolves symlinks in p, falling back gracefully for paths that
@@ -1560,7 +1587,7 @@ func runStateInit(d *db.DB, args []string) int {
 	fs := flag.NewFlagSet("state init", flag.ExitOnError)
 	name := fs.String("name", "", "Fellowship name (required)")
 	baseBranch := fs.String("base-branch", "", "Base branch for quest worktrees (Gandalf detects automatically; use this to override)")
-	skipHookInstall := fs.Bool("skip-hook-install", false, "Do not register/commit the worktree-guard hook in .claude/settings.json")
+	skipHookInstall := fs.Bool("skip-hook-install", false, "Do not register the worktree-guard hook in .claude/settings.local.json")
 	fs.Parse(args)
 
 	if *name == "" {
