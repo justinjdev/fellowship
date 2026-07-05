@@ -7,6 +7,7 @@ import (
 )
 
 type HookInput struct {
+	ToolName  string    `json:"tool_name,omitempty"`
 	ToolInput ToolInput `json:"tool_input"`
 }
 

@@ -14,6 +14,16 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${HOME}/.claude/fellowship/bin/fellowship hook worktree-guard",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "Edit|Write|Bash|Agent|Skill|NotebookEdit",
         "hooks": [
           {

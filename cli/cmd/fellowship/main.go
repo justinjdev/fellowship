@@ -135,6 +135,7 @@ Hook commands (called by Claude Code hooks, read stdin):
   hook metadata-track    Track phase metadata updates
   hook completion-guard  Block task completion unless phase is Complete
   hook file-track        Record file touches in quest tome
+  hook worktree-guard    Block source writes to the main tree during a fellowship
 
 Agent/lead commands:
   gate status            Show current phase, prereqs, pending/held state
@@ -249,6 +250,13 @@ func runHook(d *db.DB, name string) int {
 	ctx := context.Background()
 	cwd, _ := os.Getwd()
 	gitRoot := gitRootFrom(cwd)
+
+	// Worktree isolation guard: self-contained, independent of quest state.
+	// Runs in teammate sessions (inherited via project settings), so it must
+	// not depend on quest lookup keyed to this worktree.
+	if name == "worktree-guard" {
+		return runWorktreeGuard(ctx, d, cwd)
+	}
 
 	// Find quest name for this worktree.
 	var questName string
@@ -463,6 +471,83 @@ func runHook(d *db.DB, name string) int {
 	default:
 		fmt.Fprintf(os.Stderr, "fellowship: unknown hook %q\n", name)
 		return 2
+	}
+}
+
+// runWorktreeGuard is the fail-closed backstop that keeps quest teammates from
+// writing source into the MAIN working tree during an active fellowship. It is
+// defense-in-depth behind lead-created `isolation: "worktree"`, so any internal
+// resolution failure allows the action (exit 0) rather than hard-blocking
+// unrelated work. Only a positive mis-placement detection blocks (exit 2).
+func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string) int {
+	input, err := hooks.ParseInput(os.Stdin)
+	if err != nil {
+		return 0 // malformed input — allow (defense-in-depth, not primary gate)
+	}
+
+	mainRoot, err := resolveMainRepoFromCwd(cwd)
+	if err != nil {
+		return 0
+	}
+
+	// Inert unless a fellowship is initialized in the main repo's store.
+	active := false
+	d.WithConn(ctx, func(conn *db.Conn) error {
+		if _, err := dashboard.LoadFellowship(conn); err == nil {
+			active = true
+		}
+		return nil
+	})
+
+	filePath := input.ToolInput.FilePath
+	if filePath == "" {
+		filePath = input.ToolInput.NotebookPath
+	}
+	if filePath != "" && !filepath.IsAbs(filePath) {
+		filePath = filepath.Join(cwd, filePath)
+	}
+
+	// Canonicalize all paths so symlinked repo roots (e.g. macOS /tmp ->
+	// /private/tmp) don't defeat the main-root comparison. `git --show-toplevel`
+	// returns a resolved path; the cwd-derived main root does not.
+	result := hooks.IsolationGuard(hooks.IsolationParams{
+		FellowshipActive: active,
+		MainRoot:         canonicalPath(mainRoot),
+		SessionTopLevel:  canonicalPath(gitRootFrom(cwd)),
+		ToolName:         input.ToolName,
+		FilePath:         canonicalPath(filePath),
+	})
+	if result.Block {
+		fmt.Fprintln(os.Stderr, result.Message)
+		return 2
+	}
+	return 0
+}
+
+// canonicalPath resolves symlinks in p, falling back gracefully for paths that
+// don't exist yet (e.g. a Write target): it resolves the longest existing
+// ancestor and re-appends the missing remainder. Returns a cleaned absolute
+// path. An empty input returns empty.
+func canonicalPath(p string) string {
+	if p == "" {
+		return ""
+	}
+	p = filepath.Clean(p)
+	rem := ""
+	cur := p
+	for {
+		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
+			if rem == "" {
+				return resolved
+			}
+			return filepath.Join(resolved, rem)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return p // reached the root without resolving; use as-is
+		}
+		rem = filepath.Join(filepath.Base(cur), rem)
+		cur = parent
 	}
 }
 
