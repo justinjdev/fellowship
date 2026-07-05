@@ -171,6 +171,11 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 
 ## Changelog
 
+### v2.1.0
+
+- **Worktree isolation guard** — A fail-closed hook blocks quest teammates from writing source into the main working tree when isolation is skipped. `fellowship state init` registers it in the git-ignored `.claude/settings.local.json` (no commits to your repo), and it arms only while a quest worktree is live, so it never blocks ordinary solo work.
+- **Lead cd-guard hardening** — Gandalf is now blocked from `cd`-ing into quest worktrees created outside `.claude/worktrees/` (e.g. lead-provisioned worktrees), preventing the lead from inheriting a quest's gate or hold state.
+
 ### v2.0.0
 
 - **SQLite storage** — All state (quests, gates, tome, errands, herald, bulletin, autopsy) migrated from JSON files to SQLite with WAL mode. Eliminates file locking issues and race conditions in parallel quests. Run `fellowship migrate` to upgrade existing data.

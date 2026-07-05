@@ -10,6 +10,21 @@
 <div class="container page">
 	<h1>Changelog</h1>
 
+	<!-- v2.1.0 -->
+	<section class="version" id="v2-1-0">
+		<h2 class="version-heading"><a href="{base}/changelog#v2-1-0">v2.1.0</a></h2>
+		<ul class="changes">
+			<li>
+				<strong>Worktree isolation guard</strong> — A fail-closed hook blocks quest teammates from writing source into the main working tree when isolation is skipped. <code>fellowship state init</code> registers it in the git-ignored <code>.claude/settings.local.json</code> (no commits to your repo), and it arms only while a quest worktree is live, so it never blocks ordinary solo work.
+			</li>
+			<li>
+				<strong>Lead cd-guard hardening</strong> — Gandalf is now blocked from <code>cd</code>-ing into quest worktrees created outside <code>.claude/worktrees/</code> (e.g. lead-provisioned worktrees), preventing the lead from inheriting a quest's gate or hold state.
+			</li>
+		</ul>
+	</section>
+
+	<div class="divider"><span class="divider-ring"></span></div>
+
 	<!-- v2.0.0 -->
 	<section class="version" id="v2-0-0">
 		<h2 class="version-heading"><a href="{base}/changelog#v2-0-0">v2.0.0</a></h2>
