@@ -21,14 +21,14 @@ var execCommand = exec.Command
 // JSON structs for parsing legacy files.
 
 type fellowshipStateJSON struct {
-	Version    int                  `json:"version"`
-	Name       string               `json:"name"`
-	MainRepo   string               `json:"main_repo"`
-	BaseBranch string               `json:"base_branch"`
+	Version    int                   `json:"version"`
+	Name       string                `json:"name"`
+	MainRepo   string                `json:"main_repo"`
+	BaseBranch string                `json:"base_branch"`
 	Quests     []fellowshipQuestJSON `json:"quests"`
 	Scouts     []fellowshipScoutJSON `json:"scouts"`
 	Companies  []companyJSON         `json:"companies"`
-	CreatedAt  string               `json:"created_at"`
+	CreatedAt  string                `json:"created_at"`
 }
 
 type fellowshipQuestJSON struct {
@@ -52,29 +52,29 @@ type companyJSON struct {
 }
 
 type questStateJSON struct {
-	Version         int      `json:"version"`
-	QuestName       string   `json:"quest_name"`
-	TaskID          string   `json:"task_id"`
-	TeamName        string   `json:"team_name"`
-	Phase           string   `json:"phase"`
-	GatePending     bool     `json:"gate_pending"`
-	GateID          *string  `json:"gate_id"`
-	LembasCompleted bool     `json:"lembas_completed"`
-	MetadataUpdated bool     `json:"metadata_updated"`
-	Held            bool     `json:"held"`
-	HeldReason      *string  `json:"held_reason"`
+	Version          int      `json:"version"`
+	QuestName        string   `json:"quest_name"`
+	TaskID           string   `json:"task_id"`
+	TeamName         string   `json:"team_name"`
+	Phase            string   `json:"phase"`
+	GatePending      bool     `json:"gate_pending"`
+	GateID           *string  `json:"gate_id"`
+	LembasCompleted  bool     `json:"lembas_completed"`
+	MetadataUpdated  bool     `json:"metadata_updated"`
+	Held             bool     `json:"held"`
+	HeldReason       *string  `json:"held_reason"`
 	AutoApproveGates []string `json:"auto_approve_gates"`
 }
 
 type questTomeJSON struct {
-	Version         int              `json:"version"`
-	QuestName       string           `json:"quest_name"`
-	Task            string           `json:"task"`
-	PhasesCompleted []phaseRecJSON   `json:"phases_completed"`
-	GateHistory     []gateEventJSON  `json:"gate_history"`
-	FilesTouched    []string         `json:"files_touched"`
-	Respawns        int              `json:"respawns"`
-	Status          string           `json:"status"`
+	Version         int             `json:"version"`
+	QuestName       string          `json:"quest_name"`
+	Task            string          `json:"task"`
+	PhasesCompleted []phaseRecJSON  `json:"phases_completed"`
+	GateHistory     []gateEventJSON `json:"gate_history"`
+	FilesTouched    []string        `json:"files_touched"`
+	Respawns        int             `json:"respawns"`
+	Status          string          `json:"status"`
 }
 
 type phaseRecJSON struct {

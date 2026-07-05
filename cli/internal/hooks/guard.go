@@ -132,17 +132,16 @@ func isFellowshipEscapeCommand(command string) bool {
 	}
 	// Allowlist of subcommands safe to run during gate_pending.
 	allowed := map[string]bool{
-		"gate":    true, // approve/reject gates
-		"init":    true, // reset state file
+		"gate":     true, // approve/reject gates
+		"init":     true, // reset state file
 		"autopsy":  true, // write/read failure records
 		"bulletin": true, // read/write shared discovery board
 		"errand":   true, // read/update errand status
-		"status":  true, // read-only status scan
-		"eagles":  true, // read-only health scan
-		"tome":    true, // read-only quest history
-		"herald":  true, // read-only event log
-		"version": true, // print version
+		"status":   true, // read-only status scan
+		"eagles":   true, // read-only health scan
+		"tome":     true, // read-only quest history
+		"herald":   true, // read-only event log
+		"version":  true, // print version
 	}
 	return allowed[fields[1]]
 }
-

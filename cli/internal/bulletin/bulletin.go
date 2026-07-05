@@ -55,8 +55,8 @@ func Post(conn *db.Conn, entry Entry) error {
 func Load(conn *db.Conn) ([]Entry, error) {
 	// First load all entries.
 	type row struct {
-		id        int64
-		entry     Entry
+		id    int64
+		entry Entry
 	}
 	var rows []row
 
