@@ -1,0 +1,82 @@
+@import './tokens.css';
+
+*, *::before, *::after {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+html, body {
+	height: 100%;
+	background: var(--bg-base);
+	color: var(--text-secondary);
+	font-family: var(--font-body);
+	font-size: 14px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+}
+
+a {
+	color: var(--accent-gold);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+button {
+	font-family: var(--font-body);
+	cursor: pointer;
+	border: none;
+	background: none;
+	color: inherit;
+}
+
+input, textarea, select {
+	font-family: var(--font-body);
+	font-size: inherit;
+	color: var(--text-primary);
+	background: var(--bg-surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	padding: var(--space-sm) var(--space-md);
+}
+
+input:focus, textarea:focus, select:focus {
+	outline: none;
+	border-color: var(--accent-gold);
+}
+
+code {
+	font-family: var(--font-mono);
+	font-size: 0.9em;
+}
+
+::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: var(--border-hover);
+	border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: var(--border-active);
+}
+
+.mono {
+	font-family: var(--font-mono);
+}
+
+.truncate {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

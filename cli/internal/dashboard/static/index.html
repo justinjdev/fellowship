@@ -1,48 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fellowship Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-    <header id="header">
-        <div class="header-inner">
-            <h1 id="fellowship-name">Fellowship</h1>
-            <div class="header-stats">
-                <span id="quest-count" class="stat">0 quests</span>
-                <span class="stat-sep">&middot;</span>
-                <span id="scout-count" class="stat">0 scouts</span>
-            </div>
-            <div id="poll-indicator" class="poll-dot" title="Polling"></div>
-        </div>
-    </header>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="stylesheet" href="/fonts/fonts.css" />
+		<link href="/_app/immutable/entry/start.COYkiJU8.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/DDgnzpUj.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/CFIQ5hjj.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/DIeogL5L.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/Dv0Hwark.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/BUApaBEI.js" rel="modulepreload">
+		<link href="/_app/immutable/entry/app.CbPicme5.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/ByVGy8qs.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/DsnmJJEf.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/537vdszY.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/CSXl7R3t.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/BVGfD6Eb.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/DLS4WeON.js" rel="modulepreload">
+		
+	</head>
+	<body data-sveltekit-prerender="off">
+		<div style="display: contents">
+			<script>
+				{
+					__sveltekit_75m8q8 = {
+						base: ""
+					};
 
-    <div id="problems-banner"></div>
+					const element = document.currentScript.parentElement;
 
-    <main id="main">
-        <div id="quest-cards" class="cards-container"></div>
-    </main>
-
-    <section id="bulletin-section">
-        <h2>Bulletin Board</h2>
-        <div id="bulletin-entries"></div>
-    </section>
-
-    <section id="event-stream-section">
-        <h2>Herald Tidings</h2>
-        <ul id="event-stream"></ul>
-    </section>
-
-    <section id="activity-section">
-        <h2>Activity</h2>
-        <ul id="activity-feed"></ul>
-    </section>
-
-    <script src="/static/app.js"></script>
-</body>
+					Promise.all([
+						import("/_app/immutable/entry/start.COYkiJU8.js"),
+						import("/_app/immutable/entry/app.CbPicme5.js")
+					]).then(([kit, app]) => {
+						kit.start(app, element);
+					});
+				}
+			</script>
+		</div>
+	</body>
 </html>

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "shire": {
+      "args": [
+        "serve"
+      ],
+      "command": "shire"
+    }
+  }
+}
