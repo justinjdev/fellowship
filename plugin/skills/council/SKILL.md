@@ -112,4 +112,4 @@ Revise based on feedback.
 
 - **Targeted, not exhaustive.** 5-10 key files, not every file in the directory.
 - **Carry forward.** The Session Context block is referenced by lembas and quest throughout the session.
-- **Minimal questions.** One focused task question (Step 2); ambiguous monorepo scope (Step 3) and final confirmation (Step 6) may each add one more. Don't interrogate beyond that.
+- **Minimal questions, never stall.** One focused task question (Step 2) when the task wasn't already provided; Steps 0, 3, and 6 ask only when genuinely ambiguous. As a fellowship teammate there is no direct user — route blocking questions to the lead via SendMessage, and otherwise proceed with documented assumptions rather than waiting on confirmation.

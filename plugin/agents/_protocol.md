@@ -2,7 +2,7 @@
 
 Canonical spec for how fellowship agents deliver reports and respond to lifecycle events via `SendMessage`.
 
-> **Sync note:** Agent definition files must be self-contained at runtime — an installed plugin's agents cannot reliably read sibling files (their working directory is the user's project, not the plugin cache). Each agent therefore embeds the parts of this protocol it needs inline. When you edit this spec, update the embedded copies in `balrog.md`, `palantir.md`, and `scout.md`.
+> **Sync note:** Agent definition files must be self-contained at runtime — an agent's markdown is injected as its system prompt with no path context, so an installed plugin's agents cannot reliably read sibling files (their working directory is the user's project, not the plugin cache). Skills are different: the Skill tool exposes the invoked skill's directory, which is why SKILL.md files can reference sibling `resources/*.md` while agents cannot. Each agent therefore embeds the parts of this protocol it needs inline. When you edit this spec, update the embedded copies in `balrog.md`, `palantir.md`, and `scout.md`.
 
 ## Sending a Report
 

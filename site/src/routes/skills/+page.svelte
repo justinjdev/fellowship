@@ -5,7 +5,7 @@
 		{
 			name: '/quest',
 			summary: 'Full Research → Plan → Implement lifecycle for non-trivial tasks.',
-			details: 'The hub skill that orchestrates everything. Takes a task description, creates an isolated worktree, and walks through six phases: Onboard, Research, Plan, Implement, Review, Complete. In standard mode, each phase has a hard gate requiring approval before proceeding. Uses /council for context, /gather-lore for conventions, /lembas for context compression between phases, and /warden for pre-PR review. Supports plan-driven mode: provide a pre-existing plan file and the quest skips Research and Plan, jumping straight to Implement. Supports promoted mode: when a quest is promoted from a scout, Phase 1 enters validation mode — verifying and supplementing scout findings instead of researching from scratch. Includes a bulletin board for cross-quest knowledge sharing: quests scan the bulletin at Research start and post discoveries during Research and Implement. The bulletin is shared across all worktrees via the main repo root.'
+			details: 'The hub skill that orchestrates everything. Takes a task description, creates an isolated worktree, and walks through seven phases: Onboard, Research, Plan, Implement, Adversarial (a balrog agent attacks the implementation), Review, Complete. In standard mode, each phase has a hard gate requiring approval before proceeding. Uses /council for context, /gather-lore for conventions, /lembas for context compression between phases, and /warden for pre-PR review. Supports plan-driven mode: provide a pre-existing plan file and the quest skips Research and Plan, jumping straight to Implement. Supports promoted mode: when a quest is promoted from a scout, Phase 1 enters validation mode — verifying and supplementing scout findings instead of researching from scratch. Includes a bulletin board for cross-quest knowledge sharing: quests scan the bulletin at Research start and post discoveries during Research and Implement. The bulletin is shared across all worktrees via the main repo root.'
 		},
 		{
 			name: '/fellowship',
@@ -30,7 +30,7 @@
 		{
 			name: '/lembas',
 			summary: 'Context compression between phases.',
-			details: 'Compacts the conversation context at phase transitions. Keeps the context window in the reasoning sweet spot by summarizing what’s been done and what needs to happen next. Invoked automatically at all four phase transitions during a quest.'
+			details: 'Compacts the conversation context at phase transitions. Keeps the context window in the reasoning sweet spot by summarizing what’s been done and what needs to happen next. Invoked automatically at every phase transition during a quest.'
 		},
 		{
 			name: '/warden',

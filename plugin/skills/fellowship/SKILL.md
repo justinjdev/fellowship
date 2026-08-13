@@ -69,7 +69,7 @@ At startup, read `~/.claude/fellowship.json` (the user's personal Claude directo
 
 **Config keys used by fellowship:** `branch.*` (branch naming), `worktree.*` (isolation), `gates.autoApprove` (gate routing), `pr.*` (PR creation), `palantir.*` (monitoring), `models.*` (model routing for spawned agents). See `/settings` for the full schema, defaults, and valid values.
 
-**Model routing:** When spawning any teammate or agent below, check `config.models.<role>` (`quest`, `scout`, `palantir`). If set, pass its value as the Agent tool's `model` parameter for that spawn. If unset, omit the parameter — the agent definition's own default applies (scout: sonnet, palantir: haiku) and quest teammates inherit the session model. A per-invocation `model` parameter overrides the agent definition's frontmatter, so config always wins when present.
+**Model routing:** When spawning any teammate or agent below, check `config.models.<role>` (`quest`, `scout`, `palantir`). If set to a model alias (`haiku`, `sonnet`, `opus`), pass it as the Agent tool's `model` parameter for that spawn. If unset, `null`, or `"inherit"`, omit the parameter — the Agent tool's `model` parameter does not accept `"inherit"` or full model IDs; omission is how inheritance is spelled. With the parameter omitted, the agent definition's own default applies (scout: sonnet, palantir: haiku) and quest teammates inherit the session model. A per-invocation `model` parameter overrides the agent definition's frontmatter, so config always wins when present.
 
 **IMPORTANT — gate defaults:** When no config file exists, or when `gates.autoApprove` is absent/empty, ALL gates surface to the user. No gates are auto-approved by default. Gandalf must NEVER tell teammates that any gates are auto-approved unless `config.gates.autoApprove` explicitly lists them.
 
@@ -267,7 +267,7 @@ Each quest runs the full `/quest` lifecycle (6 phases with gates). Gates are enf
 
 **DEFAULT: ALL gates surface to the user.** No gates are ever auto-approved unless `config.gates.autoApprove` explicitly lists them. Gandalf must NEVER auto-approve a gate that is not listed in `config.gates.autoApprove`.
 
-**With `config.gates.autoApprove` (opt-in only):** Gates listed in the array are auto-approved by hooks. Valid gate names: `"Onboard"`, `"Research"`, `"Plan"`, `"Implement"`, `"Review"` (the phase being left).
+**With `config.gates.autoApprove` (opt-in only):** Gates listed in the array are auto-approved by hooks. Valid gate names: `"Onboard"`, `"Research"`, `"Plan"`, `"Implement"`, `"Adversarial"`, `"Review"` (the phase being left).
 
 ### Gate Approval Procedure
 

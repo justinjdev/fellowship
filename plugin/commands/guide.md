@@ -38,7 +38,7 @@ Wait for their response. This is the task description used for the rest of the g
 
 **Goal:** Understand the relevant parts of the codebase before making a plan.
 
-1. Use the Explore agent (Agent tool with subagent_type=Explore) to find files related to the task. Focus on:
+1. Use the Explore agent (Agent tool with subagent_type=Explore, passing `model: "haiku"` — or `models.explore` from fellowship config if set) to find files related to the task. Focus on:
    - Files that will likely need modification
    - Files that define patterns to follow
    - Test files for the affected area

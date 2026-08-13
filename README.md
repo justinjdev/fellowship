@@ -30,7 +30,7 @@ Fellowship's `/quest` skill orchestrates skills from these plugins. Install them
 | **superpowers** | `using-git-worktrees`, `test-driven-development`, `verification-before-completion`, `finishing-a-development-branch` | Onboard, Implement, Review, Complete |
 | **pr-review-toolkit** | `review-pr` | Review |
 
-These are referenced by name in skill prompts. If a dependency isn't installed, Claude will skip that step rather than fail — but you lose the discipline that step provides.
+These are referenced by name in skill prompts. If a dependency isn't installed, Claude performs the step's goal manually and notes the substitution in its output — but you lose the structured discipline the dedicated skill provides.
 
 ```
 /plugin marketplace add obra/superpowers-marketplace
@@ -114,17 +114,17 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 | `branch.ticketPattern` | `"[A-Z]+-\\d+"` | Regex to extract ticket IDs from quest descriptions. Default matches Jira-style IDs (e.g., `PROJ-123`). |
 | `worktree.enabled` | `true` | Whether quests create isolated worktrees. Set to `false` to work on the current branch. |
 | `worktree.directory` | `null` | Parent directory for worktrees. `null` uses Claude Code's default (`.claude/worktrees/`). |
-| `gates.autoApprove` | `[]` | Gate names to auto-approve: `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`. Gates not listed still surface to you for approval. |
+| `gates.autoApprove` | `[]` | Gate names to auto-approve: `"Onboard"`, `"Research"`, `"Plan"`, `"Implement"`, `"Adversarial"`, `"Review"` (the phase being left — `"Research"` auto-approves Research→Plan). Gates not listed still surface to you for approval. |
 | `pr.draft` | `false` | Create PRs as drafts. |
 | `pr.template` | `null` | PR body template string. Supports `{task}`, `{summary}`, and `{changes}` placeholders. |
 | `palantir.enabled` | `true` | Whether to spawn a palantir monitoring agent during fellowships. |
 | `palantir.minQuests` | `2` | Minimum active quests before palantir is spawned. |
 | `issues.autoClose` | `true` | When true, `/missive` includes `Closes #N` in PR keywords so issues close on merge. |
-| `models.quest` | `null` | Model for quest teammates. A model alias (`haiku`, `sonnet`, `opus`), a full model ID, or `"inherit"`. `null` = built-in default: inherit the session model. |
+| `models.quest` | `null` | Model for quest teammates. Valid values: `"haiku"`, `"sonnet"`, `"opus"` (aliases only — spawn parameters accept neither `"inherit"` nor full model IDs; leave `null` to inherit). `null` = built-in default: inherit the session model. |
 | `models.scout` | `null` | Model for scout teammates. Same valid values. `null` = built-in default: `sonnet`. |
 | `models.palantir` | `null` | Model for the palantir monitor. Same valid values. `null` = built-in default: `haiku`. |
 | `models.balrog` | `null` | Model for balrog adversarial review. Same valid values. `null` = built-in default: inherit the session model. |
-| `models.explore` | `null` | Model for Explore scan subagents spawned by quest, scout, and council. Same valid values. `null` = built-in default: `haiku`. |
+| `models.explore` | `null` | Model for Explore scan subagents spawned by quest, scout, council, and guide. Same valid values. `null` = built-in default: `haiku`. |
 | `models.validator` | `null` | Model for scout's validation subagent. Same valid values. `null` = built-in default: `sonnet`. |
 
 The config is read at fellowship startup and quest onboard (Phase 0). Changes to the file take effect on the next fellowship or quest invocation.
@@ -177,6 +177,7 @@ Phase 0: Onboard    → worktree isolation + /council context loading
 Phase 1: Research   → explore agents + /gather-lore
 Phase 2: Plan       → plan mode with file:line references + user approval
 Phase 3: Implement  → TDD (red-green-refactor)
+Phase 3.5: Adversarial → balrog attacks the implementation (edge cases, error paths)
 Phase 4: Review     → /warden conventions + code quality + verification
 Phase 5: Complete   → PR creation + worktree cleanup
 ```

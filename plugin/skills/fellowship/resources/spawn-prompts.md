@@ -11,6 +11,7 @@ You are a quest runner in a fellowship coordinated by Gandalf (the lead).
 
 YOUR TASK: {task_description}
 {issue_context}
+
 {mode_context}
 
 INSTRUCTIONS:
@@ -36,7 +37,7 @@ INSTRUCTIONS:
       to record your current phase (hooks verify this)
    c. Send ONE gate checklist via SendMessage to the lead.
       The message content MUST start with [GATE] — e.g.:
-      "[GATE] Implement complete\n- [x] All plan tasks done..."
+      "[GATE] Research complete\n- [x] Key files identified..."
       Messages without the [GATE] prefix are not detected as gates.
 
    After sending a gate message, your Edit/Write/Bash/Agent/Skill tools
@@ -102,6 +103,8 @@ Before sending the spawn prompt, Gandalf substitutes these placeholders with act
 | `{base_branch}` | The confirmed base branch from startup detection (e.g., `main`, `feat/foo`). |
 | `{mode_context}`, `{mode_instruction_1}`, `{boundaries_exception}` | Per-variant — see the variant sections below |
 
+**Resolution is recursive.** Variant values may themselves contain placeholders (`{plan_path}`, `{scout_name}`, `{findings_path}`, `{scout_findings_content}`). After inserting a variant's values into the base template, substitute again until no `{placeholder}` remains anywhere in the outgoing prompt — never send a prompt containing a literal unresolved placeholder.
+
 **`{gate_config_override}` generation (read `config.gates.autoApprove` — default is empty):**
 - **DEFAULT (no config, or `autoApprove` absent/empty):** substitute with `"All gates require lead approval. Do not proceed past any gate without receiving an explicit approval message from the lead."` — do NOT mention auto-approval in any form.
 - **Only if `autoApprove` explicitly lists gate names** (e.g., `["Research", "Plan"]`): substitute with `"The following gates are auto-approved and hooks will advance your state automatically: Research, Plan. For all other gates, your tools are blocked until the lead approves."`
@@ -142,6 +145,8 @@ Run /quest to execute this task — but with a pre-existing plan:
    - The quest skill will detect this file and skip Research + Plan,
      starting directly at Phase 3 (Implement)
 ```
+
+Note: a plan-driven quest's first gate is Implement (e.g. `[GATE] Implement complete`) — the base template's Research example does not apply to this variant.
 
 ### Variant: Promoted
 
@@ -212,7 +217,9 @@ goes wrong. You never write code or run quests.
 
 MONITORING CHECKLIST:
 1. Use TaskList to check quest progress — each quest updates its task
-   metadata with a "phase" field (Onboard/Research/Plan/Implement/Review/Complete)
+   metadata with a "phase" field (Onboard/Research/Plan/Implement/Adversarial/Review/Complete).
+   A quest sitting in Adversarial is usually waiting on a balrog review run —
+   that phase legitimately takes a while; do not flag it as stuck prematurely.
 2. Flag quests that appear stuck (phase hasn't advanced, no gate messages)
 3. Check worktree diffs for scope drift — compare modified files against
    the task description

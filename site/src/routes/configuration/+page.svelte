@@ -144,7 +144,7 @@
 		{
 			key: 'models.quest',
 			default_val: 'null',
-			desc: 'Model for quest teammates. A model alias (haiku, sonnet, opus), a full model ID, or "inherit". null = built-in default: inherit the session model.'
+			desc: 'Model for quest teammates. Valid values: "haiku", "sonnet", "opus" (aliases only — spawn parameters accept neither "inherit" nor full model IDs; leave null to inherit). null = built-in default: inherit the session model.'
 		},
 		{
 			key: 'models.scout',
@@ -164,7 +164,7 @@
 		{
 			key: 'models.explore',
 			default_val: 'null',
-			desc: 'Model for Explore scan subagents spawned by quest, scout, and council. Same valid values. null = built-in default: haiku.'
+			desc: 'Model for Explore scan subagents spawned by quest, scout, council, and guide. Same valid values. null = built-in default: haiku.'
 		},
 		{
 			key: 'models.validator',
