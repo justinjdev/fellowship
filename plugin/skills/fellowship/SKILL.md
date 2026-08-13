@@ -172,12 +172,12 @@ For each quest, Gandalf:
 
 If no issue references are found, `{issue_context}` is substituted with an empty string.
 
-2. Spawn a teammate via the `Task` tool with:
+2. Spawn a teammate via the `Agent` tool with:
    - `team_name`: the fellowship team name
    - `subagent_type: "general-purpose"`
    - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
    - **Isolation is the LEAD's job to PROVISION and VERIFY — never a flag to
-     trust.** The `Task`/Agent `isolation: "worktree"` param has been observed to
+     trust.** The Agent tool's `isolation: "worktree"` param has been observed to
      silently no-op for background quest teammates (no worktree is created; the
      teammate lands in the main repo root). Do NOT assume it worked, and do NOT
      rely on the teammate creating its own worktree in quest Phase 0 — that is
@@ -238,7 +238,7 @@ When uncertain, ask the user.
 For each scout, Gandalf:
 
 1. `TaskCreate` with the question and type "scout"
-2. Spawn via `Task` tool with `subagent_type: "fellowship:scout"`, no worktree isolation.
+2. Spawn via `Agent` tool with `subagent_type: "fellowship:scout"`, no worktree isolation.
 
 **Spawn prompt:** See [resources/spawn-prompts.md](resources/spawn-prompts.md) for the scout spawn prompt template.
 

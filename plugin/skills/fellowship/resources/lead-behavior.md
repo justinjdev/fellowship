@@ -7,10 +7,12 @@ digraph gandalf {
     "From user?" [shape=diamond];
     "Gate message?" [shape=diamond];
     "Quest completed?" [shape=diamond];
+    "All 5 gates + phase Complete?" [shape=diamond];
     "Quest stuck?" [shape=diamond];
     "Surface gate to user, WAIT" [shape=box];
     "Relay user decision to teammate" [shape=box];
     "Record PR URL, mark done, report" [shape=box];
+    "Reject completion, demand missing gates" [shape=box];
     "Report error, offer respawn" [shape=box];
     "No action (idle is normal)" [shape=box];
     "quest: {desc}?" [shape=diamond];
@@ -31,7 +33,9 @@ digraph gandalf {
     "Gate message?" -> "Surface gate to user, WAIT" [label="yes"];
     "Surface gate to user, WAIT" -> "Relay user decision to teammate";
     "Gate message?" -> "Quest completed?" [label="no"];
-    "Quest completed?" -> "Record PR URL, mark done, report" [label="yes"];
+    "Quest completed?" -> "All 5 gates + phase Complete?" [label="yes"];
+    "All 5 gates + phase Complete?" -> "Record PR URL, mark done, report" [label="yes"];
+    "All 5 gates + phase Complete?" -> "Reject completion, demand missing gates" [label="no"];
     "Quest completed?" -> "Quest stuck?" [label="no"];
     "Quest stuck?" -> "Report error, offer respawn" [label="yes"];
     "Quest stuck?" -> "No action (idle is normal)" [label="no"];

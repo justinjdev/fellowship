@@ -53,7 +53,7 @@ Goal: Adversarially verify findings using a fresh subagent with no context pollu
 - Deep analysis involving multiple systems or complex interactions
 - Findings that will inform architectural decisions or code changes
 - Questions where being wrong would waste significant downstream effort
-- Any time there are Medium or Low confidence findings that matter
+- Any Medium or Low confidence finding that appears in a conclusion or recommendation of the report (if it's load-bearing, it gets validated)
 
 **When to skip validation:**
 - Simple lookups ("where is X defined?")

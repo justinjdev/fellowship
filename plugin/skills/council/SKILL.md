@@ -63,7 +63,7 @@ This scope constrains all downstream scanning and verification.
 
 ### Step 4: Scan for Relevant Files
 
-Use the Explore agent (Task tool with subagent_type=Explore) to find files related to the task description. **In a monorepo, scope the search to the identified package(s)** — do not scan the entire repo.
+Use the Explore agent (Agent tool with subagent_type=Explore) to find files related to the task description. **In a monorepo, scope the search to the identified package(s)** — do not scan the entire repo.
 
 Focus on:
 - Files that will likely need modification
@@ -112,4 +112,4 @@ Revise based on feedback.
 
 - **Targeted, not exhaustive.** 5-10 key files, not every file in the directory.
 - **Carry forward.** The Session Context block is referenced by lembas and quest throughout the session.
-- **One question.** Don't interrogate the user. One focused question, then do the work.
+- **Minimal questions.** One focused task question (Step 2); ambiguous monorepo scope (Step 3) and final confirmation (Step 6) may each add one more. Don't interrogate beyond that.

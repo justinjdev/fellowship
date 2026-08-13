@@ -58,6 +58,8 @@ Phase 5: Complete ───→ finishing-a-development-branch
 
 ## Process
 
+**External skill dependencies:** Several steps invoke skills from the `superpowers` and `pr-review-toolkit` plugins (TDD, verification, branch finishing, PR review). If an invocation fails because the plugin is not installed, do not silently skip the step — perform the step's goal manually (write the failing test first yourself, run the verification commands yourself, review the diff yourself) and note the substitution in your phase output or gate message.
+
 ### Fellowship Integration
 
 When running as a fellowship teammate (indicated by the spawn prompt), the gate prerequisite order at the end of each phase is:
@@ -107,10 +109,10 @@ If the spawn prompt contains a `RESUME CONTEXT:` block, this is a recovered ques
 
 1. **Skip worktree creation** — your worktree already exists and you're already in it
 2. **Reset state file:** Run `fellowship init --dir $(pwd)` (you're already in the worktree) to clear `gate_pending` while preserving the current phase
-4. **Update task metadata:** `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})` with the new task ID from the recovery spawn
-5. **Load checkpoint:** If `.fellowship/checkpoint.md` exists, read it as your initial context — this replaces `/council` orientation
-6. **Skip `/council`** — the checkpoint provides equivalent context from the previous session
-7. **Jump to current phase:** Begin executing from the phase recorded in the state file (e.g., if phase is "Implement", skip Research and Plan, go directly to Implement)
+3. **Update task metadata:** `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})` with the new task ID from the recovery spawn
+4. **Load checkpoint:** If `.fellowship/checkpoint.md` exists, read it as your initial context — this replaces `/council` orientation
+5. **Skip `/council`** — the checkpoint provides equivalent context from the previous session
+6. **Jump to current phase:** Begin executing from the phase recorded in the state file (e.g., if phase is "Implement", skip Research and Plan, go directly to Implement)
 
 On respawn, your tome at `.fellowship/quest-tome.json` contains your full history — phases completed, gates passed/rejected, files touched. Use this to orient faster than the checkpoint alone.
 
@@ -210,7 +212,7 @@ The same hard gate requirements apply — validation mode doesn't lower the bar,
    - both flags together when both are available
    Incorporate any relevant findings into your research.
 3. If entering an unfamiliar area, invoke `/gather-lore` to extract conventions from reference files
-4. Use Explore agents (Task tool, subagent_type=Explore) to scan relevant code paths
+4. Use Explore agents (Agent tool, subagent_type=Explore) to scan relevant code paths
 5. Read key files identified in the Session Context
 6. Document findings: how the current system works, constraints, edge cases
 
@@ -255,7 +257,7 @@ Goal: Execute the plan with small, verifiable changes and tight feedback loops. 
 4. Commit each logical unit
 
 **Parallel subagents:** Plan has 3+ independent tasks touching different files.
-1. Dispatch multiple implementation subagents simultaneously (multiple Task tool calls in one message)
+1. Dispatch multiple implementation subagents simultaneously (multiple Agent tool calls in one message)
 2. Each subagent gets the full task text, relevant context, and TDD instructions
 3. No two subagents modify the same file — this is a planning constraint, not a runtime guard. If the plan has file conflicts between subtasks, fix the plan.
 4. Collect results, review each, then commit
