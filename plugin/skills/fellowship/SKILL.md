@@ -67,7 +67,9 @@ Do not proceed with any other startup steps.
 
 At startup, read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. Merge with defaults — any key not present uses the default value. If the file does not exist, all defaults apply.
 
-**Config keys used by fellowship:** `branch.*` (branch naming), `worktree.*` (isolation), `gates.autoApprove` (gate routing), `pr.*` (PR creation), `palantir.*` (monitoring). See `/settings` for the full schema, defaults, and valid values.
+**Config keys used by fellowship:** `branch.*` (branch naming), `worktree.*` (isolation), `gates.autoApprove` (gate routing), `pr.*` (PR creation), `palantir.*` (monitoring), `models.*` (model routing for spawned agents). See `/settings` for the full schema, defaults, and valid values.
+
+**Model routing:** When spawning any teammate or agent below, check `config.models.<role>` (`quest`, `scout`, `palantir`). If set, pass its value as the Agent tool's `model` parameter for that spawn. If unset, omit the parameter — the agent definition's own default applies (scout: sonnet, palantir: haiku) and quest teammates inherit the session model. A per-invocation `model` parameter overrides the agent definition's frontmatter, so config always wins when present.
 
 **IMPORTANT — gate defaults:** When no config file exists, or when `gates.autoApprove` is absent/empty, ALL gates surface to the user. No gates are auto-approved by default. Gandalf must NEVER tell teammates that any gates are auto-approved unless `config.gates.autoApprove` explicitly lists them.
 
@@ -176,6 +178,7 @@ If no issue references are found, `{issue_context}` is substituted with an empty
    - `team_name`: the fellowship team name
    - `subagent_type: "general-purpose"`
    - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
+   - `model`: `config.models.quest` if set; otherwise omit — quest teammates write production code and inherit the session model by default
    - **Isolation is the LEAD's job to PROVISION and VERIFY — never a flag to
      trust.** The Agent tool's `isolation: "worktree"` param has been observed to
      silently no-op for background quest teammates (no worktree is created; the
@@ -238,13 +241,13 @@ When uncertain, ask the user.
 For each scout, Gandalf:
 
 1. `TaskCreate` with the question and type "scout"
-2. Spawn via `Agent` tool with `subagent_type: "fellowship:scout"`, no worktree isolation.
+2. Spawn via `Agent` tool with `subagent_type: "fellowship:scout"`, no worktree isolation. Pass `model: config.models.scout` if set; otherwise omit (the scout agent definition defaults to sonnet).
 
 **Spawn prompt:** See [resources/spawn-prompts.md](resources/spawn-prompts.md) for the scout spawn prompt template.
 
 ### Spawn Palantir
 
-When `config.palantir.minQuests` or more quests are active (default: 2) and `config.palantir.enabled` is true (default), spawn a palantir monitoring agent. Only one palantir per fellowship. Shut down when quests drop below threshold.
+When `config.palantir.minQuests` or more quests are active (default: 2) and `config.palantir.enabled` is true (default), spawn a palantir monitoring agent. Only one palantir per fellowship. Shut down when quests drop below threshold. Pass `model: config.models.palantir` if set; otherwise omit (the palantir agent definition defaults to haiku — monitoring is read-only status checking).
 
 **Spawn prompt:** See [resources/spawn-prompts.md](resources/spawn-prompts.md) for the palantir spawn prompt template.
 

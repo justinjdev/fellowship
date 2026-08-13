@@ -36,6 +36,12 @@ Fellowship Config
   palantir.enabled       true                     [default]
   palantir.minQuests     2                        [default]
   issues.autoClose       true                     [default]
+  models.quest           null (inherit)           [default]
+  models.scout           null (sonnet)            [default]
+  models.palantir        null (haiku)             [default]
+  models.balrog          null (inherit)           [default]
+  models.explore         null (haiku)             [default]
+  models.validator       null (sonnet)            [default]
 
   User config:    ~/.claude/fellowship.json
   Project config: .fellowship/config.json (none found)
@@ -83,6 +89,12 @@ This is the canonical schema for fellowship config files. Both `~/.claude/fellow
 | `palantir.enabled` | boolean | `true` | `true`, `false` |
 | `palantir.minQuests` | number | `2` | Any positive integer |
 | `issues.autoClose` | boolean | `true` | `true`, `false`. When true, `/missive` includes `Closes #N` in PR keywords. |
+| `models.quest` | string \| null | `null` | Model for quest teammates. A model alias (`haiku`, `sonnet`, `opus`), a full model ID, or `"inherit"`. `null` = built-in default: inherit the session model. |
+| `models.scout` | string \| null | `null` | Model for scout teammates. Same valid values. `null` = built-in default: `sonnet` (from the scout agent definition). |
+| `models.palantir` | string \| null | `null` | Model for the palantir monitor. Same valid values. `null` = built-in default: `haiku` (from the palantir agent definition). |
+| `models.balrog` | string \| null | `null` | Model for balrog adversarial review. Same valid values. `null` = built-in default: inherit the session model. |
+| `models.explore` | string \| null | `null` | Model for Explore scan subagents spawned by quest, scout, and council. Same valid values. `null` = built-in default: `haiku`. |
+| `models.validator` | string \| null | `null` | Model for scout's validation subagent. Same valid values. `null` = built-in default: `sonnet`. |
 
 ## Merge Semantics
 

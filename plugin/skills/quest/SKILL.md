@@ -212,7 +212,7 @@ The same hard gate requirements apply — validation mode doesn't lower the bar,
    - both flags together when both are available
    Incorporate any relevant findings into your research.
 3. If entering an unfamiliar area, invoke `/gather-lore` to extract conventions from reference files
-4. Use Explore agents (Agent tool, subagent_type=Explore) to scan relevant code paths
+4. Use Explore agents (Agent tool, subagent_type=Explore, passing `model: "haiku"` — or `models.explore` from config if set) to scan relevant code paths
 5. Read key files identified in the Session Context
 6. Document findings: how the current system works, constraints, edge cases
 
@@ -299,6 +299,7 @@ Goal: Find failure modes before conventions and code quality review. Spawn balro
    - The worktree path (from Session Context / task metadata)
    - The task description
    - Your task ID (so balrog can report back via SendMessage)
+   - Model: only if `models.balrog` is set in config, pass it as the Agent tool's `model` parameter; otherwise omit it — balrog inherits the session model by default. Adversarial review is not a place to economize unless the user opted in.
 2. Wait for balrog's SendMessage report. If balrog does not respond within a reasonable time (or if you receive an error from the Agent tool), proceed to Phase 4 and note in your gate message that adversarial review was skipped due to agent failure.
 3. Evaluate findings by severity:
    - **Critical/High** — must address before Review gate opens. Fix, re-run relevant tests, then confirm fixes with balrog's reproduction steps.

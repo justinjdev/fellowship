@@ -63,7 +63,7 @@ This scope constrains all downstream scanning and verification.
 
 ### Step 4: Scan for Relevant Files
 
-Use the Explore agent (Agent tool with subagent_type=Explore) to find files related to the task description. **In a monorepo, scope the search to the identified package(s)** — do not scan the entire repo.
+Use the Explore agent (Agent tool with subagent_type=Explore, passing `model: "haiku"` — file scanning does not need the session model; use `models.explore` from fellowship config instead if set) to find files related to the task description. **In a monorepo, scope the search to the identified package(s)** — do not scan the entire repo.
 
 Focus on:
 - Files that will likely need modification

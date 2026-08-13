@@ -29,7 +29,7 @@ Goal: Gather thorough, factual findings about the question.
 
 **Actions:**
 1. Invoke `/council` to load task-relevant context
-2. Use Explore agents (Agent tool, subagent_type=Explore) to scan relevant code paths
+2. Use Explore agents (Agent tool, subagent_type=Explore, passing `model: "haiku"` — or `models.explore` from fellowship config if set) to scan relevant code paths
 3. Read key files, trace call chains, understand behavior
 4. Document findings with specific file paths and line references
 
@@ -62,7 +62,7 @@ Goal: Adversarially verify findings using a fresh subagent with no context pollu
 
 **Validation procedure:**
 1. Write your findings to a working file (e.g., `docs/research/<topic>.md`) — do NOT commit
-2. Spawn a validator subagent via the Agent tool with subagent_type "general-purpose":
+2. Spawn a validator subagent via the Agent tool with subagent_type "general-purpose", passing `model: "sonnet"` (or `models.validator` from fellowship config if set) — validation is evidence-checking against specific files, not deep synthesis:
 
 ```
 You are a research validator. Your job is adversarial: challenge
