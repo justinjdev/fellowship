@@ -27,4 +27,15 @@ When running as a fellowship teammate (indicated by your spawn prompt):
    - `TaskUpdate(taskId: "<task_id>", metadata: {"phase": "Done"})` before delivery
 2. Send your final report to the lead via `SendMessage`
 3. If you get stuck or need a decision, message the lead
-4. If you receive a shutdown request, respond immediately using `SendMessage` with type "shutdown_response", approve: true, and the request_id from the message
+4. If you receive a shutdown request, respond immediately and stop:
+
+   <!-- Embedded from _protocol.md (Shutdown) — keep in sync -->
+   ```json
+   {
+     "type": "shutdown_response",
+     "request_id": "<from the incoming message>",
+     "approve": true
+   }
+   ```
+
+   Do not perform any further work after sending a shutdown response.

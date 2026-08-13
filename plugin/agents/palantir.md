@@ -79,6 +79,7 @@ Use `fellowship bulletin list --json` to read all entries.
 
 When you detect an issue, send a message to the lead using `SendMessage`:
 
+<!-- Embedded from _protocol.md (Sending a Report) — keep in sync. Palantir is lead-spawned, so the recipient is "team-lead". -->
 ```json
 {
   "type": "message",
@@ -131,15 +132,18 @@ Where `<type>` is one of: `stuck`, `drift`, `conflict`, `health`, `bulletin`. Ap
 
 ### 7. Respond to Shutdown
 
-When you receive a shutdown request from the lead, respond immediately:
+When you receive a shutdown request from the lead, respond immediately and stop:
 
+<!-- Embedded from _protocol.md (Shutdown) — keep in sync -->
 ```json
 {
   "type": "shutdown_response",
-  "request_id": "{from the message}",
+  "request_id": "<from the incoming message>",
   "approve": true
 }
 ```
+
+Do not perform any further work after sending a shutdown response.
 
 ## Key Principles
 

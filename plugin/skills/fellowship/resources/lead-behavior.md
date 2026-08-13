@@ -113,7 +113,7 @@ When the user explicitly requests promotion (e.g., "promote scout-auth findings 
 5. **Spawn promoted quest:**
    - `TaskCreate` with the quest description
    - Read the findings file content
-   - Spawn a teammate using the **Promoted Quest Spawn Prompt** from spawn-prompts.md, with `{scout_findings_content}` set to the full file content
+   - Spawn a teammate using the quest spawn prompt's **Promoted variant** from spawn-prompts.md, with `{scout_findings_content}` set to the full file content
    - Add to state file via `fellowship state add-quest`
 6. **Report:** Tell the user the promotion is underway
 

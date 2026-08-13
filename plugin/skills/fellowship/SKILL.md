@@ -218,7 +218,7 @@ When the user's prompt references a plan file (e.g., "implement docs/plans/my-pl
 
 1. Validate the plan file exists — read it to confirm
 2. `TaskCreate` with the task description including the plan reference
-3. Spawn a teammate using the **Plan-Driven Quest Spawn Prompt** from spawn-prompts.md
+3. Spawn a teammate using the quest spawn prompt's **Plan-Driven variant** from spawn-prompts.md
 4. After spawning, add the quest to fellowship state as normal
 
 **Fan-out mode (multiple quests from one plan):**

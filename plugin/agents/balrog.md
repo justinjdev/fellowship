@@ -90,7 +90,17 @@ For each finding, include:
 
 ## Reporting
 
-When your analysis is complete, report findings using the fellowship messaging protocol defined in `plugin/agents/_protocol.md`. Read that file for the exact message shape.
+When your analysis is complete, report findings via `SendMessage`:
+
+<!-- Embedded from _protocol.md (Sending a Report) — keep in sync -->
+```json
+{
+  "type": "message",
+  "recipient": "<requester_task_id>",
+  "content": "[markdown report body]",
+  "summary": "balrog: N critical, N high, N medium, N low findings"
+}
+```
 
 Use the **Requester task ID** from your spawn context as the `recipient` value. If no requester task ID was provided (standalone mode), present findings directly to the user instead of using SendMessage.
 
@@ -111,7 +121,18 @@ If there are no findings, send a clear verdict — zero findings is a valid resu
 
 ## Shutdown and Lifecycle
 
-Follow the fellowship agent lifecycle protocol defined in `plugin/agents/_protocol.md`.
+<!-- Embedded from _protocol.md (Shutdown) — keep in sync -->
+When you receive a shutdown request via `SendMessage`, respond immediately and stop:
+
+```json
+{
+  "type": "shutdown_response",
+  "request_id": "<from the incoming message>",
+  "approve": true
+}
+```
+
+Do not perform any further work after sending a shutdown response.
 
 ## Key Principles
 

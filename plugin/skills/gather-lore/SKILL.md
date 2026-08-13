@@ -32,6 +32,8 @@ If the user can't identify any:
 
 ### Step 2: Extract Patterns
 
+<!-- This taxonomy deliberately mirrors warden/SKILL.md Step 3 (Reference Comparison): gather-lore extracts along the same dimensions warden later checks. Change both files together. Same for Step 4 below, which mirrors warden Step 6 (Learn). -->
+
 Read each reference file and produce a structured analysis. Be exhaustive — the patterns you miss are the ones that get flagged in review:
 
 ```
