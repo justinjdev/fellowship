@@ -91,6 +91,17 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
   "palantir": {
     "enabled": true,
     "minQuests": 2
+  },
+  "issues": {
+    "autoClose": true
+  },
+  "models": {
+    "quest": null,
+    "scout": null,
+    "palantir": null,
+    "balrog": null,
+    "explore": null,
+    "validator": null
   }
 }
 ```
@@ -108,10 +119,19 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 | `pr.template` | `null` | PR body template string. Supports `{task}`, `{summary}`, and `{changes}` placeholders. |
 | `palantir.enabled` | `true` | Whether to spawn a palantir monitoring agent during fellowships. |
 | `palantir.minQuests` | `2` | Minimum active quests before palantir is spawned. |
+| `issues.autoClose` | `true` | When true, `/missive` includes `Closes #N` in PR keywords so issues close on merge. |
+| `models.quest` | `null` | Model for quest teammates. A model alias (`haiku`, `sonnet`, `opus`), a full model ID, or `"inherit"`. `null` = built-in default: inherit the session model. |
+| `models.scout` | `null` | Model for scout teammates. Same valid values. `null` = built-in default: `sonnet`. |
+| `models.palantir` | `null` | Model for the palantir monitor. Same valid values. `null` = built-in default: `haiku`. |
+| `models.balrog` | `null` | Model for balrog adversarial review. Same valid values. `null` = built-in default: inherit the session model. |
+| `models.explore` | `null` | Model for Explore scan subagents spawned by quest, scout, and council. Same valid values. `null` = built-in default: `haiku`. |
+| `models.validator` | `null` | Model for scout's validation subagent. Same valid values. `null` = built-in default: `sonnet`. |
 
 The config is read at fellowship startup and quest onboard (Phase 0). Changes to the file take effect on the next fellowship or quest invocation.
 
 ## Skills
+
+Skills are invoked automatically by Claude as part of a workflow (quest phases, context compression, etc.) — you can also invoke any of them directly with `/name`.
 
 | Skill | Purpose |
 |-------|---------|
@@ -122,16 +142,31 @@ The config is read at fellowship startup and quest onboard (Phase 0). Changes to
 | `/gather-lore` | Studies reference files to extract conventions before writing code. Prevents "wrong approach" rework. |
 | `/lembas` | Context compression between phases. Keeps the context window in the reasoning sweet spot. |
 | `/warden` | Pre-PR convention review. Compares changes against reference files and documented patterns. |
+| `/missive` | Fetches GitHub issue context for quest spawning — title, body, labels, comments, branch suggestions, and PR close keywords. |
+| `/retro` | Post-fellowship retrospective. Analyzes gate history, palantir alerts, and quest metrics, then recommends configuration improvements. |
+| `/lorebook` | Loads phase-specific guidance from an assigned quest template at the start of each quest phase. |
+
+## Commands
+
+Commands are user-invoked only — Claude never calls them automatically, so they carry no base context cost.
+
+| Command | Purpose |
+|---------|---------|
 | `/chronicle` | One-time codebase bootstrapping. Walks through your project to extract conventions into CLAUDE.md. |
+| `/guide` | Interactive, learn-by-doing walkthrough of fellowship using a real task on your codebase. |
 | `/red-book` | Post-PR convention capture. Extracts conventions from reviewer comments and adds them to CLAUDE.md. |
+| `/rekindle` | Recovers a fellowship after a session crash — scans worktrees and state files, then re-spawns Gandalf with recovered context. |
+| `/scribe` | Creates a reusable quest template that encodes project-specific rules and conventions into phase guidance. |
 | `/settings` | View or edit fellowship settings (`~/.claude/fellowship.json`). Interactive setup for all configuration options. |
 
 ## Agents
 
 | Agent | Role |
 |-------|------|
-| **palantir** | Background monitor during fellowship execution. Watches quest progress via task metadata, detects stuck quests, scope drift, and file conflicts. Reports to Gandalf. |
+| **palantir** | Background monitor during fellowship execution. Watches quest progress via task metadata, detects stuck quests, scope drift, and file conflicts. Reports to Gandalf. Defaults to the `haiku` model. |
 | **quest-runner** | Quest execution agent. Uses the fellowship CLI for gate management, status checks, and phase transitions. |
+| **balrog** | Adversarial validation agent spawned by quest between Implement and Review. Analyzes the diff for failure modes, writes and runs targeted test cases, and delivers a severity-ranked findings report. |
+| **scout** | Research & analysis agent spawned as a fellowship teammate for read-only investigation — no code edits, no git operations. Defaults to the `sonnet` model. |
 
 ## How It Works
 

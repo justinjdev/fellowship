@@ -53,7 +53,8 @@
 					Reports issues to Gandalf for intervention.
 				</p>
 				<div class="agent-note config-note">
-					Enabled by default. Spawns at 2+ active quests. Configure via
+					Enabled by default. Spawns at 2+ active quests. Uses the <code>haiku</code> model by
+					default (configurable via <code>models.palantir</code>). Configure via
 					<code>palantir.enabled</code> and <code>palantir.minQuests</code> in settings.
 				</div>
 			</div>
@@ -146,7 +147,8 @@
 				</p>
 				<div class="agent-note">
 					Spawned via <code>scout: &lt;question&gt;</code> in fellowship descriptions.
-					No gates, no hooks, no commits.
+					No gates, no hooks, no commits. Uses the <code>sonnet</code> model by default
+					(configurable via <code>models.scout</code>).
 				</div>
 			</div>
 		</div>
