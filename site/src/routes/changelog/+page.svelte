@@ -10,6 +10,39 @@
 <div class="container page">
 	<h1>Changelog</h1>
 
+	<!-- v2.2.0 -->
+	<section class="version" id="v2-2-0">
+		<h2 class="version-heading"><a href="{base}/changelog#v2-2-0">v2.2.0</a></h2>
+		<ul class="changes">
+			<li>
+				<strong>Model routing</strong> — Every subagent spawn point now routes to a cost-appropriate model: palantir defaults to <code>haiku</code>, scout and the validator to <code>sonnet</code>, and Explore scans to <code>haiku</code>, while quest teammates and balrog keep the session model. Override any role via the new <code>models.*</code> block in fellowship config.
+			</li>
+			<li>
+				<strong>Validator agent</strong> — Scout's adversarial validation now runs in a dedicated read-only agent (Read/Glob/Grep only, enforced by tool restrictions) instead of an unrestricted general-purpose subagent.
+			</li>
+			<li>
+				<strong>Mode-aware gate accounting</strong> — The lead verifies quest completion against the gates the quest's mode actually requires: 6 for standard and promoted quests (Adversarial included), 3 for plan-driven. Progress bars and phase enumerations now include the Adversarial phase everywhere.
+			</li>
+			<li>
+				<strong>Spawn prompt consolidation</strong> — The three quest spawn prompt variants (standard, plan-driven, promoted) collapsed into one base template with per-variant deltas, eliminating ~250 lines of drift-prone duplication and unifying hold/shutdown language.
+			</li>
+			<li>
+				<strong>Project config layer</strong> — Fellowship startup and quest onboard now merge <code>.fellowship/config.json</code> (project) with <code>~/.claude/fellowship.json</code> (user) as defaults &rarr; project &rarr; user, matching <code>/settings</code>.
+			</li>
+			<li>
+				<strong>CLI phase fix</strong> — <code>fellowship init --phase Adversarial</code> was rejected and company progress ranked Adversarial-phase quests as zero; phase lists now derive from a single canonical order in the state package.
+			</li>
+			<li>
+				<strong>Messaging protocol fixes</strong> — SendMessage recipients are teammate names (task-ID addressing never delivered); balrog and scout embed the full report envelope inline; balrog gained Write/Edit scoped strictly to test files ("report, don't repair").
+			</li>
+			<li>
+				<strong>Docs refresh</strong> — README and site now document all 10 skills, 6 commands, and 5 agents; the skills page separates auto-invoked skills from user-invoked commands; <code>/validate-docs</code> gained a config-schema cross-check across settings, README, and the site.
+			</li>
+		</ul>
+	</section>
+
+	<div class="divider"><span class="divider-ring"></span></div>
+
 	<!-- v2.1.0 -->
 	<section class="version" id="v2-1-0">
 		<h2 class="version-heading"><a href="{base}/changelog#v2-1-0">v2.1.0</a></h2>

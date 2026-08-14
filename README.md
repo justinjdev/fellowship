@@ -215,6 +215,17 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 
 ## Changelog
 
+### v2.2.0
+
+- **Model routing** — Every subagent spawn point now routes to a cost-appropriate model: palantir defaults to `haiku`, scout and the validator to `sonnet`, Explore scans to `haiku`, while quest teammates and balrog keep the session model. Override any role via the new `models.*` config block.
+- **Validator agent** — Scout's adversarial validation runs in a dedicated read-only agent (Read/Glob/Grep only, enforced by tool restrictions) instead of an unrestricted general-purpose subagent.
+- **Mode-aware gate accounting** — The lead verifies quest completion against the gates the quest's mode actually requires: 6 for standard/promoted quests (Adversarial included), 3 for plan-driven. Progress tracking and phase enumerations now include Adversarial everywhere.
+- **Spawn prompt consolidation** — The three quest spawn prompt variants collapsed into one base template with per-variant deltas, eliminating ~250 lines of drift-prone duplication and unifying hold/shutdown language.
+- **Project config layer** — Fellowship startup and quest onboard now merge `.fellowship/config.json` (project) with `~/.claude/fellowship.json` (user) as defaults → project → user, matching `/settings`.
+- **CLI phase fix** — `fellowship init --phase Adversarial` was rejected and company progress ranked Adversarial-phase quests as zero; phase lists now derive from a single canonical order in the state package.
+- **Messaging protocol fixes** — SendMessage recipients are teammate names (task-ID addressing never delivered); balrog and scout embed the full report envelope inline; balrog gained Write/Edit scoped strictly to test files ("report, don't repair").
+- **Docs refresh** — README and site document all 10 skills, 6 commands, and 5 agents; the skills page separates auto-invoked skills from user-invoked commands; `/validate-docs` gained a config-schema cross-check.
+
 ### v2.1.0
 
 - **Worktree isolation guard** — A fail-closed hook blocks quest teammates from writing source into the main working tree when isolation is skipped. `fellowship state init` registers it in the git-ignored `.claude/settings.local.json` (no commits to your repo), and it arms only while a quest worktree is live, so it never blocks ordinary solo work.
