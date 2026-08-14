@@ -128,6 +128,19 @@ func TestNextPhase(t *testing.T) {
 	}
 }
 
+func TestIsValidPhase(t *testing.T) {
+	for _, p := range []string{"Onboard", "Research", "Plan", "Implement", "Adversarial", "Review", "Complete"} {
+		if !state.IsValidPhase(p) {
+			t.Errorf("IsValidPhase(%q) = false, want true", p)
+		}
+	}
+	for _, p := range []string{"", "onboard", "InvalidPhase", "Done"} {
+		if state.IsValidPhase(p) {
+			t.Errorf("IsValidPhase(%q) = true, want false", p)
+		}
+	}
+}
+
 func TestIsEarlyPhase(t *testing.T) {
 	early := []string{"Onboard", "Research", "Plan"}
 	late := []string{"Implement", "Adversarial", "Review", "Complete"}
