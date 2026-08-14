@@ -26,7 +26,7 @@ When a quest is held, append `(HELD)` to its phase and include the hold reason i
 When companies are defined, group quests by company in the status report:
 
 ```
-## Company: API Work (2/3 quests in Implement+)
+## Company: API Work (1/2 quests in Implement+)
 
 | Task | Type | Phase | Progress |
 |------|------|-------|----------|

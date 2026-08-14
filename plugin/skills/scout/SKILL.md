@@ -62,7 +62,7 @@ Goal: Adversarially verify findings using a fresh subagent with no context pollu
 
 **Validation procedure:**
 1. Write your findings to a working file (e.g., `docs/research/<topic>.md`) — do NOT commit
-2. Spawn a validator subagent via the Agent tool with subagent_type `"fellowship:validator"` — a read-only agent (Read/Glob/Grep only, enforced by tool restrictions; defaults to sonnet, or pass `models.validator` from fellowship config as the `model` parameter). The agent definition carries the validation procedure; the spawn prompt only needs the material:
+2. Spawn a validator subagent via the Agent tool with subagent_type `"fellowship:validator"` — a read-only agent (Read/Glob/Grep only, enforced by tool restrictions). If `models.validator` is set in fellowship config, pass it as the Agent tool's `model` parameter; otherwise omit the parameter (the agent definition defaults to sonnet). The agent definition carries the validation procedure; the spawn prompt only needs the material:
 
 ```
 FINDINGS TO VALIDATE:
