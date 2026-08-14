@@ -104,7 +104,7 @@
 
 		<p class="note">
 			These are referenced by name in skill prompts. If a dependency isn't installed,
-			Claude will skip that step rather than fail -- but you lose the discipline that step provides.
+			Claude performs the step's goal manually and notes the substitution -- but you lose the structured discipline the dedicated skill provides.
 		</p>
 	</section>
 

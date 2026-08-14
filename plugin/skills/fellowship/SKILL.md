@@ -65,9 +65,11 @@ Do not proceed with any other startup steps.
 
 ### Load Config
 
-At startup, read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. Merge with defaults — any key not present uses the default value. If the file does not exist, all defaults apply.
+At startup, read both config layers (neither is required to exist): the project config at `.fellowship/config.json` (repo root) and the user config at `~/.claude/fellowship.json` (the user's personal Claude directory). Merge as **defaults → project → user** (user always wins; see `/settings` for the merge semantics). Any key present in neither file uses the default value.
 
-**Config keys used by fellowship:** `branch.*` (branch naming), `worktree.*` (isolation), `gates.autoApprove` (gate routing), `pr.*` (PR creation), `palantir.*` (monitoring). See `/settings` for the full schema, defaults, and valid values.
+**Config keys used by fellowship:** `branch.*` (branch naming), `worktree.*` (isolation), `gates.autoApprove` (gate routing), `pr.*` (PR creation), `palantir.*` (monitoring), `models.*` (model routing for spawned agents). See `/settings` for the full schema, defaults, and valid values.
+
+**Model routing:** When spawning any teammate or agent below, check `config.models.<role>` (`quest`, `scout`, `palantir`). If set to a model alias (`haiku`, `sonnet`, `opus`), pass it as the Agent tool's `model` parameter for that spawn. If unset, `null`, or `"inherit"`, omit the parameter — the Agent tool's `model` parameter does not accept `"inherit"` or full model IDs; omission is how inheritance is spelled. With the parameter omitted, the agent definition's own default applies (scout: sonnet, palantir: haiku) and quest teammates inherit the session model. A per-invocation `model` parameter overrides the agent definition's frontmatter, so config always wins when present.
 
 **IMPORTANT — gate defaults:** When no config file exists, or when `gates.autoApprove` is absent/empty, ALL gates surface to the user. No gates are auto-approved by default. Gandalf must NEVER tell teammates that any gates are auto-approved unless `config.gates.autoApprove` explicitly lists them.
 
@@ -172,12 +174,13 @@ For each quest, Gandalf:
 
 If no issue references are found, `{issue_context}` is substituted with an empty string.
 
-2. Spawn a teammate via the `Task` tool with:
+2. Spawn a teammate via the `Agent` tool with:
    - `team_name`: the fellowship team name
    - `subagent_type: "general-purpose"`
    - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
+   - `model`: `config.models.quest` if set; otherwise omit — quest teammates write production code and inherit the session model by default
    - **Isolation is the LEAD's job to PROVISION and VERIFY — never a flag to
-     trust.** The `Task`/Agent `isolation: "worktree"` param has been observed to
+     trust.** The Agent tool's `isolation: "worktree"` param has been observed to
      silently no-op for background quest teammates (no worktree is created; the
      teammate lands in the main repo root). Do NOT assume it worked, and do NOT
      rely on the teammate creating its own worktree in quest Phase 0 — that is
@@ -196,6 +199,10 @@ If no issue references are found, `{issue_context}` is substituted with an empty
      worktree exists (`git worktree list`) and that its path is not the main root.
      Never tell a teammate it is "already isolated" unless you have verified its
      worktree exists.
+   - **Publish the verified path BEFORE spawning:** run
+     `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<path>"})` so
+     quest Phase 0's `TaskGet` check finds the provisioned worktree and skips
+     creating a second one on the wrong branch.
    - **Two safeguards catch the bug regardless of how isolation was provisioned:**
      (1) the teammate's mandatory isolation SELF-CHECK before its first write —
      top-level must differ from the main root, else STOP and message the lead
@@ -215,7 +222,7 @@ When the user's prompt references a plan file (e.g., "implement docs/plans/my-pl
 
 1. Validate the plan file exists — read it to confirm
 2. `TaskCreate` with the task description including the plan reference
-3. Spawn a teammate using the **Plan-Driven Quest Spawn Prompt** from spawn-prompts.md
+3. Spawn a teammate using the quest spawn prompt's **Plan-Driven variant** from spawn-prompts.md
 4. After spawning, add the quest to fellowship state as normal
 
 **Fan-out mode (multiple quests from one plan):**
@@ -238,13 +245,13 @@ When uncertain, ask the user.
 For each scout, Gandalf:
 
 1. `TaskCreate` with the question and type "scout"
-2. Spawn via `Task` tool with `subagent_type: "fellowship:scout"`, no worktree isolation.
+2. Spawn via `Agent` tool with `subagent_type: "fellowship:scout"`, no worktree isolation. Pass `model: config.models.scout` if set; otherwise omit (the scout agent definition defaults to sonnet).
 
 **Spawn prompt:** See [resources/spawn-prompts.md](resources/spawn-prompts.md) for the scout spawn prompt template.
 
 ### Spawn Palantir
 
-When `config.palantir.minQuests` or more quests are active (default: 2) and `config.palantir.enabled` is true (default), spawn a palantir monitoring agent. Only one palantir per fellowship. Shut down when quests drop below threshold.
+When `config.palantir.minQuests` or more quests are active (default: 2) and `config.palantir.enabled` is true (default), spawn a palantir monitoring agent. Only one palantir per fellowship. Shut down when quests drop below threshold. Pass `model: config.models.palantir` if set; otherwise omit (the palantir agent definition defaults to haiku — monitoring is read-only status checking).
 
 **Spawn prompt:** See [resources/spawn-prompts.md](resources/spawn-prompts.md) for the palantir spawn prompt template.
 
@@ -264,7 +271,7 @@ Each quest runs the full `/quest` lifecycle (6 phases with gates). Gates are enf
 
 **DEFAULT: ALL gates surface to the user.** No gates are ever auto-approved unless `config.gates.autoApprove` explicitly lists them. Gandalf must NEVER auto-approve a gate that is not listed in `config.gates.autoApprove`.
 
-**With `config.gates.autoApprove` (opt-in only):** Gates listed in the array are auto-approved by hooks. Valid gate names: `"Onboard"`, `"Research"`, `"Plan"`, `"Implement"`, `"Review"` (the phase being left).
+**With `config.gates.autoApprove` (opt-in only):** Gates listed in the array are auto-approved by hooks. Valid gate names: `"Onboard"`, `"Research"`, `"Plan"`, `"Implement"`, `"Adversarial"`, `"Review"` (the phase being left).
 
 ### Gate Approval Procedure
 

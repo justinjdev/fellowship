@@ -14,8 +14,8 @@ When the user asks for "status" or Gandalf proactively reports progress:
 
 | Task | Type | Phase | Progress |
 |------|------|-------|----------|
-| quest-auth-bug | Quest | Implement | ████░░ 3/5 |
-| quest-rate-limit | Quest | Research (HELD) | █░░░░░ 1/5 |
+| quest-auth-bug | Quest | Implement | ███░░░ 3/6 |
+| quest-rate-limit | Quest | Research (HELD) | █░░░░░ 1/6 |
 | scout-auth-analysis | Scout | Validating | ██░░ 2/3 |
 
 **Quests:** 2 active (1 held) | **Scouts:** 1 active | **Completed:** 0
@@ -26,25 +26,25 @@ When a quest is held, append `(HELD)` to its phase and include the hold reason i
 When companies are defined, group quests by company in the status report:
 
 ```
-## Company: API Work (2/3 quests in Implement+)
+## Company: API Work (1/2 quests in Implement+)
 
 | Task | Type | Phase | Progress |
 |------|------|-------|----------|
-| quest-add-endpoint | Quest | Implement | ████░░ 3/5 |
-| quest-add-tests | Quest | Research | █░░░░░ 1/5 |
+| quest-add-endpoint | Quest | Implement | ███░░░ 3/6 |
+| quest-add-tests | Quest | Research | █░░░░░ 1/6 |
 | scout-review-api | Scout | Investigating | █░░ 1/3 |
 
 ## Ungrouped
 
 | Task | Type | Phase | Progress |
 |------|------|-------|----------|
-| quest-other-task | Quest | Plan | ██░░░░ 2/5 |
+| quest-other-task | Quest | Plan | ██░░░░ 2/6 |
 ```
 
 ## Phase-to-Progress Mapping
 
 Quest phases:
-- Onboard = 0/5, Research = 1/5, Plan = 2/5, Implement = 3/5, Review = 4/5, Complete = 5/5
+- Onboard = 0/6, Research = 1/6, Plan = 2/6, Implement = 3/6, Adversarial = 4/6, Review = 5/6, Complete = 6/6
 
 Scout phases:
 - Investigating = 1/3, Validating = 2/3, Done = 3/3

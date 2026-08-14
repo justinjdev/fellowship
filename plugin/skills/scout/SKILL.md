@@ -29,7 +29,7 @@ Goal: Gather thorough, factual findings about the question.
 
 **Actions:**
 1. Invoke `/council` to load task-relevant context
-2. Use Explore agents (Agent tool, subagent_type=Explore) to scan relevant code paths
+2. Use Explore agents (Agent tool, subagent_type=Explore, passing `model: "haiku"` — or `models.explore` from fellowship config if set) to scan relevant code paths
 3. Read key files, trace call chains, understand behavior
 4. Document findings with specific file paths and line references
 
@@ -53,7 +53,7 @@ Goal: Adversarially verify findings using a fresh subagent with no context pollu
 - Deep analysis involving multiple systems or complex interactions
 - Findings that will inform architectural decisions or code changes
 - Questions where being wrong would waste significant downstream effort
-- Any time there are Medium or Low confidence findings that matter
+- Any Medium or Low confidence finding that appears in a conclusion or recommendation of the report (if it's load-bearing, it gets validated)
 
 **When to skip validation:**
 - Simple lookups ("where is X defined?")
@@ -62,28 +62,11 @@ Goal: Adversarially verify findings using a fresh subagent with no context pollu
 
 **Validation procedure:**
 1. Write your findings to a working file (e.g., `docs/research/<topic>.md`) — do NOT commit
-2. Spawn a validator subagent via the Agent tool with subagent_type "general-purpose":
+2. Spawn a validator subagent via the Agent tool with subagent_type `"fellowship:validator"` — a read-only agent (Read/Glob/Grep only, enforced by tool restrictions). If `models.validator` is set in fellowship config, pass it as the Agent tool's `model` parameter; otherwise omit the parameter (the agent definition defaults to sonnet). The agent definition carries the validation procedure; the spawn prompt only needs the material:
 
 ```
-You are a research validator. Your job is adversarial: challenge
-assumptions, verify factual claims, and flag anything wrong or unsupported.
-
 FINDINGS TO VALIDATE:
 <paste findings here, including file paths and line references>
-
-INSTRUCTIONS:
-1. For each factual claim, read the referenced file and line range.
-   Does the code actually do what the finding says?
-2. For each Medium/Low confidence finding, investigate independently.
-   Can you confirm or refute it?
-3. Produce a validation report:
-   - CONFIRMED: claims you verified are correct
-   - CONTESTED: claims that are wrong or misleading, with evidence
-   - UNVERIFIED: claims you couldn't confirm or deny
-
-BOUNDARIES:
-- Read any file. Do NOT modify any files or run commands.
-- Be adversarial — your value is in catching errors, not agreeing.
 ```
 
 3. Review the validation report

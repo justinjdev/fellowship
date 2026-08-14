@@ -22,6 +22,17 @@
   "palantir": {
     "enabled": true,
     "minQuests": 2
+  },
+  "issues": {
+    "autoClose": true
+  },
+  "models": {
+    "quest": null,
+    "scout": null,
+    "palantir": null,
+    "balrog": null,
+    "explore": null,
+    "validator": null
   }
 }`;
 
@@ -124,6 +135,41 @@
 			key: 'palantir.minQuests',
 			default_val: '2',
 			desc: 'Minimum active quests before palantir is spawned.'
+		},
+		{
+			key: 'issues.autoClose',
+			default_val: 'true',
+			desc: 'When true, /missive includes "Closes #N" in PR keywords so issues close on merge.'
+		},
+		{
+			key: 'models.quest',
+			default_val: 'null',
+			desc: 'Model for quest teammates. Valid values: "haiku", "sonnet", "opus" (aliases only — spawn parameters accept neither "inherit" nor full model IDs; leave null to inherit). null = built-in default: inherit the session model.'
+		},
+		{
+			key: 'models.scout',
+			default_val: 'null',
+			desc: 'Model for scout teammates. Same valid values. null = built-in default: sonnet.'
+		},
+		{
+			key: 'models.palantir',
+			default_val: 'null',
+			desc: 'Model for the palantir monitor. Same valid values. null = built-in default: haiku.'
+		},
+		{
+			key: 'models.balrog',
+			default_val: 'null',
+			desc: 'Model for balrog adversarial review. Same valid values. null = built-in default: inherit the session model.'
+		},
+		{
+			key: 'models.explore',
+			default_val: 'null',
+			desc: 'Model for Explore scan subagents spawned by quest, scout, council, and guide. Same valid values. null = built-in default: haiku.'
+		},
+		{
+			key: 'models.validator',
+			default_val: 'null',
+			desc: 'Model for scout\'s validation subagent. Same valid values. null = built-in default: sonnet.'
 		}
 	];
 

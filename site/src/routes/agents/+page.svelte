@@ -53,7 +53,8 @@
 					Reports issues to Gandalf for intervention.
 				</p>
 				<div class="agent-note config-note">
-					Enabled by default. Spawns at 2+ active quests. Configure via
+					Enabled by default. Spawns at 2+ active quests. Uses the <code>haiku</code> model by
+					default (configurable via <code>models.palantir</code>). Configure via
 					<code>palantir.enabled</code> and <code>palantir.minQuests</code> in settings.
 				</div>
 			</div>
@@ -146,7 +147,35 @@
 				</p>
 				<div class="agent-note">
 					Spawned via <code>scout: &lt;question&gt;</code> in fellowship descriptions.
-					No gates, no hooks, no commits.
+					No gates, no hooks, no commits. Uses the <code>sonnet</code> model by default
+					(configurable via <code>models.scout</code>).
+				</div>
+			</div>
+
+			<!-- Validator -->
+			<div class="agent-card animate-in" style="animation-delay: 400ms">
+				<div class="agent-header">
+					<div class="agent-icon">
+						<svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<circle cx="24" cy="24" r="16" stroke="currentColor" stroke-width="1.5" opacity="0.5" />
+							<path d="M17 24 L22 29 L31 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
+							<circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="1" opacity="0.15" />
+						</svg>
+					</div>
+					<div>
+						<h3 class="agent-name">Validator</h3>
+						<span class="agent-role">Findings Verifier</span>
+					</div>
+				</div>
+				<p class="agent-desc">
+					Read-only adversarial verifier spawned by scout during its Validate phase.
+					Re-reads every referenced file and line range, challenges assumptions, and
+					reports each claim as CONFIRMED, CONTESTED, or UNVERIFIED.
+				</p>
+				<div class="agent-note">
+					Tools restricted to Read, Glob, and Grep — cannot modify files or run commands.
+					Uses the <code>sonnet</code> model by default (configurable via
+					<code>models.validator</code>).
 				</div>
 			</div>
 		</div>

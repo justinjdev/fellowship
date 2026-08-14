@@ -1,6 +1,8 @@
 # Fellowship Agent Messaging Protocol
 
-Shared protocol for all fellowship agents. Agents that communicate via `SendMessage` and respond to lifecycle events must follow this spec.
+Canonical spec for how fellowship agents deliver reports and respond to lifecycle events via `SendMessage`.
+
+> **Sync note:** Agent definition files must be self-contained at runtime — an agent's markdown is injected as its system prompt with no path context, so an installed plugin's agents cannot reliably read sibling files (their working directory is the user's project, not the plugin cache). Skills are different: the Skill tool exposes the invoked skill's directory, which is why SKILL.md files can reference sibling `resources/*.md` while agents cannot. Each agent therefore embeds the parts of this protocol it needs inline. When you edit this spec, update the embedded copies in `balrog.md`, `palantir.md`, and `scout.md`.
 
 ## Sending a Report
 
@@ -9,13 +11,16 @@ Use `SendMessage` to deliver findings or status to the requesting agent:
 ```json
 {
   "type": "message",
-  "recipient": "<requester_task_id>",
+  "recipient": "<requester>",
   "content": "[markdown content]",
   "summary": "[short one-line summary for logs]"
 }
 ```
 
-- `recipient`: the task ID provided at spawn time. If not provided (standalone mode), present output directly to the user instead.
+- `recipient`: whoever requested the work, as provided at spawn time. **SendMessage addresses agents by teammate name, not task ID.**
+  - Agents spawned by a teammate (e.g. balrog, spawned by a quest runner): the **requester's teammate name** from the spawn context (e.g. `"quest-auth-bug"`).
+  - Agents spawned by the fellowship lead (e.g. palantir): the lead — `"team-lead"`.
+  - If no requester name was provided (standalone mode), present output directly to the user instead of using SendMessage.
 - `content`: full markdown report body.
 - `summary`: one-line description shown in task logs (e.g., `"balrog: 2 critical, 1 high, 0 medium, 3 low findings"`).
 

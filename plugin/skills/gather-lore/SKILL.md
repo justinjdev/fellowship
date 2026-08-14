@@ -32,6 +32,7 @@ If the user can't identify any:
 
 ### Step 2: Extract Patterns
 
+
 Read each reference file and produce a structured analysis. Be exhaustive — the patterns you miss are the ones that get flagged in review:
 
 ```

@@ -36,6 +36,12 @@ Fellowship Config
   palantir.enabled       true                     [default]
   palantir.minQuests     2                        [default]
   issues.autoClose       true                     [default]
+  models.quest           null (inherit)           [default]
+  models.scout           null (sonnet)            [default]
+  models.palantir        null (haiku)             [default]
+  models.balrog          null (inherit)           [default]
+  models.explore         null (haiku)             [default]
+  models.validator       null (sonnet)            [default]
 
   User config:    ~/.claude/fellowship.json
   Project config: .fellowship/config.json (none found)
@@ -77,12 +83,18 @@ This is the canonical schema for fellowship config files. Both `~/.claude/fellow
 | `branch.ticketPattern` | string | `"[A-Z]+-\\d+"` | Any valid regex |
 | `worktree.enabled` | boolean | `true` | `true`, `false` |
 | `worktree.directory` | string \| null | `null` | Absolute path to a directory |
-| `gates.autoApprove` | string[] | `[]` | `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`. Names refer to the completed phase — e.g., `"Research"` auto-approves the Research→Plan transition. |
+| `gates.autoApprove` | string[] | `[]` | `"Onboard"`, `"Research"`, `"Plan"`, `"Implement"`, `"Adversarial"`, `"Review"`. Names refer to the phase being left — e.g., `"Research"` auto-approves the Research→Plan transition. `"Complete"` is not a valid value (no transition leaves Complete). |
 | `pr.draft` | boolean | `false` | `true`, `false` |
 | `pr.template` | string \| null | `null` | Template with `{task}`, `{summary}`, `{changes}` placeholders |
 | `palantir.enabled` | boolean | `true` | `true`, `false` |
 | `palantir.minQuests` | number | `2` | Any positive integer |
 | `issues.autoClose` | boolean | `true` | `true`, `false`. When true, `/missive` includes `Closes #N` in PR keywords. |
+| `models.quest` | string \| null | `null` | Model for quest teammates. Valid values: the aliases `"haiku"`, `"sonnet"`, `"opus"` — these are passed verbatim as the Agent tool's `model` parameter, which does not accept `"inherit"` or full model IDs. To inherit the session model, leave the key `null` (the parameter is then omitted). `null` = built-in default: inherit the session model. |
+| `models.scout` | string \| null | `null` | Model for scout teammates. Same valid values. `null` = built-in default: `sonnet` (from the scout agent definition). |
+| `models.palantir` | string \| null | `null` | Model for the palantir monitor. Same valid values. `null` = built-in default: `haiku` (from the palantir agent definition). |
+| `models.balrog` | string \| null | `null` | Model for balrog adversarial review. Same valid values. `null` = built-in default: inherit the session model. |
+| `models.explore` | string \| null | `null` | Model for Explore scan subagents spawned by quest, scout, council, and guide. Same valid values. `null` = built-in default: `haiku`. |
+| `models.validator` | string \| null | `null` | Model for scout's validation subagent. Same valid values. `null` = built-in default: `sonnet` (from the validator agent definition). |
 
 ## Merge Semantics
 

@@ -58,6 +58,8 @@ Phase 5: Complete ───→ finishing-a-development-branch
 
 ## Process
 
+**External skill dependencies:** Several steps invoke skills from the `superpowers` and `pr-review-toolkit` plugins (TDD, verification, branch finishing, PR review). If an invocation fails because the plugin is not installed, do not silently skip the step — perform the step's goal manually (write the failing test first yourself, run the verification commands yourself, review the diff yourself) and note the substitution in your phase output or gate message.
+
 ### Fellowship Integration
 
 When running as a fellowship teammate (indicated by the spawn prompt), the gate prerequisite order at the end of each phase is:
@@ -107,10 +109,10 @@ If the spawn prompt contains a `RESUME CONTEXT:` block, this is a recovered ques
 
 1. **Skip worktree creation** — your worktree already exists and you're already in it
 2. **Reset state file:** Run `fellowship init --dir $(pwd)` (you're already in the worktree) to clear `gate_pending` while preserving the current phase
-4. **Update task metadata:** `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})` with the new task ID from the recovery spawn
-5. **Load checkpoint:** If `.fellowship/checkpoint.md` exists, read it as your initial context — this replaces `/council` orientation
-6. **Skip `/council`** — the checkpoint provides equivalent context from the previous session
-7. **Jump to current phase:** Begin executing from the phase recorded in the state file (e.g., if phase is "Implement", skip Research and Plan, go directly to Implement)
+3. **Update task metadata:** `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})` with the new task ID from the recovery spawn
+4. **Load checkpoint:** If `.fellowship/checkpoint.md` exists, read it as your initial context — this replaces `/council` orientation
+5. **Skip `/council`** — the checkpoint provides equivalent context from the previous session
+6. **Jump to current phase:** Begin executing from the phase recorded in the state file (e.g., if phase is "Implement", skip Research and Plan, go directly to Implement)
 
 On respawn, your tome at `.fellowship/quest-tome.json` contains your full history — phases completed, gates passed/rejected, files touched. Use this to orient faster than the checkpoint alone.
 
@@ -120,7 +122,7 @@ After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, upda
 
 #### Standard Onboard
 
-1. **Config:** Read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. Merge with defaults (see fellowship skill for the full schema). If the file does not exist, all defaults apply.
+1. **Config:** Read both config layers if they exist — project `.fellowship/config.json` (repo root) and user `~/.claude/fellowship.json` — and merge as defaults → project → user (user wins; see `/settings` for the full schema). If neither file exists, all defaults apply.
 2. **Isolate:** Detect whether you're resuming an existing worktree: check if task metadata contains `worktree_path` (via `TaskGet`) and the path exists on disk. If so, you're already isolated — skip worktree creation. Otherwise, if `config.worktree.enabled` is true (default), create an isolated worktree:
    - **Resolve branch name:** If the spawn prompt includes issue context from `/missive` with a suggested branch name, use that name directly (it already incorporates the issue number and title). Otherwise, determine the branch name using config:
      1. If `branch.pattern` is set: substitute `{slug}`, `{ticket}`, `{author}` placeholders (see below).
@@ -210,7 +212,7 @@ The same hard gate requirements apply — validation mode doesn't lower the bar,
    - both flags together when both are available
    Incorporate any relevant findings into your research.
 3. If entering an unfamiliar area, invoke `/gather-lore` to extract conventions from reference files
-4. Use Explore agents (Task tool, subagent_type=Explore) to scan relevant code paths
+4. Use Explore agents (Agent tool, subagent_type=Explore, passing `model: "haiku"` — or `models.explore` from config if set) to scan relevant code paths
 5. Read key files identified in the Session Context
 6. Document findings: how the current system works, constraints, edge cases
 
@@ -255,7 +257,7 @@ Goal: Execute the plan with small, verifiable changes and tight feedback loops. 
 4. Commit each logical unit
 
 **Parallel subagents:** Plan has 3+ independent tasks touching different files.
-1. Dispatch multiple implementation subagents simultaneously (multiple Task tool calls in one message)
+1. Dispatch multiple implementation subagents simultaneously (multiple Agent tool calls in one message)
 2. Each subagent gets the full task text, relevant context, and TDD instructions
 3. No two subagents modify the same file — this is a planning constraint, not a runtime guard. If the plan has file conflicts between subtasks, fix the plan.
 4. Collect results, review each, then commit
@@ -296,7 +298,8 @@ Goal: Find failure modes before conventions and code quality review. Spawn balro
 1. Spawn the balrog agent via the Agent tool, passing:
    - The worktree path (from Session Context / task metadata)
    - The task description
-   - Your task ID (so balrog can report back via SendMessage)
+   - Your teammate name (so balrog can report back via SendMessage — recipients are addressed by name, not task ID). If running /quest standalone (no fellowship), tell balrog to present findings directly instead.
+   - Model: only if `models.balrog` is set in config, pass it as the Agent tool's `model` parameter; otherwise omit it — balrog inherits the session model by default. Adversarial review is not a place to economize unless the user opted in.
 2. Wait for balrog's SendMessage report. If balrog does not respond within a reasonable time (or if you receive an error from the Agent tool), proceed to Phase 4 and note in your gate message that adversarial review was skipped due to agent failure.
 3. Evaluate findings by severity:
    - **Critical/High** — must address before Review gate opens. Fix, re-run relevant tests, then confirm fixes with balrog's reproduction steps.

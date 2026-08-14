@@ -30,7 +30,7 @@ Fellowship's `/quest` skill orchestrates skills from these plugins. Install them
 | **superpowers** | `using-git-worktrees`, `test-driven-development`, `verification-before-completion`, `finishing-a-development-branch` | Onboard, Implement, Review, Complete |
 | **pr-review-toolkit** | `review-pr` | Review |
 
-These are referenced by name in skill prompts. If a dependency isn't installed, Claude will skip that step rather than fail — but you lose the discipline that step provides.
+These are referenced by name in skill prompts. If a dependency isn't installed, Claude performs the step's goal manually and notes the substitution in its output — but you lose the structured discipline the dedicated skill provides.
 
 ```
 /plugin marketplace add obra/superpowers-marketplace
@@ -63,7 +63,14 @@ Add this hook to `.claude/settings.local.json` in repos where you use fellowship
 }
 ```
 
-Also add `.fellowship/` to your `.gitignore` — checkpoints are local ephemeral state. If you have configured a custom `dataDir` in `~/.claude/fellowship.json`, use that directory name instead.
+Also add the fellowship data directory to your `.gitignore` — checkpoints and state are local ephemeral files. Keep `.fellowship/config.json` trackable, though: it holds committable team-shared settings (see `/settings`):
+
+```gitignore
+.fellowship/*
+!.fellowship/config.json
+```
+
+If you have configured a custom `dataDir` in `~/.claude/fellowship.json`, use that directory name instead.
 
 ### Configuration (Optional)
 
@@ -91,6 +98,17 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
   "palantir": {
     "enabled": true,
     "minQuests": 2
+  },
+  "issues": {
+    "autoClose": true
+  },
+  "models": {
+    "quest": null,
+    "scout": null,
+    "palantir": null,
+    "balrog": null,
+    "explore": null,
+    "validator": null
   }
 }
 ```
@@ -103,15 +121,24 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 | `branch.ticketPattern` | `"[A-Z]+-\\d+"` | Regex to extract ticket IDs from quest descriptions. Default matches Jira-style IDs (e.g., `PROJ-123`). |
 | `worktree.enabled` | `true` | Whether quests create isolated worktrees. Set to `false` to work on the current branch. |
 | `worktree.directory` | `null` | Parent directory for worktrees. `null` uses Claude Code's default (`.claude/worktrees/`). |
-| `gates.autoApprove` | `[]` | Gate names to auto-approve: `"Research"`, `"Plan"`, `"Implement"`, `"Review"`, `"Complete"`. Gates not listed still surface to you for approval. |
+| `gates.autoApprove` | `[]` | Gate names to auto-approve: `"Onboard"`, `"Research"`, `"Plan"`, `"Implement"`, `"Adversarial"`, `"Review"` (the phase being left — `"Research"` auto-approves Research→Plan). Gates not listed still surface to you for approval. |
 | `pr.draft` | `false` | Create PRs as drafts. |
 | `pr.template` | `null` | PR body template string. Supports `{task}`, `{summary}`, and `{changes}` placeholders. |
 | `palantir.enabled` | `true` | Whether to spawn a palantir monitoring agent during fellowships. |
 | `palantir.minQuests` | `2` | Minimum active quests before palantir is spawned. |
+| `issues.autoClose` | `true` | When true, `/missive` includes `Closes #N` in PR keywords so issues close on merge. |
+| `models.quest` | `null` | Model for quest teammates. Valid values: `"haiku"`, `"sonnet"`, `"opus"` (aliases only — spawn parameters accept neither `"inherit"` nor full model IDs; leave `null` to inherit). `null` = built-in default: inherit the session model. |
+| `models.scout` | `null` | Model for scout teammates. Same valid values. `null` = built-in default: `sonnet`. |
+| `models.palantir` | `null` | Model for the palantir monitor. Same valid values. `null` = built-in default: `haiku`. |
+| `models.balrog` | `null` | Model for balrog adversarial review. Same valid values. `null` = built-in default: inherit the session model. |
+| `models.explore` | `null` | Model for Explore scan subagents spawned by quest, scout, council, and guide. Same valid values. `null` = built-in default: `haiku`. |
+| `models.validator` | `null` | Model for scout's validation subagent. Same valid values. `null` = built-in default: `sonnet`. |
 
 The config is read at fellowship startup and quest onboard (Phase 0). Changes to the file take effect on the next fellowship or quest invocation.
 
 ## Skills
+
+Skills are invoked automatically by Claude as part of a workflow (quest phases, context compression, etc.) — you can also invoke any of them directly with `/name`.
 
 | Skill | Purpose |
 |-------|---------|
@@ -122,16 +149,32 @@ The config is read at fellowship startup and quest onboard (Phase 0). Changes to
 | `/gather-lore` | Studies reference files to extract conventions before writing code. Prevents "wrong approach" rework. |
 | `/lembas` | Context compression between phases. Keeps the context window in the reasoning sweet spot. |
 | `/warden` | Pre-PR convention review. Compares changes against reference files and documented patterns. |
+| `/missive` | Fetches GitHub issue context for quest spawning — title, body, labels, comments, branch suggestions, and PR close keywords. |
+| `/retro` | Post-fellowship retrospective. Analyzes gate history, palantir alerts, and quest metrics, then recommends configuration improvements. |
+| `/lorebook` | Loads phase-specific guidance from an assigned quest template at the start of each quest phase. |
+
+## Commands
+
+Commands are user-invoked only — Claude never calls them automatically, so they carry no base context cost.
+
+| Command | Purpose |
+|---------|---------|
 | `/chronicle` | One-time codebase bootstrapping. Walks through your project to extract conventions into CLAUDE.md. |
+| `/guide` | Interactive, learn-by-doing walkthrough of fellowship using a real task on your codebase. |
 | `/red-book` | Post-PR convention capture. Extracts conventions from reviewer comments and adds them to CLAUDE.md. |
+| `/rekindle` | Recovers a fellowship after a session crash — scans worktrees and state files, then re-spawns Gandalf with recovered context. |
+| `/scribe` | Creates a reusable quest template that encodes project-specific rules and conventions into phase guidance. |
 | `/settings` | View or edit fellowship settings (`~/.claude/fellowship.json`). Interactive setup for all configuration options. |
 
 ## Agents
 
 | Agent | Role |
 |-------|------|
-| **palantir** | Background monitor during fellowship execution. Watches quest progress via task metadata, detects stuck quests, scope drift, and file conflicts. Reports to Gandalf. |
+| **palantir** | Background monitor during fellowship execution. Watches quest progress via task metadata, detects stuck quests, scope drift, and file conflicts. Reports to Gandalf. Defaults to the `haiku` model. |
 | **quest-runner** | Quest execution agent. Uses the fellowship CLI for gate management, status checks, and phase transitions. |
+| **balrog** | Adversarial validation agent spawned by quest between Implement and Review. Analyzes the diff for failure modes, writes and runs targeted test cases, and delivers a severity-ranked findings report. |
+| **scout** | Research & analysis agent spawned as a fellowship teammate for read-only investigation — no code edits, no git operations. Defaults to the `sonnet` model. |
+| **validator** | Read-only adversarial validator spawned by scout to verify research findings against the actual code (CONFIRMED/CONTESTED/UNVERIFIED). Tools restricted to Read/Glob/Grep. Defaults to the `sonnet` model. |
 
 ## How It Works
 
@@ -142,6 +185,7 @@ Phase 0: Onboard    → worktree isolation + /council context loading
 Phase 1: Research   → explore agents + /gather-lore
 Phase 2: Plan       → plan mode with file:line references + user approval
 Phase 3: Implement  → TDD (red-green-refactor)
+Phase 3.5: Adversarial → balrog attacks the implementation (edge cases, error paths)
 Phase 4: Review     → /warden conventions + code quality + verification
 Phase 5: Complete   → PR creation + worktree cleanup
 ```

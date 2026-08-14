@@ -9,12 +9,12 @@ description: Use between workflow phases or when context feels bloated. Compress
 
 Compresses the current conversation into a structured summary to keep the context window in the "smart zone." This is the intentional compaction pattern from context engineering — proactively trimming context between phases rather than waiting for overflow.
 
-The ~40% context utilization mark is where reasoning quality starts to degrade. This skill is the mechanism for staying under that threshold.
+Reasoning quality degrades as a context window fills — well before it overflows. This skill is the mechanism for staying in the sweet spot by compacting early and often.
 
 ## When to Use
 
 - Between phases of the quest workflow (invoked automatically by `/quest`)
-- When a conversation feels bloated after verbose output (build logs, long file reads, exploratory searches)
+- After any stretch of verbose output you would not re-read (build logs, long file reads, exploratory searches, failed-attempt noise) — if in doubt, compact
 - Before switching focus within a session
 - Standalone via `/lembas`
 

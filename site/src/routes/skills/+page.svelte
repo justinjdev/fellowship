@@ -4,18 +4,18 @@
 	const skills = [
 		{
 			name: '/quest',
-			summary: 'Full Research \u2192 Plan \u2192 Implement lifecycle for non-trivial tasks.',
-			details: 'The hub skill that orchestrates everything. Takes a task description, creates an isolated worktree, and walks through six phases: Onboard, Research, Plan, Implement, Review, Complete. In standard mode, each phase has a hard gate requiring approval before proceeding. Uses /council for context, /gather-lore for conventions, /lembas for context compression between phases, and /warden for pre-PR review. Supports plan-driven mode: provide a pre-existing plan file and the quest skips Research and Plan, jumping straight to Implement. Supports promoted mode: when a quest is promoted from a scout, Phase 1 enters validation mode \u2014 verifying and supplementing scout findings instead of researching from scratch. Includes a bulletin board for cross-quest knowledge sharing: quests scan the bulletin at Research start and post discoveries during Research and Implement. The bulletin is shared across all worktrees via the main repo root.'
+			summary: 'Full Research → Plan → Implement lifecycle for non-trivial tasks.',
+			details: 'The hub skill that orchestrates everything. Takes a task description, creates an isolated worktree, and walks through seven phases: Onboard, Research, Plan, Implement, Adversarial (a balrog agent attacks the implementation), Review, Complete. In standard mode, each phase has a hard gate requiring approval before proceeding. Uses /council for context, /gather-lore for conventions, /lembas for context compression between phases, and /warden for pre-PR review. Supports plan-driven mode: provide a pre-existing plan file and the quest skips Research and Plan, jumping straight to Implement. Supports promoted mode: when a quest is promoted from a scout, Phase 1 enters validation mode — verifying and supplementing scout findings instead of researching from scratch. Includes a bulletin board for cross-quest knowledge sharing: quests scan the bulletin at Research start and post discoveries during Research and Implement. The bulletin is shared across all worktrees via the main repo root.'
 		},
 		{
 			name: '/fellowship',
 			summary: 'Multi-task orchestrator. Spawns parallel agent teammates.',
-			details: 'For multiple independent tasks, Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolated worktrees and produce PRs. Scouts research questions and deliver findings. Say \u2018status\u2019 during a fellowship for a progress table. Gates surface to you for approval by default. Supports plan-driven quests: provide a plan file and Gandalf spawns quests that skip to Implement. For large plans, Gandalf can fan out into multiple parallel quests after confirming the split with you. Supports scout-to-quest promotion: say \u2018promote scout-X to a quest\u2019 and Gandalf spawns a quest pre-loaded with the scout\u2019s findings. The bulletin board enables cross-quest knowledge sharing \u2014 cleared automatically on disband.'
+			details: 'For multiple independent tasks, Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolated worktrees and produce PRs. Scouts research questions and deliver findings. Say \'status\' during a fellowship for a progress table. Gates surface to you for approval by default. Supports plan-driven quests: provide a plan file and Gandalf spawns quests that skip to Implement. For large plans, Gandalf can fan out into multiple parallel quests after confirming the split with you. Supports scout-to-quest promotion: say \'promote scout-X to a quest\' and Gandalf spawns a quest pre-loaded with the scout\'s findings. The bulletin board enables cross-quest knowledge sharing — cleared automatically on disband.'
 		},
 		{
 			name: '/scout',
 			summary: 'Research & analysis workflow. No code, no PRs, no commits.',
-			details: 'Autonomous research agent that investigates questions with configurable depth. For complex questions, spawns a fresh adversarial validator subagent to verify findings. Produces a structured report with confidence levels. Writes findings to a namespaced file (.fellowship/scout-findings-{name}.md) that can be promoted into a quest. Use alongside /quest in a fellowship for research questions that don\u2019t need code changes.'
+			details: 'Autonomous research agent that investigates questions with configurable depth. For complex questions, spawns a fresh adversarial validator subagent to verify findings. Produces a structured report with confidence levels. Writes findings to a namespaced file (.fellowship/scout-findings-{name}.md) that can be promoted into a quest. Use alongside /quest in a fellowship for research questions that don’t need code changes.'
 		},
 		{
 			name: '/council',
@@ -25,18 +25,36 @@
 		{
 			name: '/gather-lore',
 			summary: 'Studies reference files to extract conventions.',
-			details: 'Analyzes your codebase to extract patterns before writing code. Examines existing implementations to understand naming conventions, file organization, testing patterns, and architectural decisions. Prevents \u2018wrong approach\u2019 rework by learning from what\u2019s already there.'
+			details: 'Analyzes your codebase to extract patterns before writing code. Examines existing implementations to understand naming conventions, file organization, testing patterns, and architectural decisions. Prevents ‘wrong approach’ rework by learning from what’s already there.'
 		},
 		{
 			name: '/lembas',
 			summary: 'Context compression between phases.',
-			details: 'Compacts the conversation context at phase transitions. Keeps the context window in the reasoning sweet spot by summarizing what\u2019s been done and what needs to happen next. Invoked automatically at all four phase transitions during a quest.'
+			details: 'Compacts the conversation context at phase transitions. Keeps the context window in the reasoning sweet spot by summarizing what’s been done and what needs to happen next. Invoked automatically at every phase transition during a quest.'
 		},
 		{
 			name: '/warden',
 			summary: 'Pre-PR convention review.',
 			details: 'Compares your changes against reference files and documented patterns in CLAUDE.md. Catches convention violations before they reach PR review. Checks naming, file organization, testing patterns, and architectural consistency.'
 		},
+		{
+			name: '/retro',
+			summary: 'Post-fellowship retrospective analysis.',
+			details: 'Analyzes a completed fellowship’s gate history, palantir alerts, and quest metrics to surface patterns. Identifies which gates added value, which phases caused delays, and interactively recommends configuration changes like auto-approving gates with zero rejection rates.'
+		},
+		{
+			name: '/missive',
+			summary: 'Fetch GitHub issue context for quest spawning.',
+			details: 'Pulls structured context from GitHub issues via gh CLI — title, body, labels, and recent comments. Returns a package with issue context, a suggested branch name incorporating the issue number, and PR closing keywords (Closes #N). Gandalf invokes it automatically when issue references (#N) are detected in quest descriptions. Also usable standalone: /missive 42 to preview what context a quest would receive.'
+		},
+		{
+			name: '/lorebook',
+			summary: 'Load phase-specific guidance from a quest template.',
+			details: 'Invoked at the start of each quest phase when your spawn prompt includes a TEMPLATE: assignment. Resolves the template file from project (.claude/fellowship-templates/) or user (~/.claude/fellowship-templates/) directories, reads the section matching the current phase, and applies the guidance as advisory context. Created via /scribe.'
+		}
+	];
+
+	const commands = [
 		{
 			name: '/chronicle',
 			summary: 'One-time codebase bootstrapping.',
@@ -45,22 +63,7 @@
 		{
 			name: '/red-book',
 			summary: 'Post-PR convention capture.',
-			details: 'After a PR review, extracts conventions from reviewer comments and adds them to CLAUDE.md. Closes the convention learning loop \u2014 reviewer feedback becomes documented patterns that future quests will follow.'
-		},
-		{
-			name: '/retro',
-			summary: 'Post-fellowship retrospective analysis.',
-			details: 'Analyzes a completed fellowship\u2019s gate history, palantir alerts, and quest metrics to surface patterns. Identifies which gates added value, which phases caused delays, and interactively recommends configuration changes like auto-approving gates with zero rejection rates.'
-		},
-		{
-			name: '/missive',
-			summary: 'Fetch GitHub issue context for quest spawning.',
-			details: 'Pulls structured context from GitHub issues via gh CLI \u2014 title, body, labels, and recent comments. Returns a package with issue context, a suggested branch name incorporating the issue number, and PR closing keywords (Closes #N). Gandalf invokes it automatically when issue references (#N) are detected in quest descriptions. Also usable standalone: /missive 42 to preview what context a quest would receive.'
-		},
-		{
-			name: '/lorebook',
-			summary: 'Load phase-specific guidance from a quest template.',
-			details: 'Invoked at the start of each quest phase when your spawn prompt includes a TEMPLATE: assignment. Resolves the template file from project (.claude/fellowship-templates/) or user (~/.claude/fellowship-templates/) directories, reads the section matching the current phase, and applies the guidance as advisory context. Created via /scribe.'
+			details: 'After a PR review, extracts conventions from reviewer comments and adds them to CLAUDE.md. Closes the convention learning loop — reviewer feedback becomes documented patterns that future quests will follow.'
 		},
 		{
 			name: '/settings',
@@ -70,7 +73,7 @@
 		{
 			name: '/scribe',
 			summary: 'Create reusable quest templates from codebase conventions.',
-			details: 'Analyzes your project to create quest templates that encode project-specific knowledge — conventions Claude wouldn\u2019t know, domain rules that aren\u2019t in code, team workflows that matter. Templates provide phase-specific guidance loaded automatically by /lorebook during quests. Stored in .claude/fellowship-templates/ (project) or ~/.claude/fellowship-templates/ (personal).'
+			details: 'Analyzes your project to create quest templates that encode project-specific knowledge — conventions Claude wouldn’t know, domain rules that aren’t in code, team workflows that matter. Templates provide phase-specific guidance loaded automatically by /lorebook during quests. Stored in .claude/fellowship-templates/ (project) or ~/.claude/fellowship-templates/ (personal).'
 		},
 		{
 			name: '/guide',
@@ -81,23 +84,28 @@
 			name: '/rekindle',
 			summary: 'Recover a fellowship after a session crash.',
 			details: 'Scans worktrees and state files to reconstruct fellowship state from on-disk artifacts. Presents a recovery dashboard showing which quests are resumable (have checkpoints), stale (no checkpoint), or already complete (branch merged). On confirmation, re-spawns Gandalf and quest runners with recovered context.'
-		},
+		}
 	];
 </script>
 
 <svelte:head>
-	<title>Skills | Fellowship</title>
-	<meta name="description" content="Fellowship slash commands that orchestrate different parts of the workflow." />
+	<title>Skills & Commands | Fellowship</title>
+	<meta name="description" content="Fellowship skills and commands that orchestrate different parts of the workflow." />
 </svelte:head>
 
 <div class="container page">
-	<h1>Skills</h1>
+	<h1>Skills & Commands</h1>
 	<p class="intro">
-		Fellowship skills are slash commands that orchestrate different parts of the workflow.
-		Each skill is a structured prompt — no runtime code.
+		Fellowship ships two kinds of slash-typeable prompts. <strong>Skills</strong> are invoked automatically
+		by Claude at the right moment in a workflow — you can also run them directly with their name.
+		<strong>Commands</strong> only run when you type them yourself; Claude never invokes them on its own.
+		Each is a structured prompt — no runtime code.
 	</p>
 
 	<div class="divider"><span class="divider-ring"></span></div>
+
+	<h2 class="group-heading">Skills (auto-invoked)</h2>
+	<p class="group-intro">Loaded automatically by Claude as part of a quest, fellowship, or scout workflow.</p>
 
 	<div class="skills-list">
 		{#each skills as skill, i (skill.name)}
@@ -108,6 +116,22 @@
 					<span class="skill-summary">{skill.summary}</span>
 				</summary>
 				<p class="skill-details">{skill.details}</p>
+			</details>
+		{/each}
+	</div>
+
+	<h2 class="group-heading">Commands (user-invoked)</h2>
+	<p class="group-intro">Run only when you type them — no automatic invocation, no base context cost.</p>
+
+	<div class="skills-list">
+		{#each commands as command, i (command.name)}
+			<details class="skill-card animate-in" style="animation-delay: {i * 100}ms">
+				<summary>
+					<span class="chevron" aria-hidden="true"></span>
+					<code class="skill-name">{command.name}</code>
+					<span class="skill-summary">{command.summary}</span>
+				</summary>
+				<p class="skill-details">{command.details}</p>
 			</details>
 		{/each}
 	</div>
@@ -128,6 +152,18 @@
 		color: var(--color-text-secondary);
 		max-width: 42em;
 		line-height: 1.7;
+	}
+
+	.group-heading {
+		margin-top: var(--space-xl);
+		margin-bottom: var(--space-xs);
+	}
+
+	.group-intro {
+		color: var(--color-text-secondary);
+		max-width: 42em;
+		line-height: 1.6;
+		margin-bottom: var(--space-md);
 	}
 
 	.skills-list {

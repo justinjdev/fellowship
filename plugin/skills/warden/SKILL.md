@@ -43,6 +43,7 @@ For every rule in `## Review Conventions`, check compliance:
 
 ### Step 3: Reference Comparison
 
+
 Compare your code against reference files across every dimension:
 
 **Structure**

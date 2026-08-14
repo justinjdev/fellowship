@@ -807,12 +807,8 @@ func runInit(d *db.DB) int {
 	initDir := fs.String("dir", "", "Worktree or repo root (default: auto-detect via git)")
 	fs.Parse(os.Args[2:])
 
-	validPhases := map[string]bool{
-		"Onboard": true, "Research": true, "Plan": true,
-		"Implement": true, "Review": true, "Complete": true,
-	}
-	if *phase != "" && !validPhases[*phase] {
-		fmt.Fprintf(os.Stderr, "fellowship: invalid phase %q\n", *phase)
+	if *phase != "" && !state.IsValidPhase(*phase) {
+		fmt.Fprintf(os.Stderr, "fellowship: invalid phase %q (valid: %s)\n", *phase, strings.Join(state.Phases(), ", "))
 		return 1
 	}
 

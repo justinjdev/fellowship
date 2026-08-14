@@ -25,15 +25,15 @@ type CompanyProgress struct {
 	Pending    int    `json:"pending_gates"` // quests with gate_pending
 }
 
-// phaseRank maps phases to a numeric rank for progress tracking.
-var phaseRank = map[string]int{
-	"Onboard":   0,
-	"Research":  1,
-	"Plan":      2,
-	"Implement": 3,
-	"Review":    4,
-	"Complete":  5,
-}
+// phaseRank maps phases to a numeric rank for progress tracking,
+// derived from the canonical phase order in the state package.
+var phaseRank = func() map[string]int {
+	m := make(map[string]int)
+	for i, p := range state.Phases() {
+		m[p] = i
+	}
+	return m
+}()
 
 // CalculateProgress computes aggregate progress for a company given quest statuses.
 func CalculateProgress(company dashboard.CompanyEntry, quests []dashboard.QuestStatus) CompanyProgress {
@@ -55,7 +55,7 @@ func CalculateProgress(company dashboard.CompanyEntry, quests []dashboard.QuestS
 		if qs.Phase == "Complete" {
 			progress.Completed++
 		}
-		if rank, ok := phaseRank[qs.Phase]; ok && rank >= 3 { // Implement+
+		if rank, ok := phaseRank[qs.Phase]; ok && rank >= phaseRank["Implement"] {
 			progress.InProgress++
 		}
 		if qs.GatePending {

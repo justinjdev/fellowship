@@ -7,10 +7,12 @@ digraph gandalf {
     "From user?" [shape=diamond];
     "Gate message?" [shape=diamond];
     "Quest completed?" [shape=diamond];
+    "All expected gates + phase Complete?" [shape=diamond];
     "Quest stuck?" [shape=diamond];
     "Surface gate to user, WAIT" [shape=box];
     "Relay user decision to teammate" [shape=box];
     "Record PR URL, mark done, report" [shape=box];
+    "Reject completion, demand missing gates" [shape=box];
     "Report error, offer respawn" [shape=box];
     "No action (idle is normal)" [shape=box];
     "quest: {desc}?" [shape=diamond];
@@ -31,7 +33,9 @@ digraph gandalf {
     "Gate message?" -> "Surface gate to user, WAIT" [label="yes"];
     "Surface gate to user, WAIT" -> "Relay user decision to teammate";
     "Gate message?" -> "Quest completed?" [label="no"];
-    "Quest completed?" -> "Record PR URL, mark done, report" [label="yes"];
+    "Quest completed?" -> "All expected gates + phase Complete?" [label="yes"];
+    "All expected gates + phase Complete?" -> "Record PR URL, mark done, report" [label="yes"];
+    "All expected gates + phase Complete?" -> "Reject completion, demand missing gates" [label="no"];
     "Quest completed?" -> "Quest stuck?" [label="no"];
     "Quest stuck?" -> "Report error, offer respawn" [label="yes"];
     "Quest stuck?" -> "No action (idle is normal)" [label="no"];
@@ -69,14 +73,19 @@ digraph gandalf {
 
 ## Gate Tracking
 
-Gandalf maintains a gate count per teammate. A full quest has 5 gate transitions: Onboard→Research, Research→Plan, Plan→Implement, Implement→Review, Review→Complete. Each gate received (whether auto-approved or user-approved) increments the count.
+Gandalf maintains a gate count per teammate. The expected count depends on the quest's mode:
+
+- **Standard and promoted quests** have 6 gate transitions: Onboard→Research, Research→Plan, Plan→Implement, Implement→Adversarial, Adversarial→Review, Review→Complete.
+- **Plan-driven quests** start at Implement (Onboard/Research/Plan are recorded as skipped) and have 3: Implement→Adversarial, Adversarial→Review, Review→Complete.
+
+Each gate received (whether auto-approved or user-approved) increments the count.
 
 **Before accepting quest completion**, Gandalf verifies:
-1. The teammate's gate count equals 5 (all transitions completed)
+1. The teammate's gate count equals the expected count for its mode (6 standard/promoted, 3 plan-driven)
 2. The teammate's phase metadata shows "Complete"
 
 If either check fails, Gandalf rejects the completion:
-- Message the teammate: "Gate discipline violation — you have completed {N}/5 gates. You must submit gates for all phase transitions before completing. Missing: {list of missing transitions}."
+- Message the teammate: "Gate discipline violation — you have completed {N}/{expected} gates. You must submit gates for all phase transitions before completing. Missing: {list of missing transitions}."
 - Do NOT mark the task as done
 - Do NOT record a PR URL
 - Report the violation to the user
@@ -109,7 +118,7 @@ When the user explicitly requests promotion (e.g., "promote scout-auth findings 
 5. **Spawn promoted quest:**
    - `TaskCreate` with the quest description
    - Read the findings file content
-   - Spawn a teammate using the **Promoted Quest Spawn Prompt** from spawn-prompts.md, with `{scout_findings_content}` set to the full file content
+   - Spawn a teammate using the quest spawn prompt's **Promoted variant** from spawn-prompts.md, with `{scout_findings_content}` set to the full file content
    - Add to state file via `fellowship state add-quest`
 6. **Report:** Tell the user the promotion is underway
 
