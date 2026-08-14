@@ -45,6 +45,23 @@ func IsEarlyPhase(phase string) bool {
 	return phase == "Onboard" || phase == "Research" || phase == "Plan"
 }
 
+// Phases returns the ordered quest phase names.
+func Phases() []string {
+	out := make([]string, len(phaseOrder))
+	copy(out, phaseOrder)
+	return out
+}
+
+// IsValidPhase reports whether p is a known quest phase.
+func IsValidPhase(p string) bool {
+	for _, phase := range phaseOrder {
+		if phase == p {
+			return true
+		}
+	}
+	return false
+}
+
 // Load reads quest state from DB by quest name.
 func Load(conn *sqlite.Conn, questName string) (*State, error) {
 	var s State
