@@ -122,7 +122,7 @@ After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, upda
 
 #### Standard Onboard
 
-1. **Config:** Read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. Merge with defaults (see fellowship skill for the full schema). If the file does not exist, all defaults apply.
+1. **Config:** Read both config layers if they exist — project `.fellowship/config.json` (repo root) and user `~/.claude/fellowship.json` — and merge as defaults → project → user (user wins; see `/settings` for the full schema). If neither file exists, all defaults apply.
 2. **Isolate:** Detect whether you're resuming an existing worktree: check if task metadata contains `worktree_path` (via `TaskGet`) and the path exists on disk. If so, you're already isolated — skip worktree creation. Otherwise, if `config.worktree.enabled` is true (default), create an isolated worktree:
    - **Resolve branch name:** If the spawn prompt includes issue context from `/missive` with a suggested branch name, use that name directly (it already incorporates the issue number and title). Otherwise, determine the branch name using config:
      1. If `branch.pattern` is set: substitute `{slug}`, `{ticket}`, `{author}` placeholders (see below).
@@ -298,7 +298,7 @@ Goal: Find failure modes before conventions and code quality review. Spawn balro
 1. Spawn the balrog agent via the Agent tool, passing:
    - The worktree path (from Session Context / task metadata)
    - The task description
-   - Your task ID (so balrog can report back via SendMessage)
+   - Your teammate name (so balrog can report back via SendMessage — recipients are addressed by name, not task ID). If running /quest standalone (no fellowship), tell balrog to present findings directly instead.
    - Model: only if `models.balrog` is set in config, pass it as the Agent tool's `model` parameter; otherwise omit it — balrog inherits the session model by default. Adversarial review is not a place to economize unless the user opted in.
 2. Wait for balrog's SendMessage report. If balrog does not respond within a reasonable time (or if you receive an error from the Agent tool), proceed to Phase 4 and note in your gate message that adversarial review was skipped due to agent failure.
 3. Evaluate findings by severity:

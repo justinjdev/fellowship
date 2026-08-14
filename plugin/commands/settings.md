@@ -94,7 +94,7 @@ This is the canonical schema for fellowship config files. Both `~/.claude/fellow
 | `models.palantir` | string \| null | `null` | Model for the palantir monitor. Same valid values. `null` = built-in default: `haiku` (from the palantir agent definition). |
 | `models.balrog` | string \| null | `null` | Model for balrog adversarial review. Same valid values. `null` = built-in default: inherit the session model. |
 | `models.explore` | string \| null | `null` | Model for Explore scan subagents spawned by quest, scout, council, and guide. Same valid values. `null` = built-in default: `haiku`. |
-| `models.validator` | string \| null | `null` | Model for scout's validation subagent. Same valid values. `null` = built-in default: `sonnet`. |
+| `models.validator` | string \| null | `null` | Model for scout's validation subagent. Same valid values. `null` = built-in default: `sonnet` (from the validator agent definition). |
 
 ## Merge Semantics
 

@@ -43,7 +43,6 @@ For every rule in `## Review Conventions`, check compliance:
 
 ### Step 3: Reference Comparison
 
-<!-- These dimensions deliberately mirror gather-lore/SKILL.md Step 2 (Extract Patterns): warden checks along the same dimensions gather-lore extracts. Change both files together. Same for Step 6 below, which mirrors gather-lore Step 4. -->
 
 Compare your code against reference files across every dimension:
 

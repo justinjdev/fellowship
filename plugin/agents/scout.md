@@ -27,7 +27,6 @@ When running as a fellowship teammate (indicated by your spawn prompt):
    - `TaskUpdate(taskId: "<task_id>", metadata: {"phase": "Done"})` before delivery
 2. Send your final report to the lead via `SendMessage` using this envelope:
 
-   <!-- Embedded from _protocol.md (Sending a Report) — keep in sync. Scout is lead-spawned, so the recipient is "team-lead". -->
    ```json
    {
      "type": "message",
@@ -41,7 +40,6 @@ When running as a fellowship teammate (indicated by your spawn prompt):
 3. If you get stuck or need a decision, message the lead
 4. If you receive a shutdown request, respond immediately and stop:
 
-   <!-- Embedded from _protocol.md (Shutdown) — keep in sync -->
    ```json
    {
      "type": "shutdown_response",

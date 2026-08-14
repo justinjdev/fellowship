@@ -65,7 +65,7 @@ Do not proceed with any other startup steps.
 
 ### Load Config
 
-At startup, read `~/.claude/fellowship.json` (the user's personal Claude directory) if it exists. Merge with defaults — any key not present uses the default value. If the file does not exist, all defaults apply.
+At startup, read both config layers (neither is required to exist): the project config at `.fellowship/config.json` (repo root) and the user config at `~/.claude/fellowship.json` (the user's personal Claude directory). Merge as **defaults → project → user** (user always wins; see `/settings` for the merge semantics). Any key present in neither file uses the default value.
 
 **Config keys used by fellowship:** `branch.*` (branch naming), `worktree.*` (isolation), `gates.autoApprove` (gate routing), `pr.*` (PR creation), `palantir.*` (monitoring), `models.*` (model routing for spawned agents). See `/settings` for the full schema, defaults, and valid values.
 
@@ -199,6 +199,10 @@ If no issue references are found, `{issue_context}` is substituted with an empty
      worktree exists (`git worktree list`) and that its path is not the main root.
      Never tell a teammate it is "already isolated" unless you have verified its
      worktree exists.
+   - **Publish the verified path BEFORE spawning:** run
+     `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<path>"})` so
+     quest Phase 0's `TaskGet` check finds the provisioned worktree and skips
+     creating a second one on the wrong branch.
    - **Two safeguards catch the bug regardless of how isolation was provisioned:**
      (1) the teammate's mandatory isolation SELF-CHECK before its first write —
      top-level must differ from the main root, else STOP and message the lead

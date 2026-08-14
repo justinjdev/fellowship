@@ -62,28 +62,11 @@ Goal: Adversarially verify findings using a fresh subagent with no context pollu
 
 **Validation procedure:**
 1. Write your findings to a working file (e.g., `docs/research/<topic>.md`) — do NOT commit
-2. Spawn a validator subagent via the Agent tool with subagent_type "general-purpose", passing `model: "sonnet"` (or `models.validator` from fellowship config if set) — validation is evidence-checking against specific files, not deep synthesis:
+2. Spawn a validator subagent via the Agent tool with subagent_type `"fellowship:validator"` — a read-only agent (Read/Glob/Grep only, enforced by tool restrictions; defaults to sonnet, or pass `models.validator` from fellowship config as the `model` parameter). The agent definition carries the validation procedure; the spawn prompt only needs the material:
 
 ```
-You are a research validator. Your job is adversarial: challenge
-assumptions, verify factual claims, and flag anything wrong or unsupported.
-
 FINDINGS TO VALIDATE:
 <paste findings here, including file paths and line references>
-
-INSTRUCTIONS:
-1. For each factual claim, read the referenced file and line range.
-   Does the code actually do what the finding says?
-2. For each Medium/Low confidence finding, investigate independently.
-   Can you confirm or refute it?
-3. Produce a validation report:
-   - CONFIRMED: claims you verified are correct
-   - CONTESTED: claims that are wrong or misleading, with evidence
-   - UNVERIFIED: claims you couldn't confirm or deny
-
-BOUNDARIES:
-- Read any file. Do NOT modify any files or run commands.
-- Be adversarial — your value is in catching errors, not agreeing.
 ```
 
 3. Review the validation report

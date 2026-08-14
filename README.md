@@ -63,7 +63,14 @@ Add this hook to `.claude/settings.local.json` in repos where you use fellowship
 }
 ```
 
-Also add `.fellowship/` to your `.gitignore` — checkpoints are local ephemeral state. If you have configured a custom `dataDir` in `~/.claude/fellowship.json`, use that directory name instead.
+Also add the fellowship data directory to your `.gitignore` — checkpoints and state are local ephemeral files. Keep `.fellowship/config.json` trackable, though: it holds committable team-shared settings (see `/settings`):
+
+```gitignore
+.fellowship/*
+!.fellowship/config.json
+```
+
+If you have configured a custom `dataDir` in `~/.claude/fellowship.json`, use that directory name instead.
 
 ### Configuration (Optional)
 
@@ -167,6 +174,7 @@ Commands are user-invoked only — Claude never calls them automatically, so the
 | **quest-runner** | Quest execution agent. Uses the fellowship CLI for gate management, status checks, and phase transitions. |
 | **balrog** | Adversarial validation agent spawned by quest between Implement and Review. Analyzes the diff for failure modes, writes and runs targeted test cases, and delivers a severity-ranked findings report. |
 | **scout** | Research & analysis agent spawned as a fellowship teammate for read-only investigation — no code edits, no git operations. Defaults to the `sonnet` model. |
+| **validator** | Read-only adversarial validator spawned by scout to verify research findings against the actual code (CONFIRMED/CONTESTED/UNVERIFIED). Tools restricted to Read/Glob/Grep. Defaults to the `sonnet` model. |
 
 ## How It Works
 

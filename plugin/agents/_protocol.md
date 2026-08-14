@@ -17,10 +17,10 @@ Use `SendMessage` to deliver findings or status to the requesting agent:
 }
 ```
 
-- `recipient`: whoever requested the work, as provided at spawn time:
-  - Agents spawned by a teammate (e.g. balrog, spawned by a quest runner): the **requester task ID** from the spawn context.
+- `recipient`: whoever requested the work, as provided at spawn time. **SendMessage addresses agents by teammate name, not task ID.**
+  - Agents spawned by a teammate (e.g. balrog, spawned by a quest runner): the **requester's teammate name** from the spawn context (e.g. `"quest-auth-bug"`).
   - Agents spawned by the fellowship lead (e.g. palantir): the lead — `"team-lead"`.
-  - If no requester was provided (standalone mode), present output directly to the user instead of using SendMessage.
+  - If no requester name was provided (standalone mode), present output directly to the user instead of using SendMessage.
 - `content`: full markdown report body.
 - `summary`: one-line description shown in task logs (e.g., `"balrog: 2 critical, 1 high, 0 medium, 3 low findings"`).
 

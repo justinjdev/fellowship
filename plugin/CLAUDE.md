@@ -21,6 +21,16 @@ plugin/hooks/scripts/ensure-binary.sh # Downloads CLI binary from GitHub release
 - **Skills vs commands:** Skills are for things Claude needs to know about and invoke automatically (quest phases, context compression). Commands are for user-invoked actions that don't need to consume base context (guide, settings, scribe). If only the user types it, make it a command.
 - **Changelog** in README.md is append-only per version. Don't edit historical entries — they describe what shipped at that version.
 
+## Paired content (keep in sync)
+
+Cross-file duplication that exists on purpose — agent files must be self-contained at runtime (they're injected as system prompts with no path context), and docs mirror the canonical schema. When editing one side, update the other:
+
+- `plugin/agents/_protocol.md` (canonical) ↔ protocol blocks embedded in `plugin/agents/balrog.md`, `palantir.md`, `scout.md`
+- `plugin/skills/gather-lore/SKILL.md` Step 2 pattern taxonomy ↔ `plugin/skills/warden/SKILL.md` Step 3 dimensions (and gather-lore Step 4 ↔ warden Step 6)
+- Config schema: `plugin/commands/settings.md` (canonical) ↔ README Configuration section ↔ `site/src/routes/configuration/+page.svelte`
+
+Do not encode these as HTML comments inside skill/agent prompt files — hidden directives in agent-facing content can be followed by agents as instructions.
+
 ## Releasing
 
 1. Bump `version` in `.claude-plugin/plugin.json`

@@ -10,7 +10,7 @@
 		{
 			name: '/fellowship',
 			summary: 'Multi-task orchestrator. Spawns parallel agent teammates.',
-			details: 'For multiple independent tasks, Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolated worktrees and produce PRs. Scouts research questions and deliver findings. Say ‘status’ during a fellowship for a progress table. Gates surface to you for approval by default. Supports plan-driven quests: provide a plan file and Gandalf spawns quests that skip to Implement. For large plans, Gandalf can fan out into multiple parallel quests after confirming the split with you. Supports scout-to-quest promotion: say ‘promote scout-X to a quest’ and Gandalf spawns a quest pre-loaded with the scout’s findings. The bulletin board enables cross-quest knowledge sharing — cleared automatically on disband.'
+			details: 'For multiple independent tasks, Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolated worktrees and produce PRs. Scouts research questions and deliver findings. Say \'status\' during a fellowship for a progress table. Gates surface to you for approval by default. Supports plan-driven quests: provide a plan file and Gandalf spawns quests that skip to Implement. For large plans, Gandalf can fan out into multiple parallel quests after confirming the split with you. Supports scout-to-quest promotion: say \'promote scout-X to a quest\' and Gandalf spawns a quest pre-loaded with the scout\'s findings. The bulletin board enables cross-quest knowledge sharing — cleared automatically on disband.'
 		},
 		{
 			name: '/scout',
@@ -124,14 +124,14 @@
 	<p class="group-intro">Run only when you type them — no automatic invocation, no base context cost.</p>
 
 	<div class="skills-list">
-		{#each commands as skill, i (skill.name)}
+		{#each commands as command, i (command.name)}
 			<details class="skill-card animate-in" style="animation-delay: {i * 100}ms">
 				<summary>
 					<span class="chevron" aria-hidden="true"></span>
-					<code class="skill-name">{skill.name}</code>
-					<span class="skill-summary">{skill.summary}</span>
+					<code class="skill-name">{command.name}</code>
+					<span class="skill-summary">{command.summary}</span>
 				</summary>
-				<p class="skill-details">{skill.details}</p>
+				<p class="skill-details">{command.details}</p>
 			</details>
 		{/each}
 	</div>
