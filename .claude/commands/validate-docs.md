@@ -8,7 +8,7 @@ description: Validate that site and README documentation is current. Report-only
 
 ## Overview
 
-Checks that documentation is current against the codebase: the site changelog, README changelog, skills/commands page, agents page, and marketplace description. Collects all findings across Steps 1–5, then emits a single structured report in Step 6. Does not modify any files — report-only.
+Checks that documentation is current against the codebase: the site changelog, README changelog, skills/commands page, agents page, marketplace description, and config schema. Collects all findings across Steps 1–6, then emits a single structured report in Step 7. Does not modify any files — report-only.
 
 ## Process
 
@@ -55,9 +55,24 @@ Find the fellowship plugin entry and check that:
 
 Flag any mismatch.
 
-### Step 6: Report
+### Step 6: Config schema
 
-Emit all findings collected from Steps 1–5. Do not output inline findings during earlier steps — accumulate them and report here.
+Read the `## Schema Reference` table in `plugin/commands/settings.md` — the canonical config schema. If the file or section does not exist, flag it as missing and continue to Step 7.
+
+Extract the full set of config keys (e.g. `branch.pattern`, `gates.autoApprove`, `models.quest`) with their documented defaults. Cross-reference each key against both documentation surfaces:
+
+1. **README** — the Configuration section's settings table AND its example JSON block
+2. **Site** — `site/src/routes/configuration/+page.svelte` (the settings array and its example JSON)
+
+Flag:
+- Any schema key missing from the README table or example JSON
+- Any schema key missing from the site configuration page
+- Any key documented in README or on the site that is absent from the settings.md schema (stale key)
+- Default values that disagree between settings.md and either surface
+
+### Step 7: Report
+
+Emit all findings collected from Steps 1–6. Do not output inline findings during earlier steps — accumulate them and report here.
 
 If no issues:
 
@@ -69,6 +84,7 @@ Docs validation
   Skills page     ✓
   Agents page     ✓
   Marketplace     ✓
+  Config schema   ✓
 
   ✓ All docs current
 ```
@@ -83,12 +99,13 @@ Docs validation
   Skills page     ✗ missing: some-skill
   Agents page     ✓
   Marketplace     ✗ description says 2 agents, found 4
+  Config schema   ✗ issues.autoClose missing from README table
 
-  2 issues found
+  3 issues found
 ```
 
 ## Key Principles
 
 - **Report-only.** Never modify any files. Flag issues; do not fix them.
-- **Accumulate before reporting.** Collect all findings across Steps 1–5, then emit the single structured report in Step 6.
+- **Accumulate before reporting.** Collect all findings across Steps 1–6, then emit the single structured report in Step 7.
 - **Graceful degradation.** If a file or data source is missing, flag it as missing, note it in the report, and continue to the next step.
