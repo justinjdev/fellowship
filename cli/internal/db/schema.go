@@ -87,6 +87,17 @@ var schema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_herald_quest ON herald(quest, type)`,
 	`CREATE INDEX IF NOT EXISTS idx_herald_ts ON herald(timestamp)`,
 
+	// Dashboard error log — server-level errors (not quest-scoped).
+	`CREATE TABLE IF NOT EXISTS dashboard_errors (
+		id        INTEGER PRIMARY KEY AUTOINCREMENT,
+		timestamp TEXT NOT NULL,
+		source    TEXT NOT NULL,
+		handler   TEXT NOT NULL,
+		message   TEXT NOT NULL,
+		detail    TEXT
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_dashboard_errors_ts ON dashboard_errors(timestamp)`,
+
 	// Fellowship orchestration (replaces fellowship-state.json)
 	`CREATE TABLE IF NOT EXISTS fellowship (
 		id          INTEGER PRIMARY KEY CHECK (id = 1),

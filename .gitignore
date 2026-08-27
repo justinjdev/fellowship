@@ -2,3 +2,9 @@ docs/
 .worktrees/
 .fellowship/
 cli/fellowship
+.DS_Store
+.fastembed_cache/
+.shire/
+.superpowers/
+scripts/
+shire.toml
