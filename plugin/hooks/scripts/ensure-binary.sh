@@ -13,7 +13,8 @@
 #     session killed mid-install (kill -9, OOM) doesn't wedge every future
 #     install: a contending session reclaims the lock once the recorded PID
 #     is no longer alive, or once 120s have passed regardless. Leftover
-#     scratch dirs from a killed install are swept once they're 10 minutes old.
+#     scratch dirs from a killed install are swept once they're 10 minutes
+#     old, but only while no live install currently holds the lock.
 #   - "installed" is only ever printed after the binary is verified,
 #     executable, and moved into place.
 
@@ -149,12 +150,6 @@ download() {
 
 mkdir -p "$INSTALL_DIR"
 
-# Sweep scratch dirs left behind by a session that was killed (kill -9, OOM,
-# etc.) mid-install — the EXIT trap that would normally remove them never
-# gets to run. Bounded to dirs older than 10 minutes so a scratch dir from an
-# install that is still genuinely in flight is never touched.
-find "$INSTALL_DIR" -maxdepth 1 -name '.install.*' -mmin +10 -exec rm -rf {} + 2>/dev/null || true
-
 LOCK_DIR_OWNER="$LOCK_DIR/owner"
 STALE_LOCK_SECONDS=120
 
@@ -182,9 +177,21 @@ lock_is_stale() {
   return 1
 }
 
+# Sweep scratch dirs left behind by a session that was killed (kill -9, OOM,
+# etc.) mid-install — the EXIT trap that would normally remove them never
+# gets to run. TMP_DIR is only ever created after the lock below is held, so
+# the only scratch dir that can still be genuinely in flight belongs to
+# whoever holds a live (non-stale) lock right now — skip the sweep entirely
+# in that case rather than trusting mtime alone, which a slow-network
+# install exceeding 10 minutes would otherwise blow through.
+if [ ! -d "$LOCK_DIR" ] || lock_is_stale; then
+  find "$INSTALL_DIR" -maxdepth 1 -name '.install.*' -mmin +10 -exec rm -rf {} + 2>/dev/null || true
+fi
+
 LOCK_ACQUIRED=0
 acquire_lock() {
   local tries=0
+  local reclaim_tries=0
   while true; do
     if mkdir "$LOCK_DIR" 2>/dev/null; then
       LOCK_ACQUIRED=1
@@ -199,6 +206,17 @@ acquire_lock() {
       # (owner file included) and retry mkdir immediately, without counting
       # it against the contention budget below.
       rm -rf "$LOCK_DIR" 2>/dev/null || true
+      if [ -d "$LOCK_DIR" ]; then
+        # rm -rf couldn't clear it (e.g. permission denied on a shared
+        # box) — lock_is_stale would keep saying yes forever, so without
+        # this bound we'd spin tight with no sleep and never stop. Back off
+        # like the contention path below instead of retrying immediately.
+        reclaim_tries=$((reclaim_tries + 1))
+        if [ "$reclaim_tries" -ge 20 ]; then
+          return 1
+        fi
+        sleep 0.1
+      fi
       continue
     fi
     tries=$((tries + 1))
