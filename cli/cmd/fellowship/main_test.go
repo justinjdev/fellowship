@@ -345,7 +345,7 @@ func TestResolveHoldQuest(t *testing.T) {
 }
 
 // extractJSONFlag exists because Go's flag package stops recognizing flags at
-// the first positional argument, so "company show <name> --json" would
+// the first positional argument, so "group show <name> --json" would
 // otherwise leave --json unparsed and silently fall back to table output.
 func TestExtractJSONFlag(t *testing.T) {
 	tests := []struct {

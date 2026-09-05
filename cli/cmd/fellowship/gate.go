@@ -15,11 +15,11 @@ import (
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/gate"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
+	"github.com/justinjdev/fellowship/cli/internal/history"
 	"github.com/justinjdev/fellowship/cli/internal/state"
-	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
 // gateArgs is the parsed form of a `fellowship gate ...` invocation.
@@ -189,10 +189,10 @@ func runHold(d *db.DB, args []string) int {
 		if *reason != "" {
 			detail += ": " + *reason
 		}
-		return herald.Announce(conn, herald.Tiding{
+		return events.Record(conn, events.Event{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 			Quest:     questName,
-			Type:      herald.QuestHeld,
+			Type:      events.QuestHeld,
 			Phase:     phase,
 			Detail:    detail,
 		})
@@ -241,10 +241,10 @@ func runUnhold(d *db.DB, args []string) int {
 			return err
 		}
 
-		return herald.Announce(conn, herald.Tiding{
+		return events.Record(conn, events.Event{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 			Quest:     questName,
-			Type:      herald.QuestUnheld,
+			Type:      events.QuestUnheld,
 			Phase:     s.Phase,
 			Detail:    "Quest unheld — resumed",
 		})
@@ -288,7 +288,7 @@ func runInit(d *db.DB) int {
 	ctx := context.Background()
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	phase := fs.String("phase", "", "Initial phase (default: Research)")
-	planSkip := fs.Bool("plan-skip", false, "Record Research/Plan as skipped in tome")
+	planSkip := fs.Bool("plan-skip", false, "Record Research/Plan as skipped in history")
 	questName := fs.String("quest", "", "Quest name (default: the name registered for this worktree)")
 	initDir := fs.String("dir", "", "Worktree or repo root (default: auto-detect via git)")
 	fs.Parse(os.Args[2:])
@@ -377,7 +377,7 @@ func runInit(d *db.DB) int {
 		}
 
 		if *planSkip {
-			if err := tome.RecordSkippedPhases(conn, qn, []string{"Research", "Plan"}, "pre-existing plan"); err != nil {
+			if err := history.RecordSkippedPhases(conn, qn, []string{"Research", "Plan"}, "pre-existing plan"); err != nil {
 				return err
 			}
 			fmt.Println("Recorded Research/Plan as skipped (pre-existing plan).")

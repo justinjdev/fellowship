@@ -26,7 +26,7 @@
   "issues": {
     "autoClose": true
   },
-  "autopsy": {
+  "failures": {
     "expiryDays": 90
   },
   "models": {
@@ -87,7 +87,7 @@
 		{
 			key: 'dataDir',
 			default_val: '".fellowship"',
-			desc: 'Directory name for fellowship working files (state, checkpoints, errands, tome). Created inside each worktree and the main repo root.'
+			desc: 'Directory name for fellowship working files (state, checkpoints, todos, history). Created inside each worktree and the main repo root.'
 		},
 		{
 			key: 'branch.pattern',
@@ -145,9 +145,9 @@
 			desc: 'When true, /missive includes "Closes #N" in PR keywords so issues close on merge.'
 		},
 		{
-			key: 'autopsy.expiryDays',
+			key: 'failures.expiryDays',
 			default_val: '90',
-			desc: 'Days before a quest autopsy (failure record) expires and is eligible for cleanup.'
+			desc: 'Days before a quest failure record expires and is eligible for cleanup.'
 		},
 		{
 			key: 'models.quest',

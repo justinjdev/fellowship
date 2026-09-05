@@ -125,17 +125,23 @@ func TestGateGuard_AllowsAllowlistedFellowshipCommandsWhenPending(t *testing.T) 
 	for _, cmd := range []string{
 		"fellowship gate status",
 		"fellowship gate status --dir /tmp/worktree",
-		"fellowship autopsy create --dir /tmp/repo",
-		"fellowship autopsy scan --dir /tmp/repo --modules auth",
-		"fellowship autopsy infer --dir /tmp/worktree",
-		"fellowship errand list --dir .",
+		"fellowship failures create --dir /tmp/repo",
+		"fellowship failures scan --dir /tmp/repo --modules auth",
+		"fellowship failures infer --dir /tmp/worktree",
+		"fellowship todo list --dir .",
 		"fellowship status --json",
+		"fellowship health --json",
+		"fellowship history show",
+		"fellowship events --json",
+		"fellowship version",
+		"~/.claude/fellowship/bin/fellowship gate status",
+		"/usr/local/bin/fellowship health",
+		// Deprecated aliases stay allowlisted too.
+		"fellowship autopsy create --dir /tmp/repo",
+		"fellowship errand list --dir .",
 		"fellowship eagles --json",
 		"fellowship tome show",
 		"fellowship herald --json",
-		"fellowship version",
-		"~/.claude/fellowship/bin/fellowship gate status",
-		"/usr/local/bin/fellowship eagles",
 	} {
 		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
 		result := GateGuard(s, input)
@@ -175,7 +181,7 @@ func TestGateGuard_BlocksNonAllowlistedFellowshipCommandsWhenPending(t *testing.
 		"fellowship hold --dir /tmp/worktree",
 		"fellowship unhold --dir /tmp/worktree",
 		"fellowship dashboard",
-		"fellowship company approve foo",
+		"fellowship group approve foo",
 	} {
 		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
 		result := GateGuard(s, input)

@@ -40,10 +40,10 @@ User: "quest: fix auth bug #42"
 User: "implement issues #42, #51, #67 with fellowship"
 User: "scout: how does the auth middleware chain work?"
 User: "scout: list all API endpoints and their rate limit configs → send to quest-rate-limit"
-User: "company: API work — quest: add endpoint, quest: add tests, scout: review API docs"
+User: "group: API work — quest: add endpoint, quest: add tests, scout: review API docs"
 ```
 
-**Companies** group related quests and scouts for batch operations and progress tracking. A company is a reporting layer only — it does not change how quests execute.
+**Groups** collect related quests and scouts for batch operations and progress tracking. A group is a reporting layer only — it does not change how quests execute.
 
 ### Pre-flight: Verify CWD
 
@@ -79,7 +79,7 @@ Store the result as `base_branch` — every quest spawn prompt carries it so wor
 ~/.claude/fellowship/bin/fellowship state init --name <fellowship_name> [--base-branch <base_branch>]
 ~/.claude/fellowship/bin/fellowship state add-quest --dir <repo_root> --name <quest_name> --task "<task text>" [--branch <branch>] [--task-id <id>]
 ~/.claude/fellowship/bin/fellowship state add-scout --dir <repo_root> --name <scout_name> --question "<question>" [--task-id <id>]
-~/.claude/fellowship/bin/fellowship state add-company --dir <repo_root> --name <company_name> --quests q1,q2 --scouts s1
+~/.claude/fellowship/bin/fellowship state add-group --dir <repo_root> --name <group_name> --quests q1,q2 --scouts s1
 ~/.claude/fellowship/bin/fellowship state update-quest --dir <repo_root> --name <quest_name> [--worktree <path>] [--branch <branch>] [--task-id <id>]
 ```
 
@@ -133,7 +133,7 @@ For each quest, Gandalf:
      pre-flight above, published to task metadata before this spawn. See
      [resources/isolation.md](resources/isolation.md).
 
-**Errand persistence:** After spawning, write initial errands via `~/.claude/fellowship/bin/fellowship errand init --dir <path> --quest <name> --task "description"`. Add errands to running quests: `~/.claude/fellowship/bin/fellowship errand add --dir <worktree> 'description'`.
+**Todo persistence:** After spawning, write initial todos via `~/.claude/fellowship/bin/fellowship todo init --dir <path> --quest <name> --task "description"`. Add todos to running quests: `~/.claude/fellowship/bin/fellowship todo add --dir <worktree> 'description'`.
 
 **Spawn prompt:** See [resources/spawn-prompts.md](resources/spawn-prompts.md) for the full quest spawn prompt template and substitution rules.
 
@@ -164,7 +164,7 @@ When `config.palantir.minQuests` or more quests are active (default 2) and `conf
 
 ### Disband
 
-On "wrap up" or "disband": send `shutdown_request` to every active teammate including palantir; summarize quests completed, PR URLs, and open items; clear the ephemeral discoveries with `~/.claude/fellowship/bin/fellowship bulletin clear`; offer `/retro` ("it identifies patterns across quests and can recommend configuration improvements") as a suggestion the user may skip; then `TeamDelete`.
+On "wrap up" or "disband": send `shutdown_request` to every active teammate including palantir; summarize quests completed, PR URLs, and open items; clear the ephemeral discoveries with `~/.claude/fellowship/bin/fellowship notes clear`; offer `/retro` ("it identifies patterns across quests and can recommend configuration improvements") as a suggestion the user may skip; then `TeamDelete`.
 
 ## Gate Handling
 
@@ -199,13 +199,13 @@ See [resources/lead-behavior.md](resources/lead-behavior.md) for the full behavi
 
 ## Progress Tracking
 
-Status report format, phase-to-progress mappings, and company grouping.
+Status report format, phase-to-progress mappings, and how groups are reported.
 
 See [resources/progress-tracking.md](resources/progress-tracking.md) for details.
 
 ## Edge Cases
 
-- **Quest fails:** report to the user with context (which phase, what went wrong). Before respawning, preserve the failure for future quests with `~/.claude/fellowship/bin/fellowship autopsy infer --dir <worktree_path>`, which reconstructs a best-effort record from the quest's tome, herald, and eagles data. The worktree is preserved.
+- **Quest fails:** report to the user with context (which phase, what went wrong). Before respawning, preserve the failure for future quests with `~/.claude/fellowship/bin/fellowship failures infer --dir <worktree_path>`, which reconstructs a best-effort record from the quest's history, events, and health data. The worktree is preserved.
   - **Respawn:** spawn a new teammate with the same task description using the **Resume** variant of the quest spawn prompt (see [spawn-prompts.md](resources/spawn-prompts.md)) — it tells the teammate its worktree already exists and where its checkpoint is — with its working directory set to that worktree.
 - **Direct teammate access:** through Gandalf ("tell quest-2 to skip the logger refactor"), or Shift+Down to message the teammate directly.
 - **Session death:** worktrees survive, coordination does not. `/rekindle` is the recovery path: it scans, classifies, and respawns each quest from its `.fellowship/checkpoint.md`. To unstick a quest by hand: `~/.claude/fellowship/bin/fellowship gate reject --dir <worktree>`.

@@ -49,6 +49,7 @@ var baseSchema = []string{
 	)`,
 
 	// Phase history (replaces quest-tome.json phases)
+	// table: quest_phases, quest_gates, quest_files -> package history (cli/internal/history)
 	`CREATE TABLE IF NOT EXISTS quest_phases (
 		id           INTEGER PRIMARY KEY AUTOINCREMENT,
 		quest_name   TEXT NOT NULL REFERENCES quest_state(quest_name),
@@ -75,6 +76,7 @@ var baseSchema = []string{
 	)`,
 
 	// Errands (replaces quest-errands.json)
+	// table: errands, errand_deps -> package todo (cli/internal/todo)
 	`CREATE TABLE IF NOT EXISTS errands (
 		id          TEXT NOT NULL,
 		quest_name  TEXT NOT NULL REFERENCES quest_state(quest_name),
@@ -97,6 +99,7 @@ var baseSchema = []string{
 
 	// Herald event log (replaces quest-herald.jsonl)
 	// No FK to quest_state — events logged before quest exists and survive deletion.
+	// table: herald -> package events (cli/internal/events); table name unchanged, no schema change.
 	`CREATE TABLE IF NOT EXISTS herald (
 		id        INTEGER PRIMARY KEY AUTOINCREMENT,
 		timestamp TEXT NOT NULL,
@@ -134,6 +137,7 @@ var baseSchema = []string{
 		task_id  TEXT
 	)`,
 
+	// table: companies, company_members -> package group (cli/internal/group)
 	`CREATE TABLE IF NOT EXISTS companies (
 		name TEXT PRIMARY KEY
 	)`,
@@ -146,6 +150,7 @@ var baseSchema = []string{
 	)`,
 
 	// Bulletin (replaces bulletin.jsonl)
+	// table: bulletin, bulletin_files -> package notes (cli/internal/notes)
 	`CREATE TABLE IF NOT EXISTS bulletin (
 		id        INTEGER PRIMARY KEY AUTOINCREMENT,
 		timestamp TEXT NOT NULL,
@@ -163,6 +168,7 @@ var baseSchema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_bulletin_files ON bulletin_files(file_path)`,
 
 	// Autopsies (replaces autopsies/*.json)
+	// table: autopsies, autopsy_files, autopsy_modules, autopsy_tags -> package failures (cli/internal/failures)
 	`CREATE TABLE IF NOT EXISTS autopsies (
 		id          INTEGER PRIMARY KEY AUTOINCREMENT,
 		timestamp   TEXT NOT NULL,

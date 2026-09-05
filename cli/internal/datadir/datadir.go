@@ -15,10 +15,10 @@ const DefaultName = ".fellowship"
 
 // cfg holds the subset of fellowship config the CLI cares about.
 type cfg struct {
-	DataDir string `json:"dataDir"`
-	Autopsy struct {
+	DataDir  string `json:"dataDir"`
+	Failures struct {
 		ExpiryDays int `json:"expiryDays"`
-	} `json:"autopsy"`
+	} `json:"failures"`
 	Gates struct {
 		// Pointer so an explicit empty list in the user config can override a
 		// non-empty project list.
@@ -127,18 +127,18 @@ func AutoApproveGates(root string) []string {
 	return gates
 }
 
-// AutopsyExpiryDays resolves autopsy.expiryDays with the same precedence as the
+// FailuresExpiryDays resolves failures.expiryDays with the same precedence as the
 // other settings: defaults, then <root>/.fellowship/config.json, then
 // ~/.claude/fellowship.json. Returns defaultDays when nothing sets it.
-func AutopsyExpiryDays(root string, defaultDays int) int {
+func FailuresExpiryDays(root string, defaultDays int) int {
 	days := defaultDays
 	if root != "" {
-		if p := readConfigFile(filepath.Join(root, DefaultName, "config.json")); p.Autopsy.ExpiryDays > 0 {
-			days = p.Autopsy.ExpiryDays
+		if p := readConfigFile(filepath.Join(root, DefaultName, "config.json")); p.Failures.ExpiryDays > 0 {
+			days = p.Failures.ExpiryDays
 		}
 	}
-	if u := readUserConfig(); u.Autopsy.ExpiryDays > 0 {
-		days = u.Autopsy.ExpiryDays
+	if u := readUserConfig(); u.Failures.ExpiryDays > 0 {
+		days = u.Failures.ExpiryDays
 	}
 	return days
 }

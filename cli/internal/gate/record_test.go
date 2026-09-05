@@ -5,10 +5,10 @@ import (
 	"testing"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/gate"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
+	"github.com/justinjdev/fellowship/cli/internal/history"
 	"github.com/justinjdev/fellowship/cli/internal/state"
-	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
 // newQuest opens a store holding one quest in the given phase.
@@ -24,41 +24,41 @@ func newQuest(t *testing.T, phase string) *db.DB {
 }
 
 // An approval is three records: the gate event, the completed phase, and the
-// two heralds. Every approval path shares them, so a lead approval, a company
+// two events. Every approval path shares them, so a lead approval, a group
 // batch approval and an auto-approved gate cannot report different histories.
 func TestRecordApproval(t *testing.T) {
 	d := newQuest(t, "Research")
 
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		return gate.RecordApproval(conn, "quest-1", "Implement", "Review", "Batch approved for company c")
+		return gate.RecordApproval(conn, "quest-1", "Implement", "Review", "Batch approved for group c")
 	}); err != nil {
 		t.Fatalf("RecordApproval: %v", err)
 	}
 
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		qt, err := tome.Load(conn, "quest-1")
+		qt, err := history.Load(conn, "quest-1")
 		if err != nil {
 			return err
 		}
 		if len(qt.GateHistory) != 1 || qt.GateHistory[0].Action != "approved" || qt.GateHistory[0].Phase != "Implement" {
 			t.Errorf("gates = %+v, want one approved Implement gate", qt.GateHistory)
 		}
-		if len(qt.GateHistory) == 1 && qt.GateHistory[0].Reason != "Batch approved for company c" {
+		if len(qt.GateHistory) == 1 && qt.GateHistory[0].Reason != "Batch approved for group c" {
 			t.Errorf("gate reason = %q", qt.GateHistory[0].Reason)
 		}
 		if len(qt.PhasesCompleted) != 1 || qt.PhasesCompleted[0].Phase != "Implement" {
 			t.Errorf("phases = %+v, want Implement completed", qt.PhasesCompleted)
 		}
 
-		tidings, err := herald.Read(conn, "quest-1", 10)
+		tidings, err := events.Read(conn, "quest-1", 10)
 		if err != nil {
 			return err
 		}
 		if len(tidings) != 2 {
 			t.Fatalf("tidings = %d, want 2", len(tidings))
 		}
-		types := []herald.TidingType{tidings[0].Type, tidings[1].Type}
-		wantSeen := map[herald.TidingType]bool{herald.GateApproved: false, herald.PhaseTransition: false}
+		types := []events.EventType{tidings[0].Type, tidings[1].Type}
+		wantSeen := map[events.EventType]bool{events.GateApproved: false, events.PhaseTransition: false}
 		for _, ty := range types {
 			if _, ok := wantSeen[ty]; !ok {
 				t.Errorf("unexpected tiding type %q", ty)
@@ -78,7 +78,7 @@ func TestRecordApproval(t *testing.T) {
 }
 
 // A rejection keeps the quest in phase, so it records the gate event and the
-// herald but no completed phase.
+// event but no completed phase.
 func TestRecordRejection(t *testing.T) {
 	d := newQuest(t, "Review")
 
@@ -89,7 +89,7 @@ func TestRecordRejection(t *testing.T) {
 	}
 
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		qt, err := tome.Load(conn, "quest-1")
+		qt, err := history.Load(conn, "quest-1")
 		if err != nil {
 			return err
 		}
@@ -99,11 +99,11 @@ func TestRecordRejection(t *testing.T) {
 		if len(qt.PhasesCompleted) != 0 {
 			t.Errorf("phases = %+v, want none — a rejection does not complete a phase", qt.PhasesCompleted)
 		}
-		tidings, err := herald.Read(conn, "quest-1", 10)
+		tidings, err := events.Read(conn, "quest-1", 10)
 		if err != nil {
 			return err
 		}
-		if len(tidings) != 1 || tidings[0].Type != herald.GateRejected {
+		if len(tidings) != 1 || tidings[0].Type != events.GateRejected {
 			t.Errorf("tidings = %+v, want one gate_rejected", tidings)
 		}
 		return nil

@@ -1,5 +1,5 @@
 // `fellowship state ...`: the lead-side commands that create a fellowship and
-// register the quests, scouts and companies in it.
+// register the quests, scouts and groups in it.
 package main
 
 import (
@@ -28,7 +28,11 @@ func runState(d *db.DB, args []string) int {
 	case "update-quest":
 		return runStateUpdateQuest(d, args[1:])
 	case "add-company":
-		return runStateAddCompany(d, args[1:])
+		// Deprecated alias for add-group, kept working for one release.
+		fmt.Fprintln(os.Stderr, `fellowship: "state add-company" is deprecated, use "state add-group" instead`)
+		return runStateAddGroup(d, args[1:])
+	case "add-group":
+		return runStateAddGroup(d, args[1:])
 	case "show":
 		return runStateShow(d, args[1:])
 	case "clean-worktrees":
@@ -181,10 +185,10 @@ func runStateAddScout(d *db.DB, args []string) int {
 	return 0
 }
 
-func runStateAddCompany(d *db.DB, args []string) int {
+func runStateAddGroup(d *db.DB, args []string) int {
 	ctx := context.Background()
-	fs := flag.NewFlagSet("state add-company", flag.ExitOnError)
-	name := fs.String("name", "", "Company name (required)")
+	fs := flag.NewFlagSet("state add-group", flag.ExitOnError)
+	name := fs.String("name", "", "Group name (required)")
 	quests := fs.String("quests", "", "Comma-separated quest names")
 	scouts := fs.String("scouts", "", "Comma-separated scout names")
 	dir := fs.String("dir", "", "Repo or worktree directory (default: current directory)")
@@ -196,7 +200,7 @@ func runStateAddCompany(d *db.DB, args []string) int {
 	}
 
 	if *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship state add-company --name <name> [--quests q1,q2] [--scouts s1,s2] [--dir DIR]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship state add-group --name <name> [--quests q1,q2] [--scouts s1,s2] [--dir DIR]")
 		return 1
 	}
 
@@ -210,12 +214,12 @@ func runStateAddCompany(d *db.DB, args []string) int {
 	}
 
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
-		return fellowship.AddCompany(conn, *name, questList, scoutList)
+		return fellowship.AddGroup(conn, *name, questList, scoutList)
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
-	fmt.Printf("Added company %q\n", *name)
+	fmt.Printf("Added group %q\n", *name)
 	return 0
 }
 

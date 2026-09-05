@@ -35,7 +35,7 @@ Hooks are subcommands of the CLI, not standalone scripts. `plugin/hooks/hooks.js
   - **Broken store** — the file exists but cannot be opened or read. Enforcement state is unknown, so gate hooks **block** (exit 2).
   - **Missing quest row** — the store is fine and this worktree is registered as a quest, but no `quest_state` row exists yet. This is the bootstrap window before the teammate runs `fellowship init`; blocking it would deadlock the quest before it starts, so hooks **allow** (exit 0) and log one line to stderr.
   - **Unregistered worktree** — the session is in a git worktree that is not the main repo root while a fellowship is initialized, and no quest matches it. Enforcement cannot be evaluated there, so gate hooks **block** (exit 2) instead of mistaking it for the lead session.
-  - A pending gate is cleared only by the lead. `fellowship gate approve|reject` and `fellowship init` are *not* on the escape allowlist a blocked teammate may run; only read-only reporting (`status`, `gate status`, `tome`, `herald`, `eagles`) and side-channel bookkeeping (`autopsy`, `bulletin`, `errand`) are.
+  - A pending gate is cleared only by the lead. `fellowship gate approve|reject` and `fellowship init` are *not* on the escape allowlist a blocked teammate may run; only read-only reporting (`status`, `gate status`, `history`, `events`, `health`) and side-channel bookkeeping (`failures`, `notes`, `todo`) are.
 - The `worktree-guard` backstop is the exception to all of the above — it is defense-in-depth behind lead-provisioned isolation, so it fails *open* (allow) on any resolution failure, including a broken store, and blocks only on a positive main-tree mis-placement detection.
 - **Who may write in the main tree.** The main working tree is the lead's own workspace, so "a source write in the main tree during an active fellowship" is not by itself a mis-placement — `worktree-guard` has to tell the lead apart from a teammate that was dropped into the main tree. Nothing in the git topology does that (both resolve to the same top-level), so the guard identifies the *session*:
   - `fellowship state init` writes a lead marker at `<data-dir>/lead` (JSON: `session_id`, `root`, `created_at`). The session id comes from `CLAUDE_CODE_SESSION_ID`, which Claude Code exports to the commands it runs and which is the same id it puts in hook payloads as `session_id`.
@@ -54,7 +54,7 @@ What each of the gate hooks decides, against the four-phase lifecycle (Research 
 | `gate-prereq` | Records that `/lembas` ran for this phase |
 | `metadata-track` | Records that the task's `phase` metadata was updated |
 | `completion-guard` | Allows `TaskUpdate(status: "completed")` only in Review with no gate pending — Review is terminal, so this is the one place a quest may end |
-| `file-track` | Records file touches in the quest tome |
+| `file-track` | Records file touches in the quest history |
 
 The lifecycle itself has exactly one definition: `phaseOrder` in `cli/internal/state/state.go`. `state.Phases()`, `state.GatePhases()` (the three phases a gate leaves, and the only valid `gates.autoApprove` entries) and `state.TerminalPhase` all derive from it — never write a phase name into a comparison when one of those will do.
 
@@ -86,7 +86,7 @@ plugin/hooks/scripts/ensure-binary.sh  # Downloads the CLI binary from GitHub re
 plugin/hooks/scripts/fellowship.sh  # Thin wrapper — ensures binary, then exec's it
 cli/cmd/fellowship/main.go          # CLI entrypoint and subcommand dispatch
 cli/internal/hooks/                 # Hook decision logic (pure, table-tested)
-cli/internal/                       # State, db (SQLite), dashboard, herald, etc.
+cli/internal/                       # State, db (SQLite), dashboard, events, etc.
 README.md                           # User-facing docs and changelog
 CLAUDE.md                           # AI assistant conventions
 ```

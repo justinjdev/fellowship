@@ -65,7 +65,7 @@ var migrations = []migration{
 			// older binary still name the retired phases, in the live
 			// quest_state.phase and in the quest_phases / quest_gates
 			// history, and every phase lookup (NextPhase, IsValidPhase,
-			// the company phase rank) reads an unknown name as "not a
+			// the group phase rank) reads an unknown name as "not a
 			// phase". Rewrite them in place so an in-flight quest keeps
 			// advancing and its history keeps ranking.
 			//

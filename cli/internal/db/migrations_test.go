@@ -241,7 +241,7 @@ func TestEnsureSchema_UpgradesV2RemapsRetiredPhases(t *testing.T) {
 			}
 		}
 
-		// History rows are remapped too, so the tome still ranks.
+		// History rows are remapped too, so the history still ranks.
 		var history []string
 		if err := sqlitex.Execute(conn,
 			`SELECT phase FROM quest_phases ORDER BY id`,

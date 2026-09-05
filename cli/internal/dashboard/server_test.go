@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/fellowship"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -186,7 +186,7 @@ func TestAPIGateApprove_NoPending(t *testing.T) {
 	}
 }
 
-func TestAPIGateApprove_HeraldLogging(t *testing.T) {
+func TestAPIGateApprove_EventLogging(t *testing.T) {
 	d, worktreeDir := setupTestDB(t)
 	srv := NewServer(d, 5)
 
@@ -199,11 +199,11 @@ func TestAPIGateApprove_HeraldLogging(t *testing.T) {
 		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
 	}
 
-	// Read herald entries from DB
-	var tidings []herald.Tiding
+	// Read event entries from DB
+	var tidings []events.Event
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
-		tidings, err = herald.Read(conn, "quest-login", 0)
+		tidings, err = events.Read(conn, "quest-login", 0)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -215,10 +215,10 @@ func TestAPIGateApprove_HeraldLogging(t *testing.T) {
 
 	var foundApproved, foundTransition bool
 	for _, td := range tidings {
-		if td.Type == herald.GateApproved && td.Phase == "Plan" {
+		if td.Type == events.GateApproved && td.Phase == "Plan" {
 			foundApproved = true
 		}
-		if td.Type == herald.PhaseTransition && td.Phase == "Implement" {
+		if td.Type == events.PhaseTransition && td.Phase == "Implement" {
 			foundTransition = true
 		}
 	}
@@ -230,7 +230,7 @@ func TestAPIGateApprove_HeraldLogging(t *testing.T) {
 	}
 }
 
-func TestAPIGateReject_HeraldLogging(t *testing.T) {
+func TestAPIGateReject_EventLogging(t *testing.T) {
 	d, worktreeDir := setupTestDB(t)
 	srv := NewServer(d, 5)
 
@@ -243,10 +243,10 @@ func TestAPIGateReject_HeraldLogging(t *testing.T) {
 		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
 	}
 
-	var tidings []herald.Tiding
+	var tidings []events.Event
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
-		tidings, err = herald.Read(conn, "quest-login", 0)
+		tidings, err = events.Read(conn, "quest-login", 0)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -254,7 +254,7 @@ func TestAPIGateReject_HeraldLogging(t *testing.T) {
 
 	var foundRejected bool
 	for _, td := range tidings {
-		if td.Type == herald.GateRejected && td.Phase == "Plan" {
+		if td.Type == events.GateRejected && td.Phase == "Plan" {
 			foundRejected = true
 		}
 	}

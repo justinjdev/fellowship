@@ -8,7 +8,7 @@ description: Interactive guide to fellowship. Walks you through a real task usin
 
 This guide teaches fellowship by running a real task on the user's codebase. It does NOT explain concepts upfront — it demonstrates them, then names them afterward.
 
-**Do not mention** gates, lembas, tome, worktree, balrog, warden, council, palantir, herald, eagles, errands, companies, or scouts until Act 3 (Graduation). Use plain language throughout Acts 1–2.
+**Do not mention** gates, lembas, history, worktree, balrog, warden, council, palantir, events, health, todos, groups, or scouts until Act 3 (Graduation). Use plain language throughout Acts 1–2.
 
 ## Act 1: Pitch
 

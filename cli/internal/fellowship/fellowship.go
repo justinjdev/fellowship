@@ -7,25 +7,25 @@ import (
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 
-	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/state"
+	"github.com/justinjdev/fellowship/cli/internal/todo"
 )
 
-type CompanyEntry struct {
+type GroupEntry struct {
 	Name   string   `json:"name"`
 	Quests []string `json:"quests"` // quest names
 	Scouts []string `json:"scouts"` // scout names
 }
 
 type FellowshipState struct {
-	Version    int            `json:"version"`
-	Name       string         `json:"name"`
-	CreatedAt  string         `json:"created_at"`
-	MainRepo   string         `json:"main_repo"`
-	BaseBranch string         `json:"base_branch,omitempty"`
-	Quests     []QuestEntry   `json:"quests"`
-	Scouts     []ScoutEntry   `json:"scouts"`
-	Companies  []CompanyEntry `json:"companies"`
+	Version    int          `json:"version"`
+	Name       string       `json:"name"`
+	CreatedAt  string       `json:"created_at"`
+	MainRepo   string       `json:"main_repo"`
+	BaseBranch string       `json:"base_branch,omitempty"`
+	Quests     []QuestEntry `json:"quests"`
+	Scouts     []ScoutEntry `json:"scouts"`
+	Groups     []GroupEntry `json:"groups"`
 }
 
 type QuestEntry struct {
@@ -61,17 +61,17 @@ type QuestStatus struct {
 	GateID          *string `json:"gate_id"`
 	LembasCompleted bool    `json:"lembas_completed"`
 	MetadataUpdated bool    `json:"metadata_updated"`
-	ErrandsDone     int     `json:"errands_done"`
-	ErrandsTotal    int     `json:"errands_total"`
+	TodosDone       int     `json:"todos_done"`
+	TodosTotal      int     `json:"todos_total"`
 }
 
 type DashboardStatus struct {
-	Name         string         `json:"name"`
-	Quests       []QuestStatus  `json:"quests"`
-	Scouts       []ScoutEntry   `json:"scouts"`
-	Companies    []CompanyEntry `json:"companies"`
-	PollInterval int            `json:"poll_interval"`
-	Phases       []string       `json:"phases,omitempty"`
+	Name         string        `json:"name"`
+	Quests       []QuestStatus `json:"quests"`
+	Scouts       []ScoutEntry  `json:"scouts"`
+	Groups       []GroupEntry  `json:"groups"`
+	PollInterval int           `json:"poll_interval"`
+	Phases       []string      `json:"phases,omitempty"`
 }
 
 // InitFellowship inserts the singleton fellowship row (id=1).
@@ -93,7 +93,8 @@ func InitFellowship(conn *sqlite.Conn, name, mainRepo, baseBranch string) error 
 }
 
 // LoadFellowship assembles a FellowshipState from the fellowship, fellowship_quests,
-// fellowship_scouts, companies, and company_members tables.
+// fellowship_scouts, companies, and company_members tables (unchanged table
+// names — see the group package for the renamed concept).
 func LoadFellowship(conn *sqlite.Conn) (*FellowshipState, error) {
 	var fs FellowshipState
 	var found bool
@@ -157,37 +158,37 @@ func LoadFellowship(conn *sqlite.Conn) (*FellowshipState, error) {
 		return nil, fmt.Errorf("dashboard: load scouts: %w", err)
 	}
 
-	// Load companies with members
-	fs.Companies = []CompanyEntry{}
-	companyMap := make(map[string]*CompanyEntry)
+	// Load groups with members
+	fs.Groups = []GroupEntry{}
+	groupMap := make(map[string]*GroupEntry)
 
 	err = sqlitex.Execute(conn,
 		`SELECT name FROM companies`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				name := stmt.ColumnText(0)
-				entry := CompanyEntry{
+				entry := GroupEntry{
 					Name:   name,
 					Quests: []string{},
 					Scouts: []string{},
 				}
-				fs.Companies = append(fs.Companies, entry)
-				companyMap[name] = &fs.Companies[len(fs.Companies)-1]
+				fs.Groups = append(fs.Groups, entry)
+				groupMap[name] = &fs.Groups[len(fs.Groups)-1]
 				return nil
 			},
 		})
 	if err != nil {
-		return nil, fmt.Errorf("dashboard: load companies: %w", err)
+		return nil, fmt.Errorf("dashboard: load groups: %w", err)
 	}
 
 	err = sqlitex.Execute(conn,
 		`SELECT company_name, member_name, member_type FROM company_members`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
-				companyName := stmt.ColumnText(0)
+				groupName := stmt.ColumnText(0)
 				memberName := stmt.ColumnText(1)
 				memberType := stmt.ColumnText(2)
-				if c, ok := companyMap[companyName]; ok {
+				if c, ok := groupMap[groupName]; ok {
 					switch memberType {
 					case "quest":
 						c.Quests = append(c.Quests, memberName)
@@ -199,13 +200,13 @@ func LoadFellowship(conn *sqlite.Conn) (*FellowshipState, error) {
 			},
 		})
 	if err != nil {
-		return nil, fmt.Errorf("dashboard: load company members: %w", err)
+		return nil, fmt.Errorf("dashboard: load group members: %w", err)
 	}
 
 	return &fs, nil
 }
 
-// SaveFellowship updates the fellowship singleton and upserts all quests, scouts, and companies.
+// SaveFellowship updates the fellowship singleton and upserts all quests, scouts, and groups.
 func SaveFellowship(conn *sqlite.Conn, fs *FellowshipState) error {
 	// Update fellowship singleton
 	if err := sqlitex.Execute(conn,
@@ -242,15 +243,15 @@ func SaveFellowship(conn *sqlite.Conn, fs *FellowshipState) error {
 		}
 	}
 
-	// Sync companies
+	// Sync groups
 	if err := sqlitex.Execute(conn, `DELETE FROM company_members`, nil); err != nil {
-		return fmt.Errorf("dashboard: clear company members: %w", err)
+		return fmt.Errorf("dashboard: clear group members: %w", err)
 	}
 	if err := sqlitex.Execute(conn, `DELETE FROM companies`, nil); err != nil {
-		return fmt.Errorf("dashboard: clear companies: %w", err)
+		return fmt.Errorf("dashboard: clear groups: %w", err)
 	}
-	for _, c := range fs.Companies {
-		if err := addCompanyInternal(conn, c.Name, c.Quests, c.Scouts); err != nil {
+	for _, c := range fs.Groups {
+		if err := addGroupInternal(conn, c.Name, c.Quests, c.Scouts); err != nil {
 			return err
 		}
 	}
@@ -358,37 +359,37 @@ func RemoveScout(conn *sqlite.Conn, name string) error {
 		&sqlitex.ExecOptions{Named: map[string]any{":name": name}})
 }
 
-// AddCompany inserts a company with its quest and scout members.
-func AddCompany(conn *sqlite.Conn, name string, quests []string, scouts []string) error {
-	return addCompanyInternal(conn, name, quests, scouts)
+// AddGroup inserts a group with its quest and scout members.
+func AddGroup(conn *sqlite.Conn, name string, quests []string, scouts []string) error {
+	return addGroupInternal(conn, name, quests, scouts)
 }
 
-func addCompanyInternal(conn *sqlite.Conn, name string, quests []string, scouts []string) error {
+func addGroupInternal(conn *sqlite.Conn, name string, quests []string, scouts []string) error {
 	if err := sqlitex.Execute(conn,
 		`INSERT INTO companies (name) VALUES (:name) ON CONFLICT(name) DO NOTHING`,
 		&sqlitex.ExecOptions{Named: map[string]any{":name": name}}); err != nil {
-		return fmt.Errorf("dashboard: add company %s: %w", name, err)
+		return fmt.Errorf("dashboard: add group %s: %w", name, err)
 	}
 	for _, q := range quests {
 		if err := sqlitex.Execute(conn,
 			`INSERT INTO company_members (company_name, member_name, member_type)
-			 VALUES (:company, :member, 'quest')
+			 VALUES (:group, :member, 'quest')
 			 ON CONFLICT DO NOTHING`,
 			&sqlitex.ExecOptions{
-				Named: map[string]any{":company": name, ":member": q},
+				Named: map[string]any{":group": name, ":member": q},
 			}); err != nil {
-			return fmt.Errorf("dashboard: add company member %s/%s: %w", name, q, err)
+			return fmt.Errorf("dashboard: add group member %s/%s: %w", name, q, err)
 		}
 	}
 	for _, s := range scouts {
 		if err := sqlitex.Execute(conn,
 			`INSERT INTO company_members (company_name, member_name, member_type)
-			 VALUES (:company, :member, 'scout')
+			 VALUES (:group, :member, 'scout')
 			 ON CONFLICT DO NOTHING`,
 			&sqlitex.ExecOptions{
-				Named: map[string]any{":company": name, ":member": s},
+				Named: map[string]any{":group": name, ":member": s},
 			}); err != nil {
-			return fmt.Errorf("dashboard: add company member %s/%s: %w", name, s, err)
+			return fmt.Errorf("dashboard: add group member %s/%s: %w", name, s, err)
 		}
 	}
 	return nil
@@ -433,22 +434,22 @@ func ListScouts(conn *sqlite.Conn) ([]ScoutEntry, error) {
 	return scouts, err
 }
 
-// ListCompanies returns all companies with their members.
-func ListCompanies(conn *sqlite.Conn) ([]CompanyEntry, error) {
-	var companies []CompanyEntry
-	companyMap := make(map[string]*CompanyEntry)
+// ListGroups returns all groups with their members.
+func ListGroups(conn *sqlite.Conn) ([]GroupEntry, error) {
+	var groups []GroupEntry
+	groupMap := make(map[string]*GroupEntry)
 
 	err := sqlitex.Execute(conn,
 		`SELECT name FROM companies`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				name := stmt.ColumnText(0)
-				companies = append(companies, CompanyEntry{
+				groups = append(groups, GroupEntry{
 					Name:   name,
 					Quests: []string{},
 					Scouts: []string{},
 				})
-				companyMap[name] = &companies[len(companies)-1]
+				groupMap[name] = &groups[len(groups)-1]
 				return nil
 			},
 		})
@@ -460,10 +461,10 @@ func ListCompanies(conn *sqlite.Conn) ([]CompanyEntry, error) {
 		`SELECT company_name, member_name, member_type FROM company_members`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
-				companyName := stmt.ColumnText(0)
+				groupName := stmt.ColumnText(0)
 				memberName := stmt.ColumnText(1)
 				memberType := stmt.ColumnText(2)
-				if c, ok := companyMap[companyName]; ok {
+				if c, ok := groupMap[groupName]; ok {
 					switch memberType {
 					case "quest":
 						c.Quests = append(c.Quests, memberName)
@@ -478,7 +479,7 @@ func ListCompanies(conn *sqlite.Conn) ([]CompanyEntry, error) {
 		return nil, err
 	}
 
-	return companies, nil
+	return groups, nil
 }
 
 // DiscoverQuests queries the DB for fellowship state joined with quest_state for
@@ -488,23 +489,23 @@ func DiscoverQuests(conn *sqlite.Conn) (*DashboardStatus, error) {
 	if err != nil {
 		// No fellowship row — return empty status
 		return &DashboardStatus{
-			Quests:    []QuestStatus{},
-			Scouts:    []ScoutEntry{},
-			Companies: []CompanyEntry{},
+			Quests: []QuestStatus{},
+			Scouts: []ScoutEntry{},
+			Groups: []GroupEntry{},
 		}, nil
 	}
 
 	status := &DashboardStatus{
-		Name:      fs.Name,
-		Quests:    []QuestStatus{},
-		Scouts:    fs.Scouts,
-		Companies: fs.Companies,
+		Name:   fs.Name,
+		Quests: []QuestStatus{},
+		Scouts: fs.Scouts,
+		Groups: fs.Groups,
 	}
 	if status.Scouts == nil {
 		status.Scouts = []ScoutEntry{}
 	}
-	if status.Companies == nil {
-		status.Companies = []CompanyEntry{}
+	if status.Groups == nil {
+		status.Groups = []GroupEntry{}
 	}
 
 	for _, q := range fs.Quests {
@@ -537,7 +538,7 @@ func loadQuestStatusFromDB(conn *sqlite.Conn, name, worktree string) (*QuestStat
 	if err != nil {
 		return nil, err
 	}
-	done, total, _ := errand.Progress(conn, name)
+	done, total, _ := todo.Progress(conn, name)
 	return &QuestStatus{
 		Name:            name,
 		Worktree:        worktree,
@@ -546,7 +547,7 @@ func loadQuestStatusFromDB(conn *sqlite.Conn, name, worktree string) (*QuestStat
 		GateID:          s.GateID,
 		LembasCompleted: s.LembasCompleted,
 		MetadataUpdated: s.MetadataUpdated,
-		ErrandsDone:     done,
-		ErrandsTotal:    total,
+		TodosDone:       done,
+		TodosTotal:      total,
 	}, nil
 }

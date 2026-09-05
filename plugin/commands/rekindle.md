@@ -67,7 +67,7 @@ On user confirmation, transition into Gandalf coordinator mode:
 1. **Load config:** Read `~/.claude/fellowship.json` if it exists (same as `/fellowship`)
 2. **Create team:** `TeamCreate` with name `fellowship-{timestamp}`
 3. **Record fellowship state:** From the repo root, run `~/.claude/fellowship/bin/fellowship state init --name fellowship-{timestamp}` (it has no `--dir` — it operates on the current directory), then re-register each recovered quest with `~/.claude/fellowship/bin/fellowship state add-quest --name <quest_name> --task "<task>" [--branch <branch>] [--worktree <path>]` (same as `/fellowship` startup)
-4. **Write autopsies for dead quests:** Before respawning, run `~/.claude/fellowship/bin/fellowship autopsy infer --dir <worktree>` for each quest classified as `stale`. This preserves failure knowledge from the crashed session for future quests to learn from.
+4. **Write failure records for dead quests:** Before respawning, run `~/.claude/fellowship/bin/fellowship failures infer --dir <worktree>` for each quest classified as `stale`. This preserves failure knowledge from the crashed session for future quests to learn from.
 5. **For each quest that has not shipped:**
    a. `TaskCreate` with the original task description (from `~/.claude/fellowship/bin/fellowship state show --json` or inferred from quest name)
    b. Spawn a quest runner teammate with the **resume spawn prompt** (see below)

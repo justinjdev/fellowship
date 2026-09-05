@@ -23,10 +23,10 @@ When the user asks for "status" or Gandalf proactively reports progress:
 
 When a quest is held, append `(HELD)` to its phase and include the hold reason if present. Include held count in the summary line.
 
-When companies are defined, group quests by company in the status report:
+When groups are defined, group quests by group in the status report:
 
 ```
-## Company: API Work (1/2 quests in Implement+)
+## Group: API Work (1/2 quests in Implement+)
 
 | Task | Type | Phase | Progress |
 |------|------|-------|----------|

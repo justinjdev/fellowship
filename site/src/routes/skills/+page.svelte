@@ -5,12 +5,12 @@
 		{
 			name: '/quest',
 			summary: 'Full Research → Plan → Implement lifecycle for non-trivial tasks.',
-			details: 'The hub skill that orchestrates everything. Takes a task description and walks through four phases: Research, Plan, Implement, Review. A hard gate leaves each of the first three and needs approval; nothing leaves Review, where a balrog agent attacks the implementation, /warden checks conventions, the work is verified, and the PR is opened. Research provisions the isolated worktree, loads task context, and studies the reference files for conventions; /lembas compacts context between every phase. Supports plan-driven mode: provide a pre-existing plan file and the quest skips Research and Plan, starting at Implement with one gate. Supports promoted mode: a quest promoted from a scout validates and supplements the scout findings instead of researching from scratch. Includes a bulletin board for cross-quest knowledge sharing: quests scan it at the start of Research and post discoveries during Research and Implement, shared across all worktrees via the main repo root.'
+			details: 'The hub skill that orchestrates everything. Takes a task description and walks through four phases: Research, Plan, Implement, Review. A hard gate leaves each of the first three and needs approval; nothing leaves Review, where a balrog agent attacks the implementation, /warden checks conventions, the work is verified, and the PR is opened. Research provisions the isolated worktree, loads task context, and studies the reference files for conventions; /lembas compacts context between every phase. Supports plan-driven mode: provide a pre-existing plan file and the quest skips Research and Plan, starting at Implement with one gate. Supports promoted mode: a quest promoted from a scout validates and supplements the scout findings instead of researching from scratch. Includes a notes board for cross-quest knowledge sharing: quests scan it at the start of Research and post discoveries during Research and Implement, shared across all worktrees via the main repo root.'
 		},
 		{
 			name: '/fellowship',
 			summary: 'Multi-task orchestrator. Spawns parallel agent teammates.',
-			details: 'For multiple independent tasks, Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolated worktrees and produce PRs. Scouts research questions and deliver findings. Say \'status\' during a fellowship for a progress table. Gates surface to you for approval by default. Supports plan-driven quests: provide a plan file and Gandalf spawns quests that skip to Implement. For large plans, Gandalf can fan out into multiple parallel quests after confirming the split with you. Supports scout-to-quest promotion: say \'promote scout-X to a quest\' and Gandalf spawns a quest pre-loaded with the scout\'s findings. The bulletin board enables cross-quest knowledge sharing — cleared automatically on disband.'
+			details: 'For multiple independent tasks, Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolated worktrees and produce PRs. Scouts research questions and deliver findings. Say \'status\' during a fellowship for a progress table. Gates surface to you for approval by default. Supports plan-driven quests: provide a plan file and Gandalf spawns quests that skip to Implement. For large plans, Gandalf can fan out into multiple parallel quests after confirming the split with you. Supports scout-to-quest promotion: say \'promote scout-X to a quest\' and Gandalf spawns a quest pre-loaded with the scout\'s findings. The notes board enables cross-quest knowledge sharing — cleared automatically on disband.'
 		},
 		{
 			name: '/scout',
@@ -63,7 +63,7 @@
 		{
 			name: '/dashboard',
 			summary: 'Live web dashboard for the current fellowship.',
-			details: 'Starts a local HTTP server (default http://localhost:3000) in the background and prints its URL. Shows every quest\'s phase and pending gates, scouts, companies (with one-click "Approve All"), the recent event stream, the bulletin board, and eagles health — with gate approve/reject directly from the page.'
+			details: 'Starts a local HTTP server (default http://localhost:3000) in the background and prints its URL. Shows every quest\'s phase and pending gates, scouts, groups (with one-click "Approve All"), the recent event stream, the notes board, and health — with gate approve/reject directly from the page.'
 		},
 		{
 			name: '/red-book',

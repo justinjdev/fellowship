@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/justinjdev/fellowship/cli/internal/history"
 	"github.com/justinjdev/fellowship/cli/internal/state"
-	"github.com/justinjdev/fellowship/cli/internal/tome"
 	"zombiezen.com/go/sqlite"
 )
 
@@ -21,7 +21,7 @@ type SubmitResult struct {
 	AutoApproved bool
 	// PrevPhase is the phase the gate was submitted from; NextPhase is the
 	// phase it advances to (reached already when AutoApproved). The caller
-	// needs both to write the same tome entries and heralds the lead's
+	// needs both to write the same history entries and events the lead's
 	// `gate approve` writes.
 	PrevPhase string
 	NextPhase string
@@ -87,12 +87,12 @@ func GateSubmit(s *state.State, input *HookInput) SubmitResult {
 	return SubmitResult{StateChanged: true, AutoApproved: true, PrevPhase: prev, NextPhase: next}
 }
 
-// RecordGateSubmitted records a "submitted" gate event in the quest tome. An
+// RecordGateSubmitted records a "submitted" gate event in the quest history. An
 // auto-approved gate is *also* an approval: the caller records that half with
 // gate.RecordApproval, exactly as the lead's `gate approve` does, so the two
 // paths cannot drift.
 func RecordGateSubmitted(conn *sqlite.Conn, questName, phase string) error {
-	return tome.RecordGate(conn, questName, phase, "submitted", "")
+	return history.RecordGate(conn, questName, phase, "submitted", "")
 }
 
 // HookSpecificOutput is the JSON structure Claude Code expects from

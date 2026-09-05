@@ -6,7 +6,7 @@ description: Starts the live web dashboard for the current fellowship — quest/
 
 ## Overview
 
-Starts a local HTTP server that shows the current fellowship at a glance: every quest's phase and pending gates, scouts, companies, the tiding (event) stream, the bulletin board, and eagles health. Gates can be approved or rejected directly from the page, including batch-approving every pending gate in a company.
+Starts a local HTTP server that shows the current fellowship at a glance: every quest's phase and pending gates, scouts, groups, the event stream, the notes board, and health. Gates can be approved or rejected directly from the page, including batch-approving every pending gate in a group.
 
 ## Steps
 
@@ -34,6 +34,6 @@ Print the URL (`http://localhost:<port>`, `3000` unless overridden) and briefly 
 
 > **Fellowship dashboard:** http://localhost:3000
 >
-> Live view of every quest's phase and pending gates, scouts, companies (with one-click "Approve All"), the recent event stream, the bulletin board, and eagles health. Approvals and rejections made on the page take effect immediately — no need to poll `fellowship status` yourself.
+> Live view of every quest's phase and pending gates, scouts, groups (with one-click "Approve All"), the recent event stream, the notes board, and health. Approvals and rejections made on the page take effect immediately — no need to poll `fellowship status` yourself.
 
 The server keeps running after this command finishes; the user can leave the tab open across the rest of the session.

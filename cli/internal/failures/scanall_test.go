@@ -1,4 +1,4 @@
-package autopsy
+package failures
 
 import (
 	"context"
@@ -24,7 +24,7 @@ func TestScan_All(t *testing.T) {
 			wantErrIn: "--all",
 		},
 		{
-			name: "all returns every autopsy",
+			name: "all returns every failure",
 			opts: ScanOptions{All: true},
 			want: 2,
 		},

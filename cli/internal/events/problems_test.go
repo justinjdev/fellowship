@@ -1,4 +1,4 @@
-package herald
+package events
 
 import (
 	"context"
@@ -91,7 +91,7 @@ func TestZombieDetection(t *testing.T) {
 		insertQuestState(t, conn, "q1", "Implement", false, "")
 
 		oldTime := time.Now().Add(-20 * time.Minute).UTC().Format(time.RFC3339)
-		if err := Announce(conn, Tiding{
+		if err := Record(conn, Event{
 			Timestamp: oldTime,
 			Quest:     "q1",
 			Type:      MetadataUpdated,
@@ -134,7 +134,7 @@ func TestZombieNotDetectedWhenComplete(t *testing.T) {
 		}
 
 		oldTime := time.Now().Add(-20 * time.Minute).UTC().Format(time.RFC3339)
-		if err := Announce(conn, Tiding{
+		if err := Record(conn, Event{
 			Timestamp: oldTime,
 			Quest:     "q1",
 			Type:      MetadataUpdated,
@@ -164,10 +164,10 @@ func TestStrugglingDetection(t *testing.T) {
 		insertQuestState(t, conn, "q1", "Plan", false, "")
 
 		now := time.Now().UTC().Format(time.RFC3339)
-		if err := Announce(conn, Tiding{Timestamp: now, Quest: "q1", Type: GateRejected, Phase: "Plan"}); err != nil {
+		if err := Record(conn, Event{Timestamp: now, Quest: "q1", Type: GateRejected, Phase: "Plan"}); err != nil {
 			t.Fatal(err)
 		}
-		if err := Announce(conn, Tiding{Timestamp: now, Quest: "q1", Type: GateRejected, Phase: "Plan"}); err != nil {
+		if err := Record(conn, Event{Timestamp: now, Quest: "q1", Type: GateRejected, Phase: "Plan"}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -200,7 +200,7 @@ func TestStrugglingNotDetectedWithOneRejection(t *testing.T) {
 		insertQuestState(t, conn, "q1", "Plan", false, "")
 
 		now := time.Now().UTC().Format(time.RFC3339)
-		if err := Announce(conn, Tiding{Timestamp: now, Quest: "q1", Type: GateRejected, Phase: "Plan"}); err != nil {
+		if err := Record(conn, Event{Timestamp: now, Quest: "q1", Type: GateRejected, Phase: "Plan"}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -226,7 +226,7 @@ func TestNoProblemsForHealthyQuest(t *testing.T) {
 		insertQuestState(t, conn, "q1", "Implement", false, "")
 
 		now := time.Now().UTC().Format(time.RFC3339)
-		if err := Announce(conn, Tiding{
+		if err := Record(conn, Event{
 			Timestamp: now,
 			Quest:     "q1",
 			Type:      GateApproved,

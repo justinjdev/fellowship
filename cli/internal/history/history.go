@@ -1,4 +1,4 @@
-package tome
+package history
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-type QuestTome struct {
+type QuestHistory struct {
 	QuestName       string        `json:"quest_name"`
 	PhasesCompleted []PhaseRecord `json:"phases_completed"`
 	GateHistory     []GateEvent   `json:"gate_history"`
@@ -138,20 +138,20 @@ func LoadFiles(conn *sqlite.Conn, questName string) ([]string, error) {
 	return files, err
 }
 
-// Load assembles a QuestTome from the database for the given quest.
-// Returns a zero-value tome if no data exists (equivalent to old LoadOrCreate).
-func Load(conn *sqlite.Conn, questName string) (*QuestTome, error) {
+// Load assembles a QuestHistory from the database for the given quest.
+// Returns a zero-value history if no data exists (equivalent to old LoadOrCreate).
+func Load(conn *sqlite.Conn, questName string) (*QuestHistory, error) {
 	phases, err := LoadPhases(conn, questName)
 	if err != nil {
-		return nil, fmt.Errorf("tome: load phases: %w", err)
+		return nil, fmt.Errorf("history: load phases: %w", err)
 	}
 	gates, err := LoadGates(conn, questName)
 	if err != nil {
-		return nil, fmt.Errorf("tome: load gates: %w", err)
+		return nil, fmt.Errorf("history: load gates: %w", err)
 	}
 	files, err := LoadFiles(conn, questName)
 	if err != nil {
-		return nil, fmt.Errorf("tome: load files: %w", err)
+		return nil, fmt.Errorf("history: load files: %w", err)
 	}
 
 	// Load status/task/respawns from fellowship_quests.
@@ -168,7 +168,7 @@ func Load(conn *sqlite.Conn, questName string) (*QuestTome, error) {
 				return nil
 			},
 		}); err != nil {
-		return nil, fmt.Errorf("tome: load fellowship_quests: %w", err)
+		return nil, fmt.Errorf("history: load fellowship_quests: %w", err)
 	}
 	if status == "" {
 		status = "active"
@@ -185,7 +185,7 @@ func Load(conn *sqlite.Conn, questName string) (*QuestTome, error) {
 		files = []string{}
 	}
 
-	return &QuestTome{
+	return &QuestHistory{
 		QuestName:       questName,
 		PhasesCompleted: phases,
 		GateHistory:     gates,

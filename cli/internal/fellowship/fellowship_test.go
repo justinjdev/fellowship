@@ -100,7 +100,7 @@ func TestAddAndRemoveScout(t *testing.T) {
 	}
 }
 
-func TestAddCompany(t *testing.T) {
+func TestAddGroup(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		if err := InitFellowship(conn, "f1", "/tmp", "main"); err != nil {
@@ -112,25 +112,25 @@ func TestAddCompany(t *testing.T) {
 		if err := AddScout(conn, ScoutEntry{Name: "s1", Question: "why?"}); err != nil {
 			t.Fatal(err)
 		}
-		if err := AddCompany(conn, "team-alpha", []string{"q1"}, []string{"s1"}); err != nil {
+		if err := AddGroup(conn, "team-alpha", []string{"q1"}, []string{"s1"}); err != nil {
 			t.Fatal(err)
 		}
 
-		companies, err := ListCompanies(conn)
+		groups, err := ListGroups(conn)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(companies) != 1 {
-			t.Fatalf("expected 1 company, got %d", len(companies))
+		if len(groups) != 1 {
+			t.Fatalf("expected 1 group, got %d", len(groups))
 		}
-		if companies[0].Name != "team-alpha" {
-			t.Errorf("Name = %q, want %q", companies[0].Name, "team-alpha")
+		if groups[0].Name != "team-alpha" {
+			t.Errorf("Name = %q, want %q", groups[0].Name, "team-alpha")
 		}
-		if len(companies[0].Quests) != 1 || companies[0].Quests[0] != "q1" {
-			t.Errorf("Quests = %v, want [q1]", companies[0].Quests)
+		if len(groups[0].Quests) != 1 || groups[0].Quests[0] != "q1" {
+			t.Errorf("Quests = %v, want [q1]", groups[0].Quests)
 		}
-		if len(companies[0].Scouts) != 1 || companies[0].Scouts[0] != "s1" {
-			t.Errorf("Scouts = %v, want [s1]", companies[0].Scouts)
+		if len(groups[0].Scouts) != 1 || groups[0].Scouts[0] != "s1" {
+			t.Errorf("Scouts = %v, want [s1]", groups[0].Scouts)
 		}
 		return nil
 	}); err != nil {
@@ -211,8 +211,8 @@ func TestSaveFellowship_RoundTrip(t *testing.T) {
 			Scouts: []ScoutEntry{
 				{Name: "scout-1", Question: "how does X work?", TaskID: "t2"},
 			},
-			Companies: []CompanyEntry{
-				{Name: "company-1", Quests: []string{"quest-1"}, Scouts: []string{"scout-1"}},
+			Groups: []GroupEntry{
+				{Name: "group-1", Quests: []string{"quest-1"}, Scouts: []string{"scout-1"}},
 			},
 		}
 
@@ -246,11 +246,11 @@ func TestSaveFellowship_RoundTrip(t *testing.T) {
 		if loaded.Scouts[0].Question != "how does X work?" {
 			t.Errorf("Scouts[0].Question = %q, want %q", loaded.Scouts[0].Question, "how does X work?")
 		}
-		if len(loaded.Companies) != 1 {
-			t.Fatalf("len(Companies) = %d, want 1", len(loaded.Companies))
+		if len(loaded.Groups) != 1 {
+			t.Fatalf("len(Groups) = %d, want 1", len(loaded.Groups))
 		}
-		if loaded.Companies[0].Name != "company-1" {
-			t.Errorf("Companies[0].Name = %q, want %q", loaded.Companies[0].Name, "company-1")
+		if loaded.Groups[0].Name != "group-1" {
+			t.Errorf("Groups[0].Name = %q, want %q", loaded.Groups[0].Name, "group-1")
 		}
 		return nil
 	}); err != nil {
