@@ -11,7 +11,7 @@ func TestValidType(t *testing.T) {
 	}{
 		{name: "gate type", input: "gate_approved", want: GateApproved, ok: true},
 		{name: "palantir stuck", input: "palantir_stuck", want: PalantirStuck, ok: true},
-		{name: "palantir bulletin", input: "palantir_bulletin", want: PalantirBulletin, ok: true},
+		{name: "palantir notes", input: "palantir_notes", want: PalantirNotes, ok: true},
 		{name: "unknown type", input: "smoke_signal"},
 		{name: "empty type", input: ""},
 		{name: "case sensitive", input: "Gate_Approved"},

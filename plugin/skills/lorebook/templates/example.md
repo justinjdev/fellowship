@@ -26,7 +26,7 @@ interview you and write one that is.
 - Check `db/migrations/` for a migration touching the tables you plan to read.
   A migration merged but not yet deployed means the column exists in `main` and
   not in staging.
-- Ask the bulletin whether a sibling quest is already changing the handler you
+- Ask the notes board whether a sibling quest is already changing the handler you
   landed on: two quests in `routes.go` is the conflict we hit most often.
 
 ## Plan Guidance

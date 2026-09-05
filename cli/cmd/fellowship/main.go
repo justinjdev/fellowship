@@ -337,7 +337,7 @@ Events (activity log):
     --quest NAME         Quest the event is about (required)
     --type TYPE          Event type (required) — e.g. palantir_stuck,
                          palantir_drift, palantir_conflict, palantir_health,
-                         palantir_bulletin
+                         palantir_notes
     --phase PHASE        Quest phase (optional)
     --detail "TEXT"      Detail text (required)
 

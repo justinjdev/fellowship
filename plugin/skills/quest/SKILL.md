@@ -12,7 +12,7 @@ complete.
 ```
 Research  ── orient, scan prior art, study the code ──[GATE]─→
 Plan      ── explicit steps with file:line refs ─────[GATE]─→
-Implement ── TDD, small commits, errand tracking ────[GATE]─→
+Implement ── TDD, small commits, todo tracking ────[GATE]─→
 Review    ── balrog → warden → review-pr → verify → PR. No gate.
 ```
 
@@ -75,7 +75,7 @@ a `RESUME CONTEXT:` block, or `.fellowship/checkpoint.md` exists:
    session died the hooks block this — only the lead can clear it, so ask.
 3. `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})`.
 4. Read `.fellowship/checkpoint.md` as your starting context in place of step
-   2, and `fellowship tome show --dir $(pwd)` for your phases, gates, and
+   2, and `fellowship history show --dir $(pwd)` for your phases, gates, and
    files touched.
 5. Resume at the phase `fellowship gate status` reports, going straight there
    if it is past Research.
@@ -156,11 +156,11 @@ otherwise proceed on documented assumptions.
 ### Step 3 — prior art
 
 Past failures in this area, then what sibling quests have found. Either
-`bulletin scan` flag alone is fine; use both once you know both.
+`notes scan` flag alone is fine; use both once you know both.
 
 ```bash
-~/.claude/fellowship/bin/fellowship autopsy scan --dir <main_repo> --files "<files>" --modules "<modules>"
-~/.claude/fellowship/bin/fellowship bulletin scan --topics "<topics>" --files "<files>"
+~/.claude/fellowship/bin/fellowship failures scan --dir <main_repo> --files "<files>" --modules "<modules>"
+~/.claude/fellowship/bin/fellowship notes scan --topics "<topics>" --files "<files>"
 ```
 
 ### Step 4 — study the code
@@ -207,9 +207,9 @@ change; a test strategy; the user's approval of the plan.
 
 Execute the plan in small verifiable steps. TDD by default.
 
-**Errands** are the source of truth for remaining work, not the original
-prompt. `fellowship errand list --dir .` shows the checklist;
-`fellowship errand update --dir . <id> <status>` moves one along, through
+**Todos** are the source of truth for remaining work, not the original
+prompt. `fellowship todo list --dir .` shows the checklist;
+`fellowship todo update --dir . <id> <status>` moves one along, through
 `pending`, `in_progress`, `done`, `blocked`, `skipped`.
 
 **Single-stream (default):** invoke `superpowers:test-driven-development` and
@@ -223,12 +223,12 @@ touch the same file — a planning constraint, not a runtime guard; if the plan
 has such a conflict, fix the plan.
 
 Use conventional commits and verify as you go rather than batching it. Post to
-the bulletin whenever you find something a sibling quest would want —
+the notes board whenever you find something a sibling quest would want —
 refactors, API changes, infrastructure shifts, gotchas, deprecations, findings
 about shared code — but not phase progress or edit intentions:
 
 ```bash
-~/.claude/fellowship/bin/fellowship bulletin post --quest "<quest>" --topic "<topic>" --files "<files>" --discovery "<text>"
+~/.claude/fellowship/bin/fellowship notes post --quest "<quest>" --topic "<topic>" --files "<files>" --discovery "<text>"
 ```
 
 **Recovery.** Trigger it when a plan step is impossible or wrong, when 3+ TDD
@@ -237,7 +237,7 @@ implementation reveals the plan was incomplete. Stop and commit what works,
 document which step failed and why the plan does not hold, record it:
 
 ```bash
-echo '{"quest":"<quest>","task":"<task>","phase":"Implement","trigger":"recovery","files":["<files>"],"modules":["<modules>"],"what_failed":"<specific>","resolution":"<what changed>","tags":["<tags>"]}' | ~/.claude/fellowship/bin/fellowship autopsy create --dir <main_repo>
+echo '{"quest":"<quest>","task":"<task>","phase":"Implement","trigger":"recovery","files":["<files>"],"modules":["<modules>"],"what_failed":"<specific>","resolution":"<what changed>","tags":["<tags>"]}' | ~/.claude/fellowship/bin/fellowship failures create --dir <main_repo>
 ```
 
 Then `/lembas` with phase "Implement (partial)", message the lead with the
@@ -280,7 +280,7 @@ squash/merge decision, PR creation, and branch cleanup. Draft the PR if
 `Closes #42`). Clean up the worktree after the merge, then report what was
 built, what review found, the verification results, and the PR link. Marking
 the task complete ends the quest — the hooks allow it only from Review with no
-gate pending, and the tome is marked completed for you.
+gate pending, and the history is marked completed for you.
 
 ## Plan-driven mode
 
@@ -290,12 +290,12 @@ included), copy the plan file to `.fellowship/plan.md` in the worktree, then
 
 ```bash
 ~/.claude/fellowship/bin/fellowship init --dir <worktree_path> --phase Implement --plan-skip
-~/.claude/fellowship/bin/fellowship errand init --dir <worktree_path>
-~/.claude/fellowship/bin/fellowship errand add --dir <worktree_path> "<task>"   # one per plan task
+~/.claude/fellowship/bin/fellowship todo init --dir <worktree_path>
+~/.claude/fellowship/bin/fellowship todo add --dir <worktree_path> "<task>"   # one per plan task
 ```
 
 `--plan-skip` starts the quest at Implement and records Research and Plan as
-skipped in the tome. Skip both phases entirely and work `.fellowship/plan.md`
+skipped in the history. Skip both phases entirely and work `.fellowship/plan.md`
 as your blueprint. One gate remains: Implement.
 
 ## Escape hatch

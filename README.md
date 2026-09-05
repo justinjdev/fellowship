@@ -104,7 +104,7 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
   "issues": {
     "autoClose": true
   },
-  "autopsy": {
+  "failures": {
     "expiryDays": 90
   },
   "models": {
@@ -120,7 +120,7 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `dataDir` | `".fellowship"` | Directory name for fellowship working files (state, checkpoints, errands, tome). Created inside each worktree and the main repo root. |
+| `dataDir` | `".fellowship"` | Directory name for fellowship working files (state, checkpoints, todos, history). Created inside each worktree and the main repo root. |
 | `branch.pattern` | `null` | Branch name template with placeholders: `{slug}` (task description), `{ticket}` (extracted from description), `{author}` (from config). When `null`, defaults to `"fellowship/{slug}"`. |
 | `branch.author` | `null` | Static value for the `{author}` placeholder. If not set and pattern uses `{author}`, you'll be prompted. |
 | `branch.ticketPattern` | `"[A-Z]+-\\d+"` | Regex to extract ticket IDs from quest descriptions. Default matches Jira-style IDs (e.g., `PROJ-123`). |
@@ -132,7 +132,7 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 | `palantir.enabled` | `true` | Whether to spawn a palantir monitoring agent during fellowships. |
 | `palantir.minQuests` | `2` | Minimum active quests before palantir is spawned. |
 | `issues.autoClose` | `true` | When true, `/missive` includes `Closes #N` in PR keywords so issues close on merge. |
-| `autopsy.expiryDays` | `90` | Days before a quest autopsy (failure record) expires and is eligible for cleanup. |
+| `failures.expiryDays` | `90` | Days before a quest failure record expires and is eligible for cleanup. |
 | `models.quest` | `null` | Model for quest teammates. Valid values: `"haiku"`, `"sonnet"`, `"opus"` (aliases only — spawn parameters accept neither `"inherit"` nor full model IDs; leave `null` to inherit). `null` = built-in default: inherit the session model. |
 | `models.scout` | `null` | Model for scout teammates. Same valid values. `null` = built-in default: `sonnet`. |
 | `models.palantir` | `null` | Model for the palantir monitor. Same valid values. `null` = built-in default: `haiku`. |
@@ -177,7 +177,7 @@ Commands are user-invoked only — Claude never calls them automatically, so the
 
 | Agent | Role |
 |-------|------|
-| **palantir** | Background monitor during fellowship execution. A thin reporter over the CLI's health sweep (`fellowship eagles` — the same stalled/zombie/struggling classification `herald --problems` and the dashboard read) plus scope-drift and file-conflict checks read from each quest's tome. Reports to Gandalf. Defaults to the `haiku` model. |
+| **palantir** | Background monitor during fellowship execution. A thin reporter over the CLI's health sweep (`fellowship health` — the same stalled/zombie/struggling classification `events --problems` and the dashboard read) plus scope-drift and file-conflict checks read from each quest's history. Reports to Gandalf. Defaults to the `haiku` model. |
 | **balrog** | Adversarial validation agent spawned by quest as the first step of Review. Analyzes the diff for failure modes, writes and runs targeted test cases, and delivers a severity-ranked findings report. |
 | **scout** | Research & analysis agent spawned as a fellowship teammate for read-only investigation — no code edits, no git operations. Defaults to the `sonnet` model. |
 | **validator** | Read-only adversarial validator spawned by scout to verify research findings against the actual code (CONFIRMED/CONTESTED/UNVERIFIED). Tools restricted to Read/Glob/Grep. Defaults to the `sonnet` model. |
@@ -193,7 +193,7 @@ Research  → worktree + orientation, prior art, explore agents, convention stud
             ──[GATE]─→
 Plan      → plan mode with file:line references + user approval
             ──[GATE]─→
-Implement → TDD (red-green-refactor), errand tracking
+Implement → TDD (red-green-refactor), todo tracking
             ──[GATE]─→
 Review    → balrog attacks the implementation (edge cases, error paths)
             → /warden conventions → code quality → verification
@@ -214,7 +214,7 @@ Autonomous research with confidence levels. For complex questions, spawns a fres
 
 Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolated worktrees and produce PRs. Scouts research questions and deliver findings. Say "status" to see a progress table. By default, all quest gates surface to you for approval — auto-approve specific gates via `~/.claude/fellowship.json` (see Configuration).
 
-**Health monitoring** — `fellowship eagles` is the one classifier behind stalled/zombie/struggling detection; `fellowship herald --problems` and the dashboard read the same sweep. With 2+ quests active (configurable via `palantir.minQuests`), Gandalf spawns palantir to report it continuously; below that threshold, or with `palantir.enabled: false`, Gandalf runs the sweep itself after gate transitions and spawns, so health monitoring never depends on an extra agent.
+**Health monitoring** — `fellowship health` is the one classifier behind stalled/zombie/struggling detection; `fellowship events --problems` and the dashboard read the same sweep. With 2+ quests active (configurable via `palantir.minQuests`), Gandalf spawns palantir to report it continuously; below that threshold, or with `palantir.enabled: false`, Gandalf runs the sweep itself after gate transitions and spawns, so health monitoring never depends on an extra agent.
 
 ### Resuming after a crash
 
@@ -243,6 +243,7 @@ A `/lembas` checkpoint at `.fellowship/checkpoint.md` is what a dead session lea
 
 ### Unreleased
 
+- **CLI subcommand nouns renamed to plain words** — the CLI's Tolkien-flavored subcommand nouns are now plain English, matching their Go packages: `herald` → `events`, `tome` → `history`, `errand` → `todo`, `eagles` → `health`, `bulletin` → `notes`, `autopsy` → `failures`, `company` → `group` (and `state add-company` → `state add-group`). Skill and agent names are unaffected — this only touches the seven reporting/side-channel subcommand nouns above. Each old name still works for one release: running it prints one deprecation line to stderr, then runs the renamed command. The `failures.expiryDays` config key replaces `autopsy.expiryDays` (no alias — update `~/.claude/fellowship.json` and any project `.fellowship/config.json`). SQLite table and column names are unchanged (no schema migration): `herald`, `bulletin`/`bulletin_files`, `autopsies`/`autopsy_files`/`autopsy_modules`/`autopsy_tags`, `errands`/`errand_deps`, and `companies`/`company_members` keep their existing names under the renamed packages.
 - **One health classifier, reachable everywhere** — `fellowship eagles` and `fellowship herald --problems` were two separate Go implementations of the same stalled/zombie classification, and palantir carried a third copy in prose driven by unbounded `git diff`/`git status` over each worktree. `herald.DetectProblems` now delegates to eagles' sweep (which gained a `struggling` classification — repeated gate rejections in a quest's current phase, independent of its `health`), and `eagles.WriteReport` and the `.fellowship/eagles-report.json` file it wrote (nothing read it) are gone. palantir is now a thin reporter over that one sweep: it runs `fellowship eagles --json` and `fellowship state show --json` instead of reconstructing stuck/stalled from task metadata, and reads scope-drift/file-conflict signals from each quest's tome (`tome show --json`'s `files_touched`) instead of diffing worktrees itself. Below `palantir.minQuests` or with `palantir.enabled: false`, Gandalf runs the same sweep itself after every gate transition and spawn, so health monitoring never depends on an extra agent. `/rekindle` and `/retro` read quest state and phase/health the same way instead of shelling `gate status --dir <worktree>` per quest. `state show` (always JSON, but had no flag to name that) and `company show <name>` (table-only before) both accept `--json` now.
 - **Four phases, three gates** — The quest lifecycle is now **Research → Plan → Implement → Review**. Onboard's work (worktree provisioning, context loading, the checkpoint resume check) is the first step of Research; the adversarial balrog pass is the first step of Review and PR creation the last. A gate leaves Research, Plan, and Implement; nothing leaves Review, so the quest ends inside it when the PR is open and the task is marked complete — which `completion-guard` now allows only in Review with no gate pending. Valid `gates.autoApprove` entries are the three gate-bearing phases. A schema migration rewrites stored phase names (live state, phase and gate history, and each quest's `autoApprove` list) in existing stores, and the pre-2.0 JSON importer runs through the same table, so an in-flight quest keeps advancing across the upgrade.
 - **`/quest` and `/fellowship` are half the size** — `quest/SKILL.md` went from ~25 KB to ~15 KB and `fellowship/SKILL.md` from ~21 KB to ~15.5 KB. Quest inlines the orientation `/council` did and the pattern extraction `/gather-lore` did rather than invoking them, so a quest no longer hands its phase vocabulary to two satellite skills that then have to track it; both remain as skills you invoke yourself. Fellowship's isolation pre-flight and provisioning protocol moved to `resources/isolation.md`, and Gandalf's voice to `resources/lead-behavior.md`.

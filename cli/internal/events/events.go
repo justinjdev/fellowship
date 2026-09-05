@@ -28,14 +28,14 @@ const (
 	PalantirDrift    EventType = "palantir_drift"
 	PalantirConflict EventType = "palantir_conflict"
 	PalantirHealth   EventType = "palantir_health"
-	PalantirBulletin EventType = "palantir_bulletin"
+	PalantirNotes    EventType = "palantir_notes"
 )
 
 // allTypes lists every event type the CLI accepts on `events post`.
 var allTypes = []EventType{
 	GateSubmitted, GateApproved, GateRejected, PhaseTransition,
 	LembasCompleted, MetadataUpdated, QuestHeld, QuestUnheld,
-	PalantirStuck, PalantirDrift, PalantirConflict, PalantirHealth, PalantirBulletin,
+	PalantirStuck, PalantirDrift, PalantirConflict, PalantirHealth, PalantirNotes,
 }
 
 // Types returns the known event type names.
