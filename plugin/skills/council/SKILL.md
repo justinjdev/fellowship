@@ -1,6 +1,6 @@
 ---
 name: council
-description: Invoke only when the user runs /council. Quest inlines this orientation as its Research step 2 and does not call it. Loads focused, task-relevant context by reading CLAUDE.md, scanning for related files, and producing a structured Session Context block.
+description: Invoke when the user runs /council or from /scout. Quest inlines this orientation as its Research step 2 and does not call it. Loads focused, task-relevant context by reading CLAUDE.md, scanning for related files, and producing a structured Session Context block.
 ---
 
 # Council — Context-Aware Task Onboarding

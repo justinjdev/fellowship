@@ -86,96 +86,115 @@
 	const settings = [
 		{
 			key: 'dataDir',
+			enforced: 'Binary',
 			default_val: '".fellowship"',
 			desc: 'Directory name for fellowship working files (state, checkpoints, todos, history). Created inside each worktree and the main repo root.'
 		},
 		{
 			key: 'branch.pattern',
+			enforced: 'Prompt',
 			default_val: 'null',
 			desc: 'Branch name template with placeholders: {slug}, {ticket}, {author}. When null, defaults to "fellowship/{slug}".'
 		},
 		{
 			key: 'branch.author',
+			enforced: 'Prompt',
 			default_val: 'null',
 			desc: 'Static value for the {author} placeholder. If not set and pattern uses {author}, you\'ll be prompted.'
 		},
 		{
 			key: 'branch.ticketPattern',
+			enforced: 'Prompt',
 			default_val: '"[A-Z]+-\\\\d+"',
 			desc: 'Regex to extract ticket IDs from quest descriptions. Default matches Jira-style IDs (e.g., PROJ-123).'
 		},
 		{
 			key: 'worktree.enabled',
+			enforced: 'Prompt',
 			default_val: 'true',
 			desc: 'Whether quests create isolated worktrees. Set to false to work on the current branch.'
 		},
 		{
 			key: 'worktree.directory',
+			enforced: 'Prompt',
 			default_val: 'null',
 			desc: 'Parent directory for worktrees. null uses Claude Code\'s default (.claude/worktrees/).'
 		},
 		{
 			key: 'gates.autoApprove',
+			enforced: 'Binary',
 			default_val: '[]',
 			desc: 'Gate names to auto-approve: "Research", "Plan", "Implement" — the phase being left. "Review" is not valid: it is the last phase and no gate leaves it. Gates not listed still surface to you.'
 		},
 		{
 			key: 'pr.draft',
+			enforced: 'Prompt',
 			default_val: 'false',
 			desc: 'Create PRs as drafts.'
 		},
 		{
 			key: 'pr.template',
+			enforced: 'Prompt',
 			default_val: 'null',
 			desc: 'PR body template string. Supports {task}, {summary}, and {changes} placeholders.'
 		},
 		{
 			key: 'palantir.enabled',
+			enforced: 'Prompt',
 			default_val: 'true',
 			desc: 'Whether to spawn a palantir monitoring agent during fellowships.'
 		},
 		{
 			key: 'palantir.minQuests',
+			enforced: 'Prompt',
 			default_val: '2',
 			desc: 'Minimum active quests before palantir is spawned.'
 		},
 		{
 			key: 'issues.autoClose',
+			enforced: 'Prompt',
 			default_val: 'true',
 			desc: 'When true, /missive includes "Closes #N" in PR keywords so issues close on merge.'
 		},
 		{
 			key: 'failures.expiryDays',
+			enforced: 'Binary',
 			default_val: '90',
 			desc: 'Days before a quest failure record expires and is eligible for cleanup.'
 		},
 		{
 			key: 'models.quest',
+			enforced: 'Prompt',
 			default_val: 'null',
 			desc: 'Model for quest teammates. Valid values: "haiku", "sonnet", "opus" (aliases only — spawn parameters accept neither "inherit" nor full model IDs; leave null to inherit). null = built-in default: inherit the session model.'
 		},
 		{
 			key: 'models.scout',
+			enforced: 'Prompt',
 			default_val: 'null',
 			desc: 'Model for scout teammates. Same valid values. null = built-in default: sonnet.'
 		},
 		{
 			key: 'models.palantir',
+			enforced: 'Prompt',
 			default_val: 'null',
 			desc: 'Model for the palantir monitor. Same valid values. null = built-in default: haiku.'
 		},
 		{
 			key: 'models.balrog',
+			enforced: 'Prompt',
 			default_val: 'null',
 			desc: 'Model for balrog adversarial review. Same valid values. null = built-in default: inherit the session model.'
 		},
 		{
 			key: 'models.explore',
+			enforced: 'Prompt',
 			default_val: 'null',
 			desc: 'Model for Explore scan subagents spawned by quest, scout, council, and guide. Same valid values. null = built-in default: haiku.'
 		},
 		{
 			key: 'models.validator',
+			enforced: 'Prompt',
 			default_val: 'null',
 			desc: 'Model for scout\'s validation subagent. Same valid values. null = built-in default: sonnet.'
 		}
@@ -255,12 +274,19 @@
 
 	<section class="section">
 		<h2>Settings Reference</h2>
+		<p class="intro">
+			<strong>Enforced by</strong> marks how a setting takes effect: <strong>Binary</strong> settings
+			are read and applied by the <code>fellowship</code> Go CLI itself; <strong>Prompt</strong> settings
+			are followed by the agent reading the merged config from skill/agent instructions, with no
+			structural enforcement behind them.
+		</p>
 		<div class="table-wrap">
 			<table>
 				<thead>
 					<tr>
 						<th scope="col">Setting</th>
 						<th scope="col">Default</th>
+						<th scope="col">Enforced by</th>
 						<th scope="col">Description</th>
 					</tr>
 				</thead>
@@ -269,6 +295,7 @@
 						<tr class:alt-row={i % 2 === 1}>
 							<td><code>{setting.key}</code></td>
 							<td><code>{setting.default_val}</code></td>
+							<td>{setting.enforced}</td>
 							<td>{setting.desc}</td>
 						</tr>
 					{/each}

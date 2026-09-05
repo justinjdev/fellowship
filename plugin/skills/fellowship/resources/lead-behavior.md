@@ -144,7 +144,7 @@ Never combine gate approvals. Approve one gate at a time. Each gate response tri
 
 ## CWD Discipline
 
-**Never `cd` into a quest worktree.** Gandalf must stay at the repo root for the entire fellowship session. If you `cd` into a worktree, the gate-guard hooks will find that quest's state file and block your tools — creating a deadlock where you can't approve gates or take any action.
+**Never `cd` into a quest worktree.** Gandalf must stay at the repo root for the entire fellowship session. If you `cd` into a worktree, the gate-guard hooks will find its quest state and block your tools — creating a deadlock where you can't approve gates or take any action.
 
 - Use `--dir <worktree_path>` flags for all fellowship CLI commands (e.g., `~/.claude/fellowship/bin/fellowship gate approve --dir <path>`). `state init` is the exception — it has no `--dir` and operates on the current directory, which for Gandalf is the repo root.
 - Use absolute paths when reading files from quest worktrees

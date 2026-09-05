@@ -1,7 +1,7 @@
 ---
 name: palantir
 description: Background monitor during fellowship execution. Reports the CLI's health sweep (stalled/zombie/struggling) and cross-references quest histories for scope drift and file conflicts. Spawned by Gandalf alongside quest teammates. Reports issues to the lead via SendMessage.
-tools: TaskGet, SendMessage, Read, Grep, Glob, Bash
+tools: TaskGet, SendMessage, Bash
 model: haiku
 ---
 

@@ -115,7 +115,7 @@ The content should follow this structure:
 Critical: N | High: N | Medium: N | Low: N
 
 ### Verdict
-[BLOCKED: address Critical/High before Review] or [CLEAR: proceed to Review]
+[BLOCKED: address Critical/High before conventions review] or [CLEAR: proceed to conventions review]
 ```
 
 If there are no findings, send a clear verdict — zero findings is a valid result.
