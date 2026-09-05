@@ -229,6 +229,7 @@ Setup commands:
 Company commands:
   company list            List all companies and their quest/scout counts
   company show <name>     Show detailed company status (phases, progress)
+    --json                Output as JSON
   company approve <name>  Batch-approve all pending gates in a company
 
 Fellowship state:
@@ -262,6 +263,7 @@ Fellowship state:
     --dir DIR             Repo or worktree directory (default: current dir)
   state show              Show fellowship state as JSON
     --dir DIR             Repo or worktree directory (default: current dir)
+    --json                Accepted for consistency (output is always JSON)
   state clean-worktrees   Reset stale gate_pending/held flags in all quests
 
 Errands (persistent work items). Every errand command resolves the quest from

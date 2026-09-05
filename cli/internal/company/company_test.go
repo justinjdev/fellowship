@@ -457,6 +457,63 @@ func TestShow_WithQuestState(t *testing.T) {
 	}
 }
 
+func TestLoadDetail_WithQuestState(t *testing.T) {
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
+		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+			return err
+		}
+		if err := fellowship.AddCompany(conn, "team-alpha", []string{"q1"}, []string{"s1"}); err != nil {
+			return err
+		}
+		if err := state.Upsert(conn, &state.State{
+			QuestName:   "q1",
+			Phase:       "Implement",
+			GatePending: true,
+		}); err != nil {
+			return err
+		}
+
+		detail, err := LoadDetail(conn, "team-alpha")
+		if err != nil {
+			t.Fatalf("LoadDetail() error: %v", err)
+		}
+		if detail.Name != "team-alpha" {
+			t.Errorf("Name = %q, want %q", detail.Name, "team-alpha")
+		}
+		if len(detail.Quests) != 1 || detail.Quests[0].Name != "q1" {
+			t.Fatalf("Quests = %+v, want one entry named q1", detail.Quests)
+		}
+		if detail.Quests[0].Phase != "Implement" || !detail.Quests[0].GatePending {
+			t.Errorf("Quests[0] = %+v, want Phase=Implement GatePending=true", detail.Quests[0])
+		}
+		if len(detail.Scouts) != 1 || detail.Scouts[0] != "s1" {
+			t.Errorf("Scouts = %v, want [s1]", detail.Scouts)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLoadDetail_CompanyNotFound(t *testing.T) {
+	d := db.OpenTest(t)
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
+		if _, err := LoadDetail(conn, "nonexistent"); err == nil {
+			t.Fatal("expected error for nonexistent company")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestApprove_CompanyNotFound(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {

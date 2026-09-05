@@ -290,13 +290,29 @@ func runCompany(d *db.DB, args []string) int {
 
 	case "show":
 		fs := flag.NewFlagSet("company show", flag.ExitOnError)
+		jsonOut := fs.Bool("json", false, "Output as JSON")
 		fs.Parse(rest)
 
 		if fs.NArg() < 1 {
-			fmt.Fprintln(os.Stderr, "usage: fellowship company show <name>")
+			fmt.Fprintln(os.Stderr, "usage: fellowship company show <name> [--json]")
 			return 1
 		}
 		name := fs.Arg(0)
+
+		if *jsonOut {
+			var detail *company.Detail
+			if err := d.WithConn(ctx, func(conn *db.Conn) error {
+				var err error
+				detail, err = company.LoadDetail(conn, name)
+				return err
+			}); err != nil {
+				fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+				return 1
+			}
+			data, _ := json.MarshalIndent(detail, "", "  ")
+			fmt.Println(string(data))
+			return 0
+		}
 
 		if err := d.WithConn(ctx, func(conn *db.Conn) error {
 			return company.Show(conn, name)
