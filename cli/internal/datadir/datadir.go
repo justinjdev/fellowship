@@ -18,6 +18,11 @@ type cfg struct {
 	Autopsy struct {
 		ExpiryDays int `json:"expiryDays"`
 	} `json:"autopsy"`
+	Gates struct {
+		// Pointer so an explicit empty list in the user config can override a
+		// non-empty project list.
+		AutoApprove *[]string `json:"autoApprove"`
+	} `json:"gates"`
 }
 
 var (
@@ -100,6 +105,23 @@ var gitRootFunc = func() (string, error) {
 
 func gitRoot() (string, error) {
 	return gitRootFunc()
+}
+
+// AutoApproveGates returns the merged gates.autoApprove list.
+// Merge order: project (<root>/.fellowship/config.json) → user
+// (~/.claude/fellowship.json). The user config wins when it sets the key at
+// all, including to an empty list. Returns nil when neither config sets it.
+func AutoApproveGates(root string) []string {
+	var gates []string
+	if root != "" {
+		if p := readConfigFile(filepath.Join(root, DefaultName, "config.json")); p.Gates.AutoApprove != nil {
+			gates = *p.Gates.AutoApprove
+		}
+	}
+	if u := readUserConfig(); u.Gates.AutoApprove != nil {
+		gates = *u.Gates.AutoApprove
+	}
+	return gates
 }
 
 // AutopsyExpiryDays reads autopsy.expiryDays from ~/.claude/fellowship.json.

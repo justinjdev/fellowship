@@ -36,6 +36,17 @@ type StatusResult struct {
 	MergedBranches []string        `json:"merged_branches"`
 }
 
+// DefaultBaseBranch is used when the fellowship row records no base branch.
+const DefaultBaseBranch = "main"
+
+// BaseBranchOrDefault returns branch, or DefaultBaseBranch when it is empty.
+func BaseBranchOrDefault(branch string) string {
+	if strings.TrimSpace(branch) == "" {
+		return DefaultBaseBranch
+	}
+	return branch
+}
+
 // ClassifyQuest returns "complete" if Merged, "resumable" if HasCheckpoint, "stale" otherwise.
 func ClassifyQuest(q QuestInfo) string {
 	if q.Merged {
@@ -86,15 +97,16 @@ func Scan(conn *sqlite.Conn, gitRoot string) (*StatusResult, error) {
 	dataDir := datadir.Name()
 
 	// Load fellowship metadata from DB (optional — may not exist).
-	var fellowshipName, fellowshipCreatedAt string
+	var fellowshipName, fellowshipCreatedAt, baseBranch string
 	var hasFellowship bool
 	err := sqlitex.Execute(conn,
-		`SELECT name, created_at FROM fellowship WHERE id = 1`,
+		`SELECT name, created_at, COALESCE(base_branch, '') FROM fellowship WHERE id = 1`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				hasFellowship = true
 				fellowshipName = stmt.ColumnText(0)
 				fellowshipCreatedAt = stmt.ColumnText(1)
+				baseBranch = stmt.ColumnText(2)
 				return nil
 			},
 		})
@@ -133,8 +145,9 @@ func Scan(conn *sqlite.Conn, gitRoot string) (*StatusResult, error) {
 		return nil, fmt.Errorf("status: load quests: %w", err)
 	}
 
-	// Discover merged branches (git operation).
-	mergedOutput, err := gitutil.RunGit(gitRoot, "branch", "--merged", "main")
+	// Discover merged branches (git operation). Compare against the base branch
+	// the fellowship was initialized with, not a hardcoded "main".
+	mergedOutput, err := gitutil.RunGit(gitRoot, "branch", "--merged", BaseBranchOrDefault(baseBranch))
 	if err == nil {
 		result.MergedBranches = ParseMergedBranches(mergedOutput)
 	}

@@ -48,6 +48,8 @@ type ScanOptions struct {
 	Files   []string
 	Modules []string
 	Tags    []string
+	// All returns every non-expired autopsy, ignoring the other filters.
+	All bool
 }
 
 var validTriggers = map[string]bool{
@@ -132,14 +134,19 @@ func Create(conn *sqlite.Conn, input *CreateInput) (int64, error) {
 
 // Scan queries autopsies from the DB, filtering by files/modules/tags and excluding expired entries.
 func Scan(conn *sqlite.Conn, opts ScanOptions, expiryDays int) ([]Autopsy, error) {
-	if len(opts.Files) == 0 && len(opts.Modules) == 0 && len(opts.Tags) == 0 {
-		return nil, fmt.Errorf("at least one of --files, --modules, or --tags is required")
+	if !opts.All && len(opts.Files) == 0 && len(opts.Modules) == 0 && len(opts.Tags) == 0 {
+		return nil, fmt.Errorf("at least one of --files, --modules, --tags, or --all is required")
 	}
 
 	// Build a query that joins across the junction tables.
 	// We select all non-expired autopsies that match any of the filter criteria.
 	var conditions []string
 	var args []any
+
+	// --all matches every non-expired autopsy; other filters become redundant.
+	if opts.All {
+		conditions = append(conditions, "1")
+	}
 
 	if len(opts.Files) > 0 {
 		var fileCondParts []string
