@@ -71,6 +71,8 @@
 			</li>
 			<li>
 				<strong>Archived the <code>gate-state-machine</code> OpenSpec change</strong> — superseded by the Go CLI + SQLite gate enforcement design (v1.5.1&ndash;v2.2.0); moved to <code>openspec/changes/archive/</code> with a SUPERSEDED note.
+			</li>
+			<li>
 				<strong>Documented CLI invocations now work</strong> &mdash; <code>--dir &lt;path&gt;</code> is accepted by <code>gate status|approve|reject</code>, <code>state add-quest|add-scout|add-group|update-quest|show</code>, <code>todo init|list|add|update|show</code>, <code>failures create|scan|infer</code>, and <code>history show</code>, resolving the quest exactly as if the process were running in that directory. <code>gate</code> previously had no flag parsing at all, so every documented <code>--dir</code> call failed.
 			</li>
 			<li>

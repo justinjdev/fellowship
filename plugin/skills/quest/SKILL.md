@@ -57,9 +57,10 @@ The hooks also block Edit/Write outside `.fellowship/` during Research and
 Plan (Bash, Agent, Skill, and reads are always allowed); require `[GATE]` at
 the start of a line to detect a gate; block your tools between a submission
 and the lead's decision; refuse a second gate while one is pending; block
-your tools while the quest is held ("Quest is held — wait; do nothing until
-the lead unholds"); and refuse to mark the task completed unless the phase is
-Review with no gate pending. If you receive a `shutdown_request`, respond
+your tools while the quest is held ("Quest is held — paused by the lead. ...
+Wait for the lead to unhold before taking any action."); and refuse to mark
+the task completed unless the phase is Review with no gate pending. If you
+receive a `shutdown_request`, respond
 immediately via SendMessage with type `shutdown_response`, `approve: true`,
 and the request's `request_id` — do not just acknowledge it in text.
 
