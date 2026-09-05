@@ -55,7 +55,12 @@ func runStateInit(d *db.DB, args []string) int {
 		return 1
 	}
 
-	root := gitRootOrCwd()
+	// Everything `state init` records — the fellowship row's main_repo, the
+	// lead, the settings file the teammates inherit — belongs to the MAIN
+	// worktree, which is where the store lives. Resolving the session's own
+	// top-level instead put them in whatever worktree the command was run
+	// from, where no hook would ever look for them.
+	root := mainRepoRootOrCwd()
 
 	// Check for existing fellowship to warn about overwrite.
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {

@@ -56,6 +56,12 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 	ctx, cancel := context.WithTimeout(context.Background(), hookDBTimeout)
 	defer cancel()
 	gitRoot := gitRootFrom(cwd)
+	// Every path decision keys off the MAIN repo root, the same way the store
+	// path does: the project config and the data directory live there, not in
+	// whichever worktree this session happens to be. mainRoot is "" when git
+	// cannot answer, and datadir.Resolve falls back to the user config.
+	mainRoot := mainRootOrEmpty(cwd)
+	dataDirName := datadir.Resolve(mainRoot)
 
 	// Worktree isolation guard: self-contained, independent of quest state.
 	// Runs in teammate sessions (inherited via project settings), so it must
@@ -139,7 +145,8 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 				return err
 			}
 			result = hooks.GateGuard(s, input, hooks.GuardParams{
-				LeadSessionID: hookLeadSessionID(conn, cwd),
+				LeadSessionID: state.LeadSessionID(conn, mainRoot, dataDirName),
+				DataDirName:   dataDirName,
 			})
 			return nil
 		}); err != nil {
@@ -205,7 +212,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			if err != nil {
 				return err
 			}
-			hooks.FileTrack(conn, s, input, questName)
+			hooks.FileTrack(conn, s, input, questName, dataDirName)
 			return nil
 		}); err != nil {
 			return hookDBExit(err)
@@ -361,17 +368,15 @@ func hookDBExit(err error) int {
 	return 2
 }
 
-// hookLeadSessionID resolves the session id recorded for the fellowship's lead
-// in the repo containing cwd. The store is the authority; the legacy marker
-// file is a one-release fallback consulted only when the store names no lead.
-// Any failure to resolve it reads as "unknown", which every guard treats as
-// "the writer cannot be identified" rather than as a licence to act.
-func hookLeadSessionID(conn *db.Conn, cwd string) string {
-	mainRoot, err := gitutil.MainRepoRoot(cwd)
+// mainRootOrEmpty resolves the main repository root for a directory, or "" when
+// git cannot answer. Callers read "" as "unknown", never as a path: the lead is
+// then unidentifiable and datadir.Resolve falls back to the user config.
+func mainRootOrEmpty(dir string) string {
+	root, err := gitutil.MainRepoRoot(dir)
 	if err != nil {
 		return ""
 	}
-	return state.LeadSessionID(conn, mainRoot, datadir.Resolve(mainRoot))
+	return root
 }
 
 // unregisteredQuestWorktree reports whether cwd sits in a git worktree that is

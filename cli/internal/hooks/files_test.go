@@ -29,7 +29,7 @@ func TestFileTrack_EditToolInput(t *testing.T) {
 
 	var modified bool
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		modified = FileTrack(conn, s, input, "q1")
+		modified = FileTrack(conn, s, input, "q1", ".fellowship")
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -66,7 +66,7 @@ func TestFileTrack_NotebookPath(t *testing.T) {
 
 	var modified bool
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		modified = FileTrack(conn, s, input, "q1")
+		modified = FileTrack(conn, s, input, "q1", ".fellowship")
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -110,7 +110,7 @@ func TestFileTrack_DataDirPathExclusion(t *testing.T) {
 				ToolInput: ToolInput{FilePath: tt.path},
 			}
 			if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-				modified := FileTrack(conn, s, input, "q1")
+				modified := FileTrack(conn, s, input, "q1", ".fellowship")
 				if modified {
 					t.Errorf("FileTrack should return false for data dir path %q", tt.path)
 				}
@@ -132,7 +132,7 @@ func TestFileTrack_EmptyFilePath(t *testing.T) {
 	}
 
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		modified := FileTrack(conn, s, input, "q1")
+		modified := FileTrack(conn, s, input, "q1", ".fellowship")
 		if modified {
 			t.Error("FileTrack should return false when no file path present")
 		}
@@ -152,8 +152,8 @@ func TestFileTrack_Deduplication(t *testing.T) {
 	}
 
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		FileTrack(conn, s, input, "q1")
-		modified := FileTrack(conn, s, input, "q1")
+		FileTrack(conn, s, input, "q1", ".fellowship")
+		modified := FileTrack(conn, s, input, "q1", ".fellowship")
 		if modified {
 			t.Error("FileTrack should return false on duplicate file")
 		}

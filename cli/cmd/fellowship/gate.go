@@ -317,8 +317,14 @@ func runInit(d *db.DB, args []string) int {
 		root = gitRootOrCwd()
 	}
 
-	// Still create .fellowship/ directory marker.
-	dataDir := filepath.Join(root, datadir.Name())
+	// The quest's own working directory for checkpoints and notes. Its name
+	// comes from the MAIN repo's config (that is where the project config
+	// lives), so a worktree and the main tree always agree on it.
+	mainRoot := root
+	if mr, err := gitutil.MainRepoRoot(root); err == nil {
+		mainRoot = mr
+	}
+	dataDir := filepath.Join(root, datadir.Resolve(mainRoot))
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: creating data directory: %v\n", err)
 		return 1
@@ -333,11 +339,7 @@ func runInit(d *db.DB, args []string) int {
 
 	// Auto-approved gates come from the merged fellowship config: the main
 	// repo's .fellowship/config.json, overridden by ~/.claude/fellowship.json.
-	configRoot := root
-	if mainRepo, err := gitutil.MainRepoRoot(root); err == nil {
-		configRoot = mainRepo
-	}
-	autoApprove := datadir.AutoApproveGates(configRoot)
+	autoApprove := datadir.AutoApproveGates(mainRoot)
 	if err := validateAutoApproveGates(autoApprove); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
@@ -352,7 +354,7 @@ func runInit(d *db.DB, args []string) int {
 	// being submitted, and gate-guard waves it through because nothing is
 	// pending. Only the lead may do that. On a row being created for the first
 	// time the flags are ordinary bootstrap and anyone may pass them.
-	callerIsLead, leadKnown := initCallerIsLead(d, root)
+	callerIsLead, leadKnown := initCallerIsLead(d, mainRoot)
 	// Whether --plan-skip's history entry is written: only alongside a phase
 	// move that actually happened.
 	recordSkipped := true
@@ -420,20 +422,16 @@ func runInit(d *db.DB, args []string) int {
 	return 0
 }
 
-// initCallerIsLead answers, for the repo containing dir, whether the session
-// running this command is the fellowship's recorded lead, and whether a lead is
-// recorded at all. It is the same identity check the worktree-guard makes at
-// hook time: the session id `fellowship state init` recorded against the id
-// Claude Code exports to the commands it runs.
+// initCallerIsLead answers, for the repo rooted at mainRoot, whether the
+// session running this command is the fellowship's recorded lead, and whether a
+// lead is recorded at all. It is the same identity check the worktree-guard
+// makes at hook time: the session id `fellowship state init` recorded against
+// the id Claude Code exports to the commands it runs.
 //
 // leadKnown is what separates "you are not the lead" (a teammate — refuse) from
 // "nobody knows who the lead is" (an old fellowship, or a plain shell — refuse
 // the phase move, but do not accuse anyone).
-func initCallerIsLead(d *db.DB, dir string) (callerIsLead, leadKnown bool) {
-	mainRoot := dir
-	if mr, err := gitutil.MainRepoRoot(dir); err == nil {
-		mainRoot = mr
-	}
+func initCallerIsLead(d *db.DB, mainRoot string) (callerIsLead, leadKnown bool) {
 	lead := ""
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		lead = state.LeadSessionID(conn, mainRoot, datadir.Resolve(mainRoot))

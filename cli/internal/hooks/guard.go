@@ -21,6 +21,23 @@ type GuardParams struct {
 	// LeadSessionID is the session id recorded for the fellowship's lead, or
 	// "" when no lead was recorded. Only the lead may move a quest's phase.
 	LeadSessionID string
+	// DataDirName is the data directory name configured for the MAIN repo
+	// (datadir.Resolve(mainRoot)), whose writes the early-phase rule exempts.
+	// It must be resolved from the main root, exactly as the store path is:
+	// the project config lives there, and a hook that resolved it from its own
+	// worktree read ".fellowship" for a fellowship configured otherwise —
+	// exempting the wrong directory and blocking the right one. Empty falls
+	// back to the process-wide lookup.
+	DataDirName string
+}
+
+// dataDirName returns the data directory name to enforce with, falling back to
+// the process-wide lookup when the caller did not resolve one.
+func (p GuardParams) dataDirName() string {
+	if p.DataDirName != "" {
+		return p.DataDirName
+	}
+	return datadir.Name()
 }
 
 // IsLeadSession reports whether a hook payload's session id identifies the
@@ -70,10 +87,11 @@ func GateGuard(s *state.State, input *HookInput, p GuardParams) HookResult {
 
 	filePath := TargetPath(input)
 	if state.IsEarlyPhase(s.Phase) {
-		if filePath != "" && !datadir.IsDataDirPath(filePath) {
+		dataDir := p.dataDirName()
+		if filePath != "" && !datadir.IsPathIn(filePath, dataDir) {
 			return HookResult{
 				Block:   true,
-				Message: fmt.Sprintf("Phase '%s' does not allow file modifications outside %s/. Submit this phase's gate to advance toward Implement.", s.Phase, datadir.Name()),
+				Message: fmt.Sprintf("Phase '%s' does not allow file modifications outside %s/. Submit this phase's gate to advance toward Implement.", s.Phase, dataDir),
 			}
 		}
 	}

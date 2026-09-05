@@ -160,6 +160,18 @@ func gitRootOrCwd() string {
 	return gitRootFrom(cwd)
 }
 
+// mainRepoRootOrCwd returns the MAIN repository root — the worktree that holds
+// the store, the data directory and the project config — falling back to this
+// session's own working-tree root when git cannot answer. Commands that write
+// fellowship-wide state use it so they never land in a linked worktree.
+func mainRepoRootOrCwd() string {
+	cwd, _ := os.Getwd()
+	if root, err := gitutil.MainRepoRoot(cwd); err == nil {
+		return root
+	}
+	return gitRootFrom(cwd)
+}
+
 // listQuestWorktrees returns the canonicalized roots of all git worktrees for
 // the repo containing dir, excluding the main worktree. Used by the lead's
 // cd-guard to recognize quest worktrees created OUTSIDE the main tree (not just

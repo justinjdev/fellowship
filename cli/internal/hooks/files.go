@@ -7,14 +7,16 @@ import (
 	"zombiezen.com/go/sqlite"
 )
 
-// FileTrack records file paths from Edit/Write tool inputs into the quest history.
-// Returns true if the history was modified.
-func FileTrack(conn *sqlite.Conn, s *state.State, input *HookInput, questName string) bool {
-	filePath := input.ToolInput.FilePath
-	if filePath == "" {
-		filePath = input.ToolInput.NotebookPath
+// FileTrack records file paths from Edit/Write tool inputs into the quest
+// history. Returns true if the history was modified. dataDirName is the data
+// directory of the MAIN repo, whose coordination writes are not quest files;
+// empty falls back to the process-wide lookup.
+func FileTrack(conn *sqlite.Conn, s *state.State, input *HookInput, questName, dataDirName string) bool {
+	filePath := TargetPath(input)
+	if dataDirName == "" {
+		dataDirName = datadir.Name()
 	}
-	if filePath == "" || datadir.IsDataDirPath(filePath) {
+	if filePath == "" || datadir.IsPathIn(filePath, dataDirName) {
 		return false
 	}
 
