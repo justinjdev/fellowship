@@ -1,6 +1,6 @@
 ---
 name: retro
-description: Post-fellowship retrospective analysis. Collects gate history, palantir alerts, and quest metrics to surface patterns and interactively recommend configuration improvements.
+description: Invoke after a fellowship disbands, or when the user explicitly asks for a retrospective. Collects gate history, palantir alerts, and quest metrics to surface patterns and interactively recommend configuration improvements.
 ---
 
 # Retro — Post-Fellowship Retrospective
@@ -49,7 +49,7 @@ Everything below reads the fellowship database via the CLI — there are no stat
 Compute the following from collected data:
 
 **Summary metrics:**
-- Total quests completed vs failed (phase != "Complete")
+- Total quests completed vs failed (status != "completed")
 - Total gate events: approved, rejected, submitted
 - Rejection rate by phase (e.g., "Plan: 2/3 rejected, Research: 0/3 rejected")
 
@@ -99,8 +99,8 @@ Recommendations:
 - "quest-ui-login spent longest in Research — task may have been under-specified"
 - "No warden violations — conventions well-established"
 - "2 file conflict alerts — consider splitting shared files across quests"
-- "auth module has 4 autopsies — consider documenting its quirks in CLAUDE.md"
-- "3 recovery autopsies in Implement — plans may need more detail"
+- "auth module has 4 failure records — consider documenting its quirks in CLAUDE.md"
+- "3 recovery failure records in Implement — plans may need more detail"
 
 **Recommendation examples:**
 - Auto-approve phases with 0% rejection rate
