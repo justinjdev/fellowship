@@ -96,15 +96,9 @@ func runStatus(d *db.DB, args []string) int {
 func runEagles(d *db.DB, args []string) int {
 	ctx := context.Background()
 	fs := flag.NewFlagSet("eagles", flag.ExitOnError)
-	dir := fs.String("dir", "", "Git repo root (default: auto-detect)")
 	threshold := fs.Int("threshold", 10, "Gate pending timeout in minutes")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Parse(args)
-
-	root := *dir
-	if root == "" {
-		root = gitRootOrCwd()
-	}
 
 	opts := eagles.DefaultOptions()
 	opts.GateThreshold = time.Duration(*threshold) * time.Minute
@@ -117,11 +111,6 @@ func runEagles(d *db.DB, args []string) int {
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
-	}
-
-	// Write report to data directory.
-	if err := eagles.WriteReport(root, report); err != nil {
-		fmt.Fprintf(os.Stderr, "fellowship: warning: %v\n", err)
 	}
 
 	if *jsonOut {

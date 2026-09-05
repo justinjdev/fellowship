@@ -212,8 +212,7 @@ Agent/lead commands:
     --dir DIR            Worktree directory (default: current directory)
     --json               Output as JSON
   status [--json]        Scan worktrees and show fellowship recovery status
-  eagles                 Scan quest health and write eagles report
-    --dir DIR            Git repo root (default: auto-detect)
+  eagles                 Scan quest health (stalled/zombie/struggling classification)
     --threshold N        Gate pending timeout in minutes (default: 10)
     --json               Output as JSON
 
