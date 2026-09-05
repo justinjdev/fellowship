@@ -263,7 +263,7 @@ func TestIsDataDirPath(t *testing.T) {
 
 func TestAutopsyExpiryDays_Default(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	if got := AutopsyExpiryDays(90); got != 90 {
+	if got := AutopsyExpiryDays("", 90); got != 90 {
 		t.Errorf("AutopsyExpiryDays = %d, want 90", got)
 	}
 }
@@ -274,8 +274,26 @@ func TestAutopsyExpiryDays_Custom(t *testing.T) {
 	os.MkdirAll(filepath.Join(home, ".claude"), 0755)
 	os.WriteFile(filepath.Join(home, ".claude", "fellowship.json"), []byte(`{"autopsy":{"expiryDays":30}}`), 0644)
 
-	if got := AutopsyExpiryDays(90); got != 30 {
+	if got := AutopsyExpiryDays("", 90); got != 30 {
 		t.Errorf("AutopsyExpiryDays = %d, want 30", got)
+	}
+}
+
+func TestAutopsyExpiryDays_ProjectThenUser(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, DefaultName), 0755)
+	os.WriteFile(filepath.Join(root, DefaultName, "config.json"), []byte(`{"autopsy":{"expiryDays":45}}`), 0644)
+
+	if got := AutopsyExpiryDays(root, 90); got != 45 {
+		t.Errorf("project config: AutopsyExpiryDays = %d, want 45", got)
+	}
+
+	os.MkdirAll(filepath.Join(home, ".claude"), 0755)
+	os.WriteFile(filepath.Join(home, ".claude", "fellowship.json"), []byte(`{"autopsy":{"expiryDays":30}}`), 0644)
+	if got := AutopsyExpiryDays(root, 90); got != 30 {
+		t.Errorf("user config should win: AutopsyExpiryDays = %d, want 30", got)
 	}
 }
 

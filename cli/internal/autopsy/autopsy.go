@@ -41,6 +41,9 @@ type CreateInput struct {
 	WhatFailed string   `json:"what_failed"`
 	Resolution string   `json:"resolution,omitempty"`
 	Tags       []string `json:"tags,omitempty"`
+	// ExpiryDays overrides DefaultExpiryDays when > 0. Not read from JSON;
+	// the caller resolves it from config.
+	ExpiryDays int `json:"-"`
 }
 
 // ScanOptions configures which autopsies to match.
@@ -76,7 +79,11 @@ func Create(conn *sqlite.Conn, input *CreateInput) (int64, error) {
 
 	now := time.Now().UTC()
 	timestamp := now.Format(time.RFC3339)
-	expiresAt := now.AddDate(0, 0, DefaultExpiryDays).Format(time.RFC3339)
+	days := input.ExpiryDays
+	if days <= 0 {
+		days = DefaultExpiryDays
+	}
+	expiresAt := now.AddDate(0, 0, days).Format(time.RFC3339)
 
 	err := sqlitex.Execute(conn,
 		`INSERT INTO autopsies (timestamp, quest, task, phase, trigger_type, what_failed, resolution, expires_at)

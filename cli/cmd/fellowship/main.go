@@ -1143,6 +1143,8 @@ func runAutopsyCreate(d *db.DB, args []string) int {
 		return 1
 	}
 
+	input.ExpiryDays = datadir.AutopsyExpiryDays(gitRootOrCwd(), autopsy.DefaultExpiryDays)
+
 	var id int64
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
 		var err error
@@ -1182,7 +1184,7 @@ func runAutopsyScan(d *db.DB, args []string) int {
 		opts.Tags = strings.Split(*tags, ",")
 	}
 
-	expiryDays := datadir.AutopsyExpiryDays(autopsy.DefaultExpiryDays)
+	expiryDays := datadir.AutopsyExpiryDays(gitRootOrCwd(), autopsy.DefaultExpiryDays)
 
 	var matches []autopsy.Autopsy
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {

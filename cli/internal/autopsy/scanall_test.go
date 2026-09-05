@@ -4,8 +4,11 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"zombiezen.com/go/sqlite"
+	"zombiezen.com/go/sqlite/sqlitex"
 )
 
 func TestScan_All(t *testing.T) {
@@ -68,5 +71,30 @@ func TestScan_All(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestCreate_HonorsExpiryDays(t *testing.T) {
+	d := db.OpenTest(t)
+	var expires string
+	err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		id, err := Create(conn, &CreateInput{Quest: "q", Trigger: "recovery", WhatFailed: "x", ExpiryDays: 7})
+		if err != nil {
+			return err
+		}
+		return sqlitex.Execute(conn, `SELECT expires_at FROM autopsies WHERE id = ?`, &sqlitex.ExecOptions{
+			Args:       []any{id},
+			ResultFunc: func(stmt *sqlite.Stmt) error { expires = stmt.ColumnText(0); return nil },
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exp, err := time.Parse(time.RFC3339, expires)
+	if err != nil {
+		t.Fatalf("parse expires_at %q: %v", expires, err)
+	}
+	if until := time.Until(exp); until < 6*24*time.Hour || until > 8*24*time.Hour {
+		t.Errorf("expires_at %s is not about 7 days out", expires)
 	}
 }

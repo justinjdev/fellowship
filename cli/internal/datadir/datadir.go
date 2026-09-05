@@ -124,12 +124,18 @@ func AutoApproveGates(root string) []string {
 	return gates
 }
 
-// AutopsyExpiryDays reads autopsy.expiryDays from ~/.claude/fellowship.json.
-// Returns the provided defaultDays if not configured or on any error.
-func AutopsyExpiryDays(defaultDays int) int {
-	c := readUserConfig()
-	if c.Autopsy.ExpiryDays <= 0 {
-		return defaultDays
+// AutopsyExpiryDays resolves autopsy.expiryDays with the same precedence as the
+// other settings: defaults, then <root>/.fellowship/config.json, then
+// ~/.claude/fellowship.json. Returns defaultDays when nothing sets it.
+func AutopsyExpiryDays(root string, defaultDays int) int {
+	days := defaultDays
+	if root != "" {
+		if p := readConfigFile(filepath.Join(root, DefaultName, "config.json")); p.Autopsy.ExpiryDays > 0 {
+			days = p.Autopsy.ExpiryDays
+		}
 	}
-	return c.Autopsy.ExpiryDays
+	if u := readUserConfig(); u.Autopsy.ExpiryDays > 0 {
+		days = u.Autopsy.ExpiryDays
+	}
+	return days
 }
