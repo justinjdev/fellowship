@@ -289,9 +289,13 @@ func runCompany(d *db.DB, args []string) int {
 		return 0
 
 	case "show":
+		// --json can come before or after the positional name (docs write it
+		// both ways), and Go's flag package only recognizes flags up to the
+		// first positional argument — so pull it out before handing the rest
+		// to a FlagSet.
+		jsonOut, positional := extractJSONFlag(rest)
 		fs := flag.NewFlagSet("company show", flag.ExitOnError)
-		jsonOut := fs.Bool("json", false, "Output as JSON")
-		fs.Parse(rest)
+		fs.Parse(positional)
 
 		if fs.NArg() < 1 {
 			fmt.Fprintln(os.Stderr, "usage: fellowship company show <name> [--json]")
@@ -299,7 +303,7 @@ func runCompany(d *db.DB, args []string) int {
 		}
 		name := fs.Arg(0)
 
-		if *jsonOut {
+		if jsonOut {
 			var detail *company.Detail
 			if err := d.WithConn(ctx, func(conn *db.Conn) error {
 				var err error
@@ -443,6 +447,23 @@ func splitCSV(raw string) []string {
 		}
 	}
 	return out
+}
+
+// extractJSONFlag pulls a "--json" (or "-json") token out of args wherever it
+// appears and reports whether it was present, returning the remaining
+// arguments in order. It exists for subcommands that mix a positional
+// argument with --json, since Go's flag package stops recognizing flags at
+// the first positional one — so "<name> --json" would otherwise silently
+// leave --json unparsed.
+func extractJSONFlag(args []string) (found bool, rest []string) {
+	for _, a := range args {
+		if a == "--json" || a == "-json" {
+			found = true
+			continue
+		}
+		rest = append(rest, a)
+	}
+	return found, rest
 }
 
 // gitRootOrCwd returns the working tree root, falling back to the process

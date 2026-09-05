@@ -343,3 +343,38 @@ func TestResolveHoldQuest(t *testing.T) {
 		})
 	}
 }
+
+// extractJSONFlag exists because Go's flag package stops recognizing flags at
+// the first positional argument, so "company show <name> --json" would
+// otherwise leave --json unparsed and silently fall back to table output.
+func TestExtractJSONFlag(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantJSON bool
+		wantRest []string
+	}{
+		{"flag before positional", []string{"--json", "smoke-co"}, true, []string{"smoke-co"}},
+		{"flag after positional", []string{"smoke-co", "--json"}, true, []string{"smoke-co"}},
+		{"no flag", []string{"smoke-co"}, false, []string{"smoke-co"}},
+		{"only flag", []string{"--json"}, true, nil},
+		{"empty", nil, false, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotJSON, gotRest := extractJSONFlag(tt.args)
+			if gotJSON != tt.wantJSON {
+				t.Errorf("extractJSONFlag(%v) json = %v, want %v", tt.args, gotJSON, tt.wantJSON)
+			}
+			if len(gotRest) != len(tt.wantRest) {
+				t.Fatalf("extractJSONFlag(%v) rest = %v, want %v", tt.args, gotRest, tt.wantRest)
+			}
+			for i := range gotRest {
+				if gotRest[i] != tt.wantRest[i] {
+					t.Errorf("extractJSONFlag(%v) rest = %v, want %v", tt.args, gotRest, tt.wantRest)
+				}
+			}
+		})
+	}
+}
