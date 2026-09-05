@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/fellowship"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -167,7 +167,7 @@ func initGitRepo(t *testing.T) string {
 func registerQuest(t *testing.T, d *db.DB, name, worktree string) {
 	t.Helper()
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		return dashboard.AddQuest(conn, dashboard.QuestEntry{
+		return fellowship.AddQuest(conn, fellowship.QuestEntry{
 			Name:            name,
 			TaskDescription: "test quest",
 			Worktree:        worktree,
