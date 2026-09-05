@@ -48,9 +48,9 @@
 				</div>
 				<p class="agent-desc">
 					A thin reporter over the CLI's health sweep during fellowship execution —
-					runs <code>fellowship eagles</code> and reports its stalled, zombie, and
+					runs <code>fellowship health</code> and reports its stalled, zombie, and
 					struggling classification rather than recomputing it. Reads each quest's
-					tome for scope drift (files touched outside the described scope) and file
+					history for scope drift (files touched outside the described scope) and file
 					conflicts between parallel quests. Reports issues to Gandalf for intervention.
 				</p>
 				<div class="agent-note config-note">

@@ -22,7 +22,7 @@
 			number: 3,
 			name: 'Implement',
 			description:
-				'TDD red-green-refactor against an errand checklist. Writes the failing test, implements, verifies, commits. If stuck: commits partial work, records an autopsy, and returns to Plan.',
+				'TDD red-green-refactor against a todo checklist. Writes the failing test, implements, verifies, commits. If stuck: commits partial work, records a failure, and returns to Plan.',
 			skill: 'test-driven-development',
 			gate: true
 		},
