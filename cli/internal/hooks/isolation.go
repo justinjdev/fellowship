@@ -28,7 +28,9 @@ type IsolationParams struct {
 	DataDirName string
 }
 
-// IsolationGuard is the fail-closed backstop for worktree isolation. During an
+// IsolationGuard is the fail-OPEN backstop for worktree isolation: it blocks
+// only on a positive mis-placement detection, and every uncertainty (no
+// fellowship active, unresolved paths, non-mutating tool) allows. During an
 // active fellowship, a quest teammate must operate inside its own git worktree.
 // If a session whose top-level IS the main worktree root tries to Edit/Write a
 // source file there, the teammate was mis-placed (isolation was skipped) and the

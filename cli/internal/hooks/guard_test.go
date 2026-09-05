@@ -123,9 +123,8 @@ func TestGateGuard_HeldTakesPriorityOverGatePending(t *testing.T) {
 func TestGateGuard_AllowsAllowlistedFellowshipCommandsWhenPending(t *testing.T) {
 	s := &state.State{Phase: "Research", GatePending: true}
 	for _, cmd := range []string{
-		"fellowship gate reject",
-		"fellowship gate approve",
-		"fellowship init",
+		"fellowship gate status",
+		"fellowship gate status --dir /tmp/worktree",
 		"fellowship autopsy create --dir /tmp/repo",
 		"fellowship autopsy scan --dir /tmp/repo --modules auth",
 		"fellowship autopsy infer --dir /tmp/worktree",
@@ -135,13 +134,36 @@ func TestGateGuard_AllowsAllowlistedFellowshipCommandsWhenPending(t *testing.T) 
 		"fellowship tome show",
 		"fellowship herald --json",
 		"fellowship version",
-		"~/.claude/fellowship/bin/fellowship gate reject",
+		"~/.claude/fellowship/bin/fellowship gate status",
 		"/usr/local/bin/fellowship eagles",
 	} {
 		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
 		result := GateGuard(s, input)
 		if result.Block {
 			t.Errorf("allowlisted fellowship command should be allowed through gate_pending, cmd=%q got: %s", cmd, result.Message)
+		}
+	}
+}
+
+// A teammate waiting on a gate must not be able to clear its own wait. Both
+// `fellowship gate approve|reject` (self-approval) and `fellowship init`
+// (resetting the state that holds the pending flag) were once allowlisted,
+// which made the gate advisory rather than enforced.
+func TestGateGuard_BlocksSelfApprovalWhenPending(t *testing.T) {
+	s := &state.State{Phase: "Research", GatePending: true}
+	for _, cmd := range []string{
+		"fellowship gate approve",
+		"fellowship gate reject",
+		"fellowship gate approve --dir /tmp/worktree",
+		"fellowship gate",
+		"fellowship init",
+		"fellowship init --phase Implement",
+		"~/.claude/fellowship/bin/fellowship gate approve",
+		"/usr/local/bin/fellowship init",
+	} {
+		input := &HookInput{ToolInput: ToolInput{Command: cmd}}
+		if result := GateGuard(s, input); !result.Block {
+			t.Errorf("pending teammate must not be able to run %q", cmd)
 		}
 	}
 }

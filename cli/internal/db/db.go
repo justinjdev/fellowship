@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -21,26 +22,76 @@ type DB struct {
 	path string
 }
 
-// Open resolves the main repo from fromDir (via git rev-parse --git-common-dir),
-// locates <main-repo>/.fellowship/fellowship.db, and opens a connection pool.
-func Open(fromDir string) (*DB, error) {
+// ErrNoStore reports that the repo containing the starting directory has no
+// fellowship store. It is not a failure: an ordinary repo that has never run
+// `fellowship init` has no store, and hooks must allow in that case rather
+// than block (and must not bring a store into existence by looking).
+var ErrNoStore = errors.New("db: no fellowship store")
+
+// StorePath returns the fellowship database path for the repo containing
+// fromDir, without touching the filesystem.
+func StorePath(fromDir string) (string, error) {
 	mainRepo, err := resolveMainRepo(fromDir)
 	if err != nil {
-		return nil, fmt.Errorf("db: resolve main repo: %w", err)
+		return "", fmt.Errorf("db: resolve main repo: %w", err)
 	}
-	dbPath := filepath.Join(mainRepo, ".fellowship", "fellowship.db")
+	return filepath.Join(mainRepo, ".fellowship", "fellowship.db"), nil
+}
+
+// Open resolves the main repo from fromDir (via git rev-parse --git-common-dir),
+// locates <main-repo>/.fellowship/fellowship.db, and opens a connection pool,
+// CREATING the store if it does not exist. Only store-creating commands
+// (`fellowship init`, `fellowship state init`, `fellowship migrate`) may call
+// this; everything else — hooks above all — must use OpenExisting so that
+// merely running the binary in an unrelated repo leaves no .fellowship behind.
+func Open(fromDir string) (*DB, error) {
+	dbPath, err := StorePath(fromDir)
+	if err != nil {
+		return nil, err
+	}
 	return OpenPath(dbPath)
 }
 
-// OpenPath opens a DB at the given file path.
+// OpenExisting opens the store for the repo containing fromDir and never
+// creates one. It returns an error wrapping ErrNoStore when no database file
+// exists, so callers can tell "no fellowship here" (allow) apart from "the
+// store is present but unreadable" (fail closed).
+func OpenExisting(fromDir string) (*DB, error) {
+	dbPath, err := StorePath(fromDir)
+	if err != nil {
+		return nil, err
+	}
+	return openExistingPath(dbPath)
+}
+
+// openExistingPath is OpenExisting once the store path is known.
+func openExistingPath(dbPath string) (*DB, error) {
+	if _, err := os.Stat(dbPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("%w at %s", ErrNoStore, dbPath)
+		}
+		return nil, fmt.Errorf("db: stat %s: %w", dbPath, err)
+	}
+	return openPath(dbPath, false)
+}
+
+// OpenPath opens a DB at the given file path, creating it if needed.
 func OpenPath(dbPath string) (*DB, error) {
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		return nil, fmt.Errorf("db: mkdir %s: %w", filepath.Dir(dbPath), err)
+	return openPath(dbPath, true)
+}
+
+func openPath(dbPath string, create bool) (*DB, error) {
+	flags := sqlite.OpenReadWrite | sqlite.OpenWAL
+	if create {
+		if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+			return nil, fmt.Errorf("db: mkdir %s: %w", filepath.Dir(dbPath), err)
+		}
+		flags |= sqlite.OpenCreate
 	}
 
 	pool, err := sqlitex.NewPool(dbPath, sqlitex.PoolOptions{
 		PoolSize: 1,
-		Flags:    sqlite.OpenReadWrite | sqlite.OpenCreate | sqlite.OpenWAL,
+		Flags:    flags,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("db: open %s: %w", dbPath, err)
@@ -48,15 +99,14 @@ func OpenPath(dbPath string) (*DB, error) {
 
 	d := &DB{pool: pool, path: dbPath}
 
-	// Enable foreign keys and apply schema.
+	// Enable foreign keys and bring the schema up to date. ensureSchema is a
+	// no-op read when the store is already current, which keeps the common
+	// case (a hook opening an initialized store) free of writes.
 	if err := d.WithConn(context.Background(), func(conn *Conn) error {
 		if err := sqlitex.ExecuteTransient(conn, "PRAGMA foreign_keys = ON", nil); err != nil {
 			return err
 		}
-		if err := sqlitex.ExecuteTransient(conn, "PRAGMA journal_mode = WAL", nil); err != nil {
-			return err
-		}
-		return applySchema(conn)
+		return ensureSchema(conn)
 	}); err != nil {
 		pool.Close()
 		return nil, err

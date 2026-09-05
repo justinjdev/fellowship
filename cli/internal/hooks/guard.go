@@ -135,8 +135,16 @@ func isLegacyWorktreePath(path string) bool {
 }
 
 // isFellowshipEscapeCommand returns true for fellowship CLI commands that are
-// safe to execute even when gate_pending is true. These are commands that
-// operate on state/metadata files, not source code.
+// safe to execute even when gate_pending is true.
+//
+// A pending gate means "this teammate is waiting on the lead". The allowlist
+// therefore must not contain anything that can clear that wait: `fellowship
+// gate approve|reject` would let the blocked teammate approve its own gate,
+// and `fellowship init` would reset the quest state that carries the pending
+// flag. Both were previously allowed, which made the gate advisory rather than
+// enforced. What remains is either read-only or side-channel bookkeeping
+// (autopsy records, the bulletin board, errand status) that cannot advance the
+// quest past the gate.
 //
 // Shell metacharacters are rejected to prevent bypass abuse (e.g., chaining
 // a destructive command after fellowship via "&&" or ";").
@@ -158,8 +166,6 @@ func isFellowshipEscapeCommand(command string) bool {
 	}
 	// Allowlist of subcommands safe to run during gate_pending.
 	allowed := map[string]bool{
-		"gate":     true, // approve/reject gates
-		"init":     true, // reset state file
 		"autopsy":  true, // write/read failure records
 		"bulletin": true, // read/write shared discovery board
 		"errand":   true, // read/update errand status
@@ -169,5 +175,9 @@ func isFellowshipEscapeCommand(command string) bool {
 		"herald":   true, // read-only event log
 		"version":  true, // print version
 	}
-	return allowed[fields[1]]
+	if allowed[fields[1]] {
+		return true
+	}
+	// `gate` is not allowlisted wholesale — only its read-only reporting form.
+	return fields[1] == "gate" && len(fields) > 2 && fields[2] == "status"
 }

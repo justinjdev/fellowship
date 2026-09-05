@@ -30,7 +30,13 @@ Hooks are subcommands of the CLI, not standalone scripts. `plugin/hooks/hooks.js
 
 - Input: the hook payload is JSON on stdin, parsed by `hooks.ParseInput`.
 - Output: **exit 0 allows** the tool call; **exit 2 blocks** it (the message on stderr is surfaced to Claude). Some hooks emit a JSON decision on stdout instead (e.g. gate-submit).
-- Posture: gate hooks fail *closed* (block on internal error) so enforcement can't be silently skipped. The `worktree-guard` backstop is the exception — it is defense-in-depth behind lead-provisioned isolation, so it fails *open* (allow) on any resolution failure and blocks only on a positive main-tree mis-placement detection.
+- Posture: gate hooks (`gate-guard`, `gate-submit`, `gate-prereq`, `completion-guard`, `metadata-track`, `file-track`) fail *closed* so enforcement can't be silently skipped, but only where blocking is actually the safe answer. Precisely:
+  - **No store** — the repo has no `.fellowship/fellowship.db`. This is an ordinary repo with no fellowship, so hooks **allow** (exit 0). The binary must not create a store just by being run: only `fellowship init` and `fellowship state init` may bring one into existence.
+  - **Broken store** — the file exists but cannot be opened or read. Enforcement state is unknown, so gate hooks **block** (exit 2).
+  - **Missing quest row** — the store is fine and this worktree is registered as a quest, but no `quest_state` row exists yet. This is the bootstrap window before the teammate runs `fellowship init`; blocking it would deadlock the quest before it starts, so hooks **allow** (exit 0) and log one line to stderr.
+  - **Unregistered worktree** — the session is in a git worktree that is not the main repo root while a fellowship is initialized, and no quest matches it. Enforcement cannot be evaluated there, so gate hooks **block** (exit 2) instead of mistaking it for the lead session.
+  - A pending gate is cleared only by the lead. `fellowship gate approve|reject` and `fellowship init` are *not* on the escape allowlist a blocked teammate may run; only read-only reporting (`status`, `gate status`, `tome`, `herald`, `eagles`) and side-channel bookkeeping (`autopsy`, `bulletin`, `errand`) are.
+- The `worktree-guard` backstop is the exception to all of the above — it is defense-in-depth behind lead-provisioned isolation, so it fails *open* (allow) on any resolution failure, including a broken store, and blocks only on a positive main-tree mis-placement detection.
 
 Current hooks: `gate-guard`, `gate-submit`, `gate-prereq`, `completion-guard`, `metadata-track`, `file-track`, `worktree-guard`. Run `fellowship` with no args for the full command reference.
 

@@ -6,12 +6,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 
@@ -52,16 +54,21 @@ func main() {
 		return
 	}
 
-	// Open DB for all other commands.
-	cwd, _ := os.Getwd()
-	d, err := db.Open(cwd)
-	if err != nil {
-		if jsonFilesExist(cwd) {
-			fmt.Fprintln(os.Stderr, `fellowship: Run "fellowship migrate" to upgrade to the new storage format.`)
-			os.Exit(1)
-		}
-		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+	// Reject unknown commands before going anywhere near the store. Opening the
+	// store used to be the first thing every invocation did, so a typo like
+	// `fellowship bogus` created .fellowship/fellowship.db in whatever repo the
+	// user happened to be standing in.
+	if !isKnownCommand(os.Args[1]) {
+		usage()
 		os.Exit(1)
+	}
+
+	// Open the store for all other commands. Only store-creating commands may
+	// bring one into existence; everything else opens what is already there.
+	cwd, _ := os.Getwd()
+	d, err := openStore(cwd, os.Args[1:])
+	if err != nil {
+		os.Exit(storeOpenExit(cwd, os.Args[1:], err))
 	}
 	defer d.Close()
 
@@ -124,6 +131,97 @@ func main() {
 		usage()
 		os.Exit(1)
 	}
+}
+
+// knownCommands is every top-level subcommand the CLI dispatches, including the
+// two (version, migrate) handled before the store is opened.
+var knownCommands = map[string]bool{
+	"version": true, "migrate": true, "hook": true, "gate": true, "init": true,
+	"status": true, "company": true, "tome": true, "eagles": true,
+	"bulletin": true, "errand": true, "state": true, "hold": true,
+	"unhold": true, "autopsy": true, "herald": true, "dashboard": true,
+}
+
+func isKnownCommand(name string) bool { return knownCommands[name] }
+
+// gateHooks are the hooks that carry enforcement. They fail CLOSED: if the
+// store exists but cannot be read, the safe answer is to block, because the
+// alternative is silently skipping gate, hold, and phase checks. worktree-guard
+// is deliberately absent — it is defense-in-depth behind lead-provisioned
+// isolation and fails open.
+var gateHooks = map[string]bool{
+	"gate-guard":       true,
+	"gate-submit":      true,
+	"gate-prereq":      true,
+	"completion-guard": true,
+	"metadata-track":   true,
+	"file-track":       true,
+}
+
+func isGateHook(name string) bool { return gateHooks[name] }
+
+// storeCreatingCommand reports whether args name a command allowed to create
+// the fellowship store. Only explicit initialization qualifies; a hook that
+// created the store it is about to read would turn every unrelated repo into a
+// fellowship and would report "no quest here" for a store it just made.
+func storeCreatingCommand(args []string) bool {
+	switch args[0] {
+	case "init":
+		return true
+	case "state":
+		return len(args) > 1 && args[1] == "init"
+	}
+	return false
+}
+
+func openStore(cwd string, args []string) (*db.DB, error) {
+	if storeCreatingCommand(args) {
+		return db.Open(cwd)
+	}
+	return db.OpenExisting(cwd)
+}
+
+// storeOpenExit turns a store-open failure into an exit code according to the
+// enforcement posture:
+//
+//   - No store at all — this is an ordinary repo with no fellowship, so hooks
+//     allow (exit 0) and there is nothing to enforce. Other commands report the
+//     missing store.
+//   - Store present but unopenable (corrupt, unreadable, locked out) — gate
+//     hooks block (exit 2) because enforcement state is unknown; worktree-guard
+//     still fails open.
+func storeOpenExit(cwd string, args []string, err error) int {
+	isHook := args[0] == "hook"
+	hookName := ""
+	if isHook && len(args) > 1 {
+		hookName = args[1]
+	}
+
+	if errors.Is(err, db.ErrNoStore) {
+		if isHook {
+			return 0 // no fellowship here — nothing to enforce
+		}
+		if jsonFilesExist(cwd) {
+			fmt.Fprintln(os.Stderr, `fellowship: Run "fellowship migrate" to upgrade to the new storage format.`)
+			return 1
+		}
+		fmt.Fprintln(os.Stderr, `fellowship: no fellowship state in this repo — run "fellowship init" first.`)
+		return 1
+	}
+
+	if isGateHook(hookName) {
+		fmt.Fprintf(os.Stderr, "fellowship: cannot read fellowship state (%v) — blocking for safety.\n", err)
+		return 2
+	}
+	if isHook {
+		return 0 // worktree-guard and unknown hooks fail open
+	}
+	if jsonFilesExist(cwd) {
+		fmt.Fprintln(os.Stderr, `fellowship: Run "fellowship migrate" to upgrade to the new storage format.`)
+		return 1
+	}
+	fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+	return 1
 }
 
 func usage() {
@@ -248,16 +346,29 @@ Other:
   version                Print version`)
 }
 
+// hookDBTimeout bounds every hook's database work. Claude Code kills a hook at
+// 5s with no exit code of its own; deadlining well inside that turns lock
+// contention into a decision we control (fail closed for gate hooks) instead of
+// a killed process.
+const hookDBTimeout = 2 * time.Second
+
 func runHook(d *db.DB, name string) int {
-	ctx := context.Background()
 	cwd, _ := os.Getwd()
+	return runHookWith(name, os.Stdin, cwd, d)
+}
+
+// runHookWith is runHook's testable core: it takes the hook name, the payload
+// reader, the working directory, and an open store, and returns the exit code.
+func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
+	ctx, cancel := context.WithTimeout(context.Background(), hookDBTimeout)
+	defer cancel()
 	gitRoot := gitRootFrom(cwd)
 
 	// Worktree isolation guard: self-contained, independent of quest state.
 	// Runs in teammate sessions (inherited via project settings), so it must
 	// not depend on quest lookup keyed to this worktree.
 	if name == "worktree-guard" {
-		return runWorktreeGuard(ctx, d, cwd)
+		return runWorktreeGuard(ctx, d, cwd, stdin)
 	}
 
 	// Find quest name for this worktree.
@@ -270,15 +381,24 @@ func runHook(d *db.DB, name string) int {
 	}); err != nil {
 		lookupErr = err
 	}
-	// Lead session (no quest found): only the CWD guard applies.
 	if questName == "" {
 		if lookupErr != nil {
 			// DB error — fail closed for safety.
 			fmt.Fprintf(os.Stderr, "fellowship: quest lookup failed: %v\n", lookupErr)
 			return 2
 		}
+		// "No quest for this worktree" means one of two very different things.
+		// In the main repo root it is the lead session, and only the CWD guard
+		// applies. In some OTHER worktree of a repo running a fellowship it
+		// means a teammate is somewhere no quest is registered — enforcement
+		// cannot be evaluated there, so gate hooks block instead of waving it
+		// through as if it were the lead.
+		if isGateHook(name) && unregisteredQuestWorktree(ctx, d, cwd, gitRoot) {
+			fmt.Fprintf(os.Stderr, "fellowship: worktree %s has no registered quest while a fellowship is running — blocking for safety. The lead can register it with \"fellowship state update-quest --name <quest> --worktree %s\".\n", gitRoot, gitRoot)
+			return 2
+		}
 		if name == "gate-guard" {
-			input, err := hooks.ParseInput(os.Stdin)
+			input, err := hooks.ParseInput(stdin)
 			if err != nil {
 				input = &hooks.HookInput{}
 			}
@@ -296,7 +416,7 @@ func runHook(d *db.DB, name string) int {
 		return 0
 	}
 
-	input, err := hooks.ParseInput(os.Stdin)
+	input, err := hooks.ParseInput(stdin)
 	if err != nil {
 		switch name {
 		case "gate-guard":
@@ -307,7 +427,10 @@ func runHook(d *db.DB, name string) int {
 		}
 	}
 
-	// Read-only hooks: use WithConn.
+	// Dispatch. Hooks that only decide take a plain connection; hooks that
+	// record state do their read and write in one transaction. Every branch
+	// funnels database errors through hookDBExit so the bootstrap window (no
+	// quest row yet) is allowed and everything else fails closed.
 	switch name {
 	case "gate-guard":
 		var result hooks.HookResult
@@ -319,8 +442,7 @@ func runHook(d *db.DB, name string) int {
 			result = hooks.GateGuard(s, input)
 			return nil
 		}); err != nil {
-			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-			return 2
+			return hookDBExit(err)
 		}
 		if result.Block {
 			fmt.Fprintln(os.Stderr, result.Message)
@@ -350,8 +472,7 @@ func runHook(d *db.DB, name string) int {
 			}
 			return nil
 		}); err != nil {
-			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-			return 2
+			return hookDBExit(err)
 		}
 		if result.Block {
 			fmt.Fprintln(os.Stderr, result.Message)
@@ -374,8 +495,7 @@ func runHook(d *db.DB, name string) int {
 			}
 			return nil
 		}); err != nil {
-			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-			return 2
+			return hookDBExit(err)
 		}
 		if result.Block {
 			fmt.Fprintln(os.Stderr, result.Message)
@@ -392,8 +512,7 @@ func runHook(d *db.DB, name string) int {
 			hooks.FileTrack(conn, s, input, questName)
 			return nil
 		}); err != nil {
-			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-			return 2
+			return hookDBExit(err)
 		}
 		return 0
 
@@ -428,8 +547,7 @@ func runHook(d *db.DB, name string) int {
 			}
 			return nil
 		}); err != nil {
-			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-			return 2
+			return hookDBExit(err)
 		}
 		if result.Block {
 			out := hooks.NewDenyOutput(result.Message)
@@ -471,8 +589,7 @@ func runHook(d *db.DB, name string) int {
 			}
 			return nil
 		}); err != nil {
-			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-			return 2
+			return hookDBExit(err)
 		}
 		return 0
 
@@ -482,13 +599,61 @@ func runHook(d *db.DB, name string) int {
 	}
 }
 
-// runWorktreeGuard is the fail-closed backstop that keeps quest teammates from
+// bootstrapNotice makes the bootstrap allow visible exactly once per process,
+// so a teammate can see why the hook let a call through without every
+// subsequent tool call repeating it.
+var bootstrapNotice sync.Once
+
+// hookDBExit maps a hook's database error to an exit code.
+//
+// state.ErrNotFound is the bootstrap window: the lead has registered this
+// worktree as a quest, but the teammate has not run `fellowship init` yet, so
+// no quest_state row exists. Blocking there is a deadlock — the teammate cannot
+// run the very command that would create the row. So a missing quest row
+// allows. Every other error is a real failure and fails closed.
+func hookDBExit(err error) int {
+	if errors.Is(err, state.ErrNotFound) {
+		bootstrapNotice.Do(func() {
+			fmt.Fprintln(os.Stderr, `fellowship: no quest state for this worktree yet — allowing so the quest can be started with "fellowship init".`)
+		})
+		return 0
+	}
+	fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+	return 2
+}
+
+// unregisteredQuestWorktree reports whether cwd sits in a git worktree that is
+// NOT the main repo root while a fellowship is initialized in that repo's
+// store. That combination means a teammate is running somewhere no quest was
+// ever registered (a stale or mistyped path, a tree created outside the
+// fellowship), so gate hooks must not treat it as a lead session. Anything it
+// cannot determine reads as false: the lead session in the main tree must
+// never be blocked by this.
+func unregisteredQuestWorktree(ctx context.Context, d *db.DB, cwd, gitRoot string) bool {
+	mainRoot, err := resolveMainRepoFromCwd(cwd)
+	if err != nil {
+		return false
+	}
+	if hooks.CanonicalPath(mainRoot) == hooks.CanonicalPath(gitRoot) {
+		return false // the main tree — this really is the lead session
+	}
+	initialized := false
+	d.WithConn(ctx, func(conn *db.Conn) error {
+		if _, err := dashboard.LoadFellowship(conn); err == nil {
+			initialized = true
+		}
+		return nil
+	})
+	return initialized
+}
+
+// runWorktreeGuard is the fail-OPEN backstop that keeps quest teammates from
 // writing source into the MAIN working tree during an active fellowship. It is
 // defense-in-depth behind lead-created `isolation: "worktree"`, so any internal
 // resolution failure allows the action (exit 0) rather than hard-blocking
 // unrelated work. Only a positive mis-placement detection blocks (exit 2).
-func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string) int {
-	input, err := hooks.ParseInput(os.Stdin)
+func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader) int {
+	input, err := hooks.ParseInput(stdin)
 	if err != nil {
 		return 0 // malformed input — allow (defense-in-depth, not primary gate)
 	}

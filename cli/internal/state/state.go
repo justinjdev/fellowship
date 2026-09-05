@@ -153,15 +153,33 @@ func Delete(conn *sqlite.Conn, questName string) error {
 		&sqlitex.ExecOptions{Named: map[string]any{":name": questName}})
 }
 
-// FindQuest returns the quest name for a given worktree root path.
+// FindQuest returns the quest name registered for a given worktree root path.
+//
+// Matching is done on canonicalized paths. Quest rows are canonicalized on
+// write, but a row registered by an older version (or by hand) may hold a
+// relative or symlinked path, while hooks always look up a resolved git
+// top-level — a raw string comparison silently misses those and the quest
+// reads as "no quest here", which is exactly the state that used to be
+// mistaken for a lead session. The raw stored value is still accepted as a
+// fallback so a path that cannot be resolved at all still matches itself.
 func FindQuest(conn *sqlite.Conn, worktreeRoot string) (string, error) {
+	if worktreeRoot == "" {
+		return "", nil
+	}
+	target := CanonicalWorktree(worktreeRoot)
 	var name string
 	err := sqlitex.Execute(conn,
-		`SELECT name FROM fellowship_quests WHERE worktree = :wt`,
+		`SELECT name, worktree FROM fellowship_quests
+		 WHERE worktree IS NOT NULL AND worktree != ''`,
 		&sqlitex.ExecOptions{
-			Named: map[string]any{":wt": worktreeRoot},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
-				name = stmt.ColumnText(0)
+				if name != "" {
+					return nil
+				}
+				stored := stmt.ColumnText(1)
+				if stored == worktreeRoot || CanonicalWorktree(stored) == target {
+					name = stmt.ColumnText(0)
+				}
 				return nil
 			},
 		})
