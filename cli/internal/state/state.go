@@ -174,12 +174,13 @@ func Upsert(conn *sqlite.Conn, s *State) error {
 // mistaken for a lead session. The raw stored value is still accepted as a
 // fallback so a path that cannot be resolved at all still matches itself.
 //
-// Rows are scanned newest first so the answer is deterministic when two quests
-// claim the same worktree — the most recently registered one wins, which is
-// what re-registering a path means.
-//
-// fellowship_quests.worktree carries a UNIQUE index (schema v2); ORDER BY rowid
-// keeps the lookup deterministic on stores that predate the migration.
+// fellowship_quests.worktree carries a UNIQUE index (schema v2): at most one
+// row can hold a given worktree, so re-registering a worktree under a
+// different quest (fellowship.upsertQuest) clears it from whichever row held
+// it before inserting or updating. Rows are still scanned newest first —
+// ORDER BY rowid DESC — purely as a defensive tiebreaker for a store that
+// predates the migration and may still have duplicate worktree values; on a
+// migrated store there is only ever one match.
 func FindQuest(conn *sqlite.Conn, worktreeRoot string) (string, error) {
 	if worktreeRoot == "" {
 		return "", nil
