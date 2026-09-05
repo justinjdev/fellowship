@@ -450,13 +450,11 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 		return 0
 	}
 
-	filePath := input.ToolInput.FilePath
-	if filePath == "" {
-		filePath = input.ToolInput.NotebookPath
-	}
+	filePath := hooks.TargetPath(input)
 	if filePath != "" && !filepath.IsAbs(filePath) {
 		filePath = filepath.Join(cwd, filePath)
 	}
+	filePath = hooks.CanonicalPath(filePath)
 
 	// Canonicalize all paths so symlinked repo roots (e.g. macOS /tmp ->
 	// /private/tmp) don't defeat the main-root comparison. `git --show-toplevel`
@@ -465,8 +463,9 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 		FellowshipActive:         active,
 		MainRoot:                 hooks.CanonicalPath(mainRoot),
 		SessionTopLevel:          sessionTop,
+		TargetTopLevel:           targetTopLevel(filePath),
 		ToolName:                 input.ToolName,
-		FilePath:                 hooks.CanonicalPath(filePath),
+		FilePath:                 filePath,
 		DataDirName:              dataDirName,
 		SessionID:                input.SessionID,
 		LeadSessionID:            leadSessionID,
@@ -477,6 +476,44 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 		return 2
 	}
 	return 0
+}
+
+// targetTopLevel resolves the git working tree a target file belongs to, from
+// the file's own path rather than the session's working directory — that is
+// what makes a write into the main tree visible when the session sits in a
+// worktree. Returns "" when git cannot answer, which the guard reads as
+// "unknown" and falls back to the session's own top-level.
+//
+// The target may not exist yet (a Write creating a file, in a directory that
+// does not exist either), so the lookup runs in its nearest existing ancestor.
+func targetTopLevel(path string) string {
+	if path == "" {
+		return ""
+	}
+	dir := nearestExistingDir(filepath.Dir(path))
+	if dir == "" {
+		return ""
+	}
+	root, err := gitutil.TopLevel(dir)
+	if err != nil {
+		return ""
+	}
+	return hooks.CanonicalPath(root)
+}
+
+// nearestExistingDir walks up from dir to the first directory that exists, or
+// "" if it reaches the filesystem root without finding one.
+func nearestExistingDir(dir string) string {
+	for {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
 }
 
 // fellowshipRunning reports whether a fellowship is actually in progress, as
