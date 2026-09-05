@@ -118,27 +118,29 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 }
 ```
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `dataDir` | `".fellowship"` | Directory name for fellowship working files (state, checkpoints, todos, history). Created inside each worktree and the main repo root. |
-| `branch.pattern` | `null` | Branch name template with placeholders: `{slug}` (task description), `{ticket}` (extracted from description), `{author}` (from config). When `null`, defaults to `"fellowship/{slug}"`. |
-| `branch.author` | `null` | Static value for the `{author}` placeholder. If not set and pattern uses `{author}`, you'll be prompted. |
-| `branch.ticketPattern` | `"[A-Z]+-\\d+"` | Regex to extract ticket IDs from quest descriptions. Default matches Jira-style IDs (e.g., `PROJ-123`). |
-| `worktree.enabled` | `true` | Whether quests create isolated worktrees. Set to `false` to work on the current branch. |
-| `worktree.directory` | `null` | Parent directory for worktrees. `null` uses Claude Code's default (`.claude/worktrees/`). |
-| `gates.autoApprove` | `[]` | Gate names to auto-approve: `"Research"`, `"Plan"`, `"Implement"` (the phase being left — `"Research"` auto-approves Research→Plan). `"Review"` is not a valid entry: it is the last phase and no gate leaves it. `fellowship init` reads the merged value when it creates a quest's state and fails with a clear error on an unknown phase name. Gates not listed still surface to you for approval. |
-| `pr.draft` | `false` | Create PRs as drafts. |
-| `pr.template` | `null` | PR body template string. Supports `{task}`, `{summary}`, and `{changes}` placeholders. |
-| `palantir.enabled` | `true` | Whether to spawn a palantir monitoring agent during fellowships. |
-| `palantir.minQuests` | `2` | Minimum active quests before palantir is spawned. |
-| `issues.autoClose` | `true` | When true, `/missive` includes `Closes #N` in PR keywords so issues close on merge. |
-| `failures.expiryDays` | `90` | Days before a quest failure record expires and is eligible for cleanup. |
-| `models.quest` | `null` | Model for quest teammates. Valid values: `"haiku"`, `"sonnet"`, `"opus"` (aliases only — spawn parameters accept neither `"inherit"` nor full model IDs; leave `null` to inherit). `null` = built-in default: inherit the session model. |
-| `models.scout` | `null` | Model for scout teammates. Same valid values. `null` = built-in default: `sonnet`. |
-| `models.palantir` | `null` | Model for the palantir monitor. Same valid values. `null` = built-in default: `haiku`. |
-| `models.balrog` | `null` | Model for balrog adversarial review. Same valid values. `null` = built-in default: inherit the session model. |
-| `models.explore` | `null` | Model for Explore scan subagents spawned by quest, scout, council, and guide. Same valid values. `null` = built-in default: `haiku`. |
-| `models.validator` | `null` | Model for scout's validation subagent. Same valid values. `null` = built-in default: `sonnet`. |
+**Enforced by** marks how a setting takes effect: "Binary" settings are read and applied by the `fellowship` Go CLI itself; "Prompt" settings only take effect because the agent reads the merged config and follows it — no CLI code enforces them structurally.
+
+| Setting | Default | Enforced by | Description |
+|---------|---------|-------------|-------------|
+| `dataDir` | `".fellowship"` | Binary | Directory name for fellowship working files (state, checkpoints, todos, history). Created inside each worktree and the main repo root. |
+| `branch.pattern` | `null` | Prompt | Branch name template with placeholders: `{slug}` (task description), `{ticket}` (extracted from description), `{author}` (from config). When `null`, defaults to `"fellowship/{slug}"`. |
+| `branch.author` | `null` | Prompt | Static value for the `{author}` placeholder. If not set and pattern uses `{author}`, you'll be prompted. |
+| `branch.ticketPattern` | `"[A-Z]+-\\d+"` | Prompt | Regex to extract ticket IDs from quest descriptions. Default matches Jira-style IDs (e.g., `PROJ-123`). |
+| `worktree.enabled` | `true` | Prompt | Whether quests create isolated worktrees. Set to `false` to work on the current branch. |
+| `worktree.directory` | `null` | Prompt | Parent directory for worktrees. `null` uses Claude Code's default (`.claude/worktrees/`). |
+| `gates.autoApprove` | `[]` | Binary | Gate names to auto-approve: `"Research"`, `"Plan"`, `"Implement"` (the phase being left — `"Research"` auto-approves Research→Plan). `"Review"` is not a valid entry: it is the last phase and no gate leaves it. `fellowship init` reads the merged value when it creates a quest's state and fails with a clear error on an unknown phase name. Gates not listed still surface to you for approval. |
+| `pr.draft` | `false` | Prompt | Create PRs as drafts. |
+| `pr.template` | `null` | Prompt | PR body template string. Supports `{task}`, `{summary}`, and `{changes}` placeholders. |
+| `palantir.enabled` | `true` | Prompt | Whether to spawn a palantir monitoring agent during fellowships. |
+| `palantir.minQuests` | `2` | Prompt | Minimum active quests before palantir is spawned. |
+| `issues.autoClose` | `true` | Prompt | When true, `/missive` includes `Closes #N` in PR keywords so issues close on merge. |
+| `failures.expiryDays` | `90` | Binary | Days before a quest failure record expires and is eligible for cleanup. |
+| `models.quest` | `null` | Prompt | Model for quest teammates. Valid values: `"haiku"`, `"sonnet"`, `"opus"` (aliases only — spawn parameters accept neither `"inherit"` nor full model IDs; leave `null` to inherit). `null` = built-in default: inherit the session model. |
+| `models.scout` | `null` | Prompt | Model for scout teammates. Same valid values. `null` = built-in default: `sonnet`. |
+| `models.palantir` | `null` | Prompt | Model for the palantir monitor. Same valid values. `null` = built-in default: `haiku`. |
+| `models.balrog` | `null` | Prompt | Model for balrog adversarial review. Same valid values. `null` = built-in default: inherit the session model. |
+| `models.explore` | `null` | Prompt | Model for Explore scan subagents spawned by quest, scout, council, and guide. Same valid values. `null` = built-in default: `haiku`. |
+| `models.validator` | `null` | Prompt | Model for scout's validation subagent. Same valid values. `null` = built-in default: `sonnet`. |
 
 The config is read at fellowship startup and at the start of a quest's Research phase. Changes to the file take effect on the next fellowship or quest invocation.
 
