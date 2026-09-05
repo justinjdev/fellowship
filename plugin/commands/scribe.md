@@ -32,7 +32,9 @@ Then investigate the codebase:
 
 ### 2. Draft the Template
 
-Write a template with YAML frontmatter and phase-specific sections. Every line of guidance must be **specific to this project** — if the advice would apply to any codebase, delete it.
+Write a template with YAML frontmatter and one section per quest phase. The lifecycle has four phases, so a complete template has four sections. Every line of guidance must be **specific to this project** — if the advice would apply to any codebase, delete it.
+
+Read the shipped `example` template first (`plugin/skills/lorebook/templates/example.md` in the installed plugin) for a worked one at the right specificity.
 
 **Format:**
 
@@ -44,17 +46,21 @@ keywords: [{comma-separated trigger words}]
 ---
 
 ## Research Guidance
-{project-specific research steps}
+{what to read and understand first; the project's prior art for this work}
 
 ## Plan Guidance
-{project-specific planning constraints}
+{what a plan for this kind of work must name before it is complete}
 
 ## Implement Guidance
-{project-specific implementation rules}
+{project-specific rules, generators, and commands to use while writing}
 
 ## Review Guidance
-{project-specific review checklist}
+{what adversarial review, convention review, and verification must confirm
+ before the PR — Review is the last phase, so anything that must be true
+ before the PR opens belongs here}
 ```
+
+Emit all four sections. Leave one out only when you genuinely have nothing project-specific for that phase; never fold Review guidance into Implement, and never add a fifth section — `/lorebook` maps exactly these four.
 
 **Rules for good templates:**
 
@@ -72,7 +78,7 @@ Default to project placement unless the user specifies otherwise.
 
 ### 4. Write and Confirm
 
-Write the template file. Show the user what was created and where. Remind them that templates are loaded by `/lorebook` at each quest phase — no other setup needed.
+Write the template file. Show the user what was created and where. Remind them that templates are loaded by `/lorebook` at the start of each quest phase — no other setup needed.
 
 ## Anti-Patterns
 
@@ -82,3 +88,4 @@ Do NOT create templates that contain:
 - Advice that duplicates CLAUDE.md or the quest skill's built-in phase guidance
 - Aspirational rules nobody actually follows
 - Kitchen-sink checklists — if a template has 10+ bullets per phase, it's too broad
+- A section for a phase that no longer exists. The lifecycle is Research, Plan, Implement, Review; a `## Onboard Guidance` or `## Complete Guidance` section is never read.

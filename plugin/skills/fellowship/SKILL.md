@@ -85,7 +85,9 @@ Store the result as `base_branch` — every quest spawn prompt carries it so wor
 
 ### Discover Templates
 
-At startup, or when spawning a quest, discover templates from `.claude/fellowship-templates/` in the repo root and `~/.claude/fellowship-templates/`, project winning on a name collision. Parse each one's YAML frontmatter for `name`, `description`, and `keywords`. Selection: explicit (`template: <name>`) > keyword auto-suggest > none. Fellowship ships one example template; `/scribe` writes the rest.
+At startup, or when spawning a quest, discover templates from three directories, highest priority first: `.claude/fellowship-templates/` in the repo root, `~/.claude/fellowship-templates/`, and the plugin's own `plugin/skills/lorebook/templates/` (under `$latest_plugin_dir` from Ensure CLI). Parse each one's YAML frontmatter for `name`, `description`, and `keywords`. Selection: explicit (`template: <name>`) > keyword auto-suggest > none.
+
+Fellowship ships one built-in, `example`. It carries no keywords, so it never auto-suggests — it is there to be read and copied. `/scribe` writes real ones.
 
 ### Isolation Pre-flight (REQUIRED before spawning)
 
