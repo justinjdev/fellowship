@@ -253,6 +253,18 @@
 
 	<div class="divider"><span class="divider-ring"></span></div>
 
+	<!-- v1.7.5 -->
+	<section class="version" id="v1-7-5">
+		<h2 class="version-heading"><a href="{base}/changelog#v1-7-5">v1.7.5</a></h2>
+		<ul class="changes">
+			<li>
+				<strong>Fix</strong> — Hook binary distribution fixes (v1.7.1–v1.7.5). Use binary directly in hooks, bootstrap via <code>SessionStart</code>, remove duplicate hook installation.
+			</li>
+		</ul>
+	</section>
+
+	<div class="divider"><span class="divider-ring"></span></div>
+
 	<!-- v1.7.0 -->
 	<section class="version" id="v1-7-0">
 		<h2 class="version-heading"><a href="{base}/changelog#v1-7-0">v1.7.0</a></h2>
@@ -271,6 +283,18 @@
 			</li>
 			<li>
 				<strong>CI</strong> — Added PR workflow to run Go tests.
+			</li>
+		</ul>
+	</section>
+
+	<div class="divider"><span class="divider-ring"></span></div>
+
+	<!-- v1.6.3 -->
+	<section class="version" id="v1-6-3">
+		<h2 class="version-heading"><a href="{base}/changelog#v1-6-3">v1.6.3</a></h2>
+		<ul class="changes">
+			<li>
+				<strong>Fix plugin discovery</strong> — moved <code>.claude-plugin/plugin.json</code> to repo root with explicit path fields for skills, agents, commands, and hooks. Fixes skills not showing up after install.
 			</li>
 		</ul>
 	</section>
