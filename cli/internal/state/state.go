@@ -160,9 +160,8 @@ func Upsert(conn *sqlite.Conn, s *State) error {
 // claim the same worktree — the most recently registered one wins, which is
 // what re-registering a path means.
 //
-// TODO: fellowship_quests.worktree should carry a UNIQUE index so duplicates
-// cannot be recorded in the first place. That needs a schema migration; until
-// then the ordering below is what keeps lookups stable.
+// fellowship_quests.worktree carries a UNIQUE index (schema v2); ORDER BY rowid
+// keeps the lookup deterministic on stores that predate the migration.
 func FindQuest(conn *sqlite.Conn, worktreeRoot string) (string, error) {
 	if worktreeRoot == "" {
 		return "", nil

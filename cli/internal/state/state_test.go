@@ -3,6 +3,7 @@ package state_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
@@ -412,34 +413,36 @@ func deref[T any](p *T) any {
 // (fellowship_quests.worktree has no unique index yet), and a hook that
 // resolved to a different one on different runs would enforce a different
 // quest's gate. The newest registration wins, every time.
-func TestFindQuest_DuplicateWorktreeIsDeterministic(t *testing.T) {
+func TestFindQuest_DuplicateWorktreeIsRejected(t *testing.T) {
 	d := db.OpenTest(t)
 	worktree := "/repo/.worktrees/quest"
 
-	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		for _, name := range []string{"quest-old", "quest-new"} {
-			if err := sqlitex.Execute(conn,
+	insert := func(name string) error {
+		return d.WithTx(context.Background(), func(conn *db.Conn) error {
+			return sqlitex.Execute(conn,
 				`INSERT INTO fellowship_quests (name, task_description, worktree) VALUES (:n, 't', :w)`,
-				&sqlitex.ExecOptions{Named: map[string]any{":n": name, ":w": worktree}}); err != nil {
-				return err
-			}
-		}
-		return nil
+				&sqlitex.ExecOptions{Named: map[string]any{":n": name, ":w": worktree}})
+		})
+	}
+	if err := insert("quest-old"); err != nil {
+		t.Fatal(err)
+	}
+	// The schema's unique index on worktree (schema version 2) makes a second
+	// registration of the same worktree a hard error, so FindQuest can never
+	// see two candidates.
+	if err := insert("quest-new"); err == nil || !strings.Contains(err.Error(), "UNIQUE") {
+		t.Fatalf("second insert for the same worktree: err = %v, want UNIQUE constraint failure", err)
+	}
+
+	var got string
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		got, err = state.FindQuest(conn, worktree)
+		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-
-	for i := 0; i < 5; i++ {
-		var got string
-		if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-			var err error
-			got, err = state.FindQuest(conn, worktree)
-			return err
-		}); err != nil {
-			t.Fatal(err)
-		}
-		if got != "quest-new" {
-			t.Fatalf("FindQuest = %q, want the most recently registered quest-new", got)
-		}
+	if got != "quest-old" {
+		t.Fatalf("FindQuest = %q, want quest-old", got)
 	}
 }
