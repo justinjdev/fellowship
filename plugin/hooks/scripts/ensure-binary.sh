@@ -24,38 +24,75 @@ LOCK_DIR="$INSTALL_DIR/.lock"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
-# A plain `grep -o '"version"...'` would match ANY key named "version"
-# anywhere in the file — including one day showing up nested inside some
-# other object (e.g. a future per-entry version field) — and `head -1`
-# would then silently prefer whichever happens to appear first in the file,
-# not the top-level manifest version this script actually needs. There's no
-# jq (or any JSON tooling) guaranteed present on end-user machines, and
-# pulling one in just to read a single field isn't worth the added
-# dependency, so this walks brace depth by hand and only accepts a
-# "version" key seen while depth == 1 (directly inside the outermost { }).
-# That's not a general JSON parser — a string value containing a literal
-# `{` or `}` would throw the count off — but plugin.json is a small,
-# hand-maintained, one-key-per-line manifest, so that trade-off is fine
-# here. Guarded with `|| true`: under `set -o pipefail` a no-match here
-# would otherwise trip `set -e` before we get a chance to report a clean
-# error.
-VERSION=$(awk '
-  {
-    line = $0
-    for (i = 1; i <= length(line); i++) {
-      c = substr(line, i, 1)
-      if (c == "{") depth++
-      else if (c == "}") depth--
+PLUGIN_JSON="$PLUGIN_ROOT/.claude-plugin/plugin.json"
+
+# Fast path: a real JSON parser reads the top-level "version" field exactly,
+# with no risk of matching a same-named key nested elsewhere. Neither
+# python3 nor node is guaranteed present on end-user machines (that's why
+# this is a fast path in front of the awk fallback below, not a hard
+# dependency) but both are common on dev/CI machines, where they make this
+# start-of-session hook do less string-munging. Each is only used if found
+# on PATH; either failure mode (not found, or the read/parse itself fails)
+# falls through to awk. Constraint: keep plugin.json parseable as plain JSON
+# by both of these paths and by the awk fallback — no comments, no trailing
+# commas, "version" a direct top-level string field.
+VERSION=""
+if command -v python3 >/dev/null 2>&1; then
+  VERSION=$(python3 -c '
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        sys.stdout.write(json.load(f)["version"])
+except Exception:
+    sys.exit(1)
+' "$PLUGIN_JSON" 2>/dev/null) || VERSION=""
+elif command -v node >/dev/null 2>&1; then
+  VERSION=$(node -e '
+const fs = require("fs");
+try {
+  const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  process.stdout.write(String(data.version));
+} catch (e) {
+  process.exit(1);
+}
+' "$PLUGIN_JSON" 2>/dev/null) || VERSION=""
+fi
+
+if [ -z "$VERSION" ]; then
+  # Fallback: no python3 or node on PATH (or the fast path above failed).
+  # A plain `grep -o '"version"...'` would match ANY key named "version"
+  # anywhere in the file — including one day showing up nested inside some
+  # other object (e.g. a future per-entry version field) — and `head -1`
+  # would then silently prefer whichever happens to appear first in the file,
+  # not the top-level manifest version this script actually needs. There's no
+  # jq (or any JSON tooling) guaranteed present on end-user machines, and
+  # pulling one in just to read a single field isn't worth the added
+  # dependency, so this walks brace depth by hand and only accepts a
+  # "version" key seen while depth == 1 (directly inside the outermost { }).
+  # That's not a general JSON parser — a string value containing a literal
+  # `{` or `}` would throw the count off — but plugin.json is a small,
+  # hand-maintained, one-key-per-line manifest, so that trade-off is fine
+  # here. Guarded with `|| true`: under `set -o pipefail` a no-match here
+  # would otherwise trip `set -e` before we get a chance to report a clean
+  # error.
+  VERSION=$(awk '
+    {
+      line = $0
+      for (i = 1; i <= length(line); i++) {
+        c = substr(line, i, 1)
+        if (c == "{") depth++
+        else if (c == "}") depth--
+      }
     }
-  }
-  depth == 1 && match($0, /"version"[[:space:]]*:[[:space:]]*"[^"]*"/) {
-    val = substr($0, RSTART, RLENGTH)
-    sub(/^"version"[[:space:]]*:[[:space:]]*"/, "", val)
-    sub(/"$/, "", val)
-    print val
-    exit
-  }
-' "$PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null) || true
+    depth == 1 && match($0, /"version"[[:space:]]*:[[:space:]]*"[^"]*"/) {
+      val = substr($0, RSTART, RLENGTH)
+      sub(/^"version"[[:space:]]*:[[:space:]]*"/, "", val)
+      sub(/"$/, "", val)
+      print val
+      exit
+    }
+  ' "$PLUGIN_JSON" 2>/dev/null) || true
+fi
 
 if [ -z "$VERSION" ]; then
   echo "fellowship: could not determine version from plugin.json" >&2
