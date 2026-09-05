@@ -23,7 +23,7 @@ When the user asks for "status" or Gandalf proactively reports progress:
 
 When a quest is held, append `(HELD)` to its phase and include the hold reason if present. Include held count in the summary line.
 
-When groups are defined, group quests by group in the status report:
+When groups are defined, group quests by group in the status report. Run `~/.claude/fellowship/bin/fellowship group show <name> --json` for a group's canonical membership and completed count rather than reconstructing it from task metadata:
 
 ```
 ## Group: API Work (1/2 quests in Implement+)
