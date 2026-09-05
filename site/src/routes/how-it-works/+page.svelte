@@ -41,7 +41,7 @@
 		{ label: 'Analyze', detail: 'Gandalf analyzes them, creates task list' },
 		{ label: 'Spawn', detail: 'Spawns quest teammates in isolated worktrees' },
 		{ label: 'Scout', detail: 'Spawns scout agents for research questions' },
-		{ label: 'Monitor', detail: 'Palantir monitors progress (at 2+ quests)' },
+		{ label: 'Monitor', detail: "Palantir reports the CLI's health sweep (at 2+ quests; Gandalf runs it directly below that)" },
 		{ label: 'Gate', detail: 'Gates surface to you for approval' },
 		{ label: 'Status', detail: 'Say "status" anytime for a progress table' },
 		{ label: 'Deliver', detail: 'Each quest produces a PR; scouts produce reports' }
@@ -158,7 +158,7 @@
 				<div class="branch monitor-branch">
 					<div class="branch-line"></div>
 					<div class="branch-tag">Palantir</div>
-					<div class="branch-detail">monitors all active quests</div>
+					<div class="branch-detail">reports the CLI's health sweep</div>
 				</div>
 			</div>
 		</div>
