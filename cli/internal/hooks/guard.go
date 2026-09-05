@@ -80,25 +80,30 @@ func GateGuard(s *state.State, input *HookInput, p GuardParams) HookResult {
 	// `fellowship state ...` here is a teammate reaching for the lead's own
 	// command set, and `fellowship init --phase/--plan-skip` is a phase move,
 	// which is a gate decision. Both are refused before they reach the CLI.
-	if inv, ok := LeadOnlyCommand(input.ToolInput.Command); ok &&
-		!IsLeadSession(input.SessionID, p.LeadSessionID) {
-		switch inv.Subcommand {
-		case "state":
-			return HookResult{
-				Block: true,
-				Message: fmt.Sprintf(
-					"\"fellowship state %s\" is a lead command and this is a quest worktree. `state init` records which session is the lead, so running it here would make this teammate the lead and lock the real one out. Ask the lead to run it.",
-					strings.TrimSpace(inv.Detail)),
-			}
-		case "init":
-			// Re-running init for the phase the quest is already in moves
-			// nothing, so it is not a gate decision.
-			if inv.Detail != s.Phase {
+	//
+	// Every invocation on the line is judged, not just the first: a no-op
+	// `init --phase <current phase>` is waved through below, and stopping at
+	// it would hand a teammate everything chained behind it.
+	if !IsLeadSession(input.SessionID, p.LeadSessionID) {
+		for _, inv := range LeadOnlyCommands(input.ToolInput.Command) {
+			switch inv.Subcommand {
+			case "state":
 				return HookResult{
 					Block: true,
 					Message: fmt.Sprintf(
-						"Only the lead may move a quest's phase: \"fellowship init\" with --phase/--plan-skip would take this quest from %s to %s without a gate. Submit this phase's gate and wait for the lead instead.",
-						s.Phase, inv.Detail),
+						"\"fellowship state %s\" is a lead command and this is a quest worktree. `state init` records which session is the lead, so running it here would make this teammate the lead and lock the real one out. Ask the lead to run it.",
+						strings.TrimSpace(inv.Detail)),
+				}
+			case "init":
+				// Re-running init for the phase the quest is already in moves
+				// nothing, so it is not a gate decision.
+				if inv.Detail != s.Phase {
+					return HookResult{
+						Block: true,
+						Message: fmt.Sprintf(
+							"Only the lead may move a quest's phase: \"fellowship init\" with --phase/--plan-skip would take this quest from %s to %s without a gate. Submit this phase's gate and wait for the lead instead.",
+							s.Phase, inv.Detail),
+					}
 				}
 			}
 		}

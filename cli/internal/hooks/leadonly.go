@@ -24,8 +24,15 @@ type LeadOnlyInvocation struct {
 	Detail string
 }
 
-// LeadOnlyCommand reports the first lead-only fellowship invocation in a Bash
-// command line, if any.
+// LeadOnlyCommands reports EVERY lead-only fellowship invocation in a Bash
+// command line, in the order a shell would run them.
+//
+// All of them, not just the first: whether an invocation is actually a
+// violation depends on the quest's current phase, which only the caller knows.
+// Returning the first match let a harmless one mask the rest — a teammate that
+// prefixed `fellowship init --phase <the phase it is already in>` (a no-op the
+// caller waves through) got the `fellowship state init --claim-lead` chained
+// behind it for free.
 //
 // The whole command is scanned, not just its first word, and the scan follows
 // the shapes a shell actually runs: operators (`&&`, `||`, `;`, `|`, `&`,
@@ -34,7 +41,8 @@ type LeadOnlyInvocation struct {
 // NAMED inside a quoted argument (`git commit -m "fellowship state init"`) is
 // not an invocation and is left alone — that is why the scan tokenizes rather
 // than matching on the raw string.
-func LeadOnlyCommand(command string) (LeadOnlyInvocation, bool) {
+func LeadOnlyCommands(command string) []LeadOnlyInvocation {
+	var found []LeadOnlyInvocation
 	for _, tokens := range commandInvocations(command, 0) {
 		for i := 0; i+1 < len(tokens); i++ {
 			if !isFellowshipBinary(tokens[i]) {
@@ -46,15 +54,26 @@ func LeadOnlyCommand(command string) (LeadOnlyInvocation, bool) {
 				if i+2 < len(tokens) {
 					detail = tokens[i+2]
 				}
-				return LeadOnlyInvocation{Subcommand: "state", Detail: detail}, true
+				found = append(found, LeadOnlyInvocation{Subcommand: "state", Detail: detail})
 			case "init":
 				if phase, ok := initPhaseFrom(tokens[i+2:]); ok {
-					return LeadOnlyInvocation{Subcommand: "init", Detail: phase}, true
+					found = append(found, LeadOnlyInvocation{Subcommand: "init", Detail: phase})
 				}
 			}
 		}
 	}
-	return LeadOnlyInvocation{}, false
+	return found
+}
+
+// LeadOnlyCommand reports the first lead-only fellowship invocation in a Bash
+// command line, if any. Callers that decide per-invocation (gate-guard) must
+// use LeadOnlyCommands instead — see why there.
+func LeadOnlyCommand(command string) (LeadOnlyInvocation, bool) {
+	found := LeadOnlyCommands(command)
+	if len(found) == 0 {
+		return LeadOnlyInvocation{}, false
+	}
+	return found[0], true
 }
 
 // InitPhaseRequest reports the phase a Bash command asks `fellowship init` to

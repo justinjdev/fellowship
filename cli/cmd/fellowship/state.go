@@ -66,21 +66,21 @@ func runStateInit(d *db.DB, args []string) int {
 	// from, where no hook would ever look for them.
 	root := mainRepoRootOrCwd()
 
-	// --claim-lead on its own re-records the lead and touches nothing else. It
+	// --claim-lead re-records the lead. On its own it touches nothing else; it
 	// is the way out of the degraded case: the lead's session id changed (a new
 	// session in the main tree rather than a resumed one), so worktree-guard
 	// now reads the lead as a mis-placed teammate and refuses its writes.
+	//
+	// The lead moved into the store precisely so the sessions it identifies
+	// could not rewrite it. --claim-lead is a CLI door back into that row, so
+	// it is only opened from the main working tree — the lead's own workspace.
+	// A teammate stands in its worktree, where this refuses; reaching the main
+	// tree at all is a violation worktree-guard already reports.
+	if *claimLead && !sessionInMainWorktree(root) {
+		fmt.Fprintf(os.Stderr, "fellowship: --claim-lead only runs in the main working tree (%s); the lead's session is the one that may record itself.\n", root)
+		return 1
+	}
 	if *name == "" {
-		// The lead moved into the store precisely so the sessions it
-		// identifies could not rewrite it. --claim-lead is a CLI door back
-		// into that row, so it is only opened from the main working tree —
-		// the lead's own workspace. A teammate stands in its worktree, where
-		// this refuses; reaching the main tree at all is a violation
-		// worktree-guard already reports.
-		if !sessionInMainWorktree(root) {
-			fmt.Fprintf(os.Stderr, "fellowship: --claim-lead only runs in the main working tree (%s); the lead's session is the one that may record itself.\n", root)
-			return 1
-		}
 		return claimLeadSession(d, root)
 	}
 
@@ -118,19 +118,33 @@ func runStateInit(d *db.DB, args []string) int {
 	// second door into the lead row: re-running it — which the skill does on
 	// every `/fellowship`, and which any session can do — silently re-recorded
 	// whoever ran it. Re-recording is `--claim-lead`'s job, and it says so.
-	if err := d.WithTx(ctx, func(conn *db.Conn) error {
-		if _, found, err := state.ReadLead(conn); err == nil && found {
-			leadAlreadyRecorded = true
-			return nil
+	// Asking for it explicitly alongside --name does re-record, under exactly
+	// the guards the standalone form runs under.
+	if *claimLead {
+		if code := claimLeadSession(d, root); code != 0 {
+			return code
 		}
-		return state.RecordLead(conn, root, state.CurrentSessionID())
-	}); err != nil {
-		fmt.Fprintf(os.Stderr, "fellowship: warning: could not record the lead session: %v\n", err)
-	}
-	if leadAlreadyRecorded {
-		fmt.Fprintln(os.Stderr, "fellowship: a lead session is already recorded for this repo and was left alone. If this session is the lead, run \"fellowship state init --claim-lead\" from the main working tree.")
 	} else {
-		warnNoSessionID()
+		if err := d.WithTx(ctx, func(conn *db.Conn) error {
+			// A lead the store cannot be read for is not "no lead": treat the
+			// failure as a failure rather than overwriting the row behind it.
+			_, found, err := state.ReadLead(conn)
+			if err != nil {
+				return err
+			}
+			if found {
+				leadAlreadyRecorded = true
+				return nil
+			}
+			return state.RecordLead(conn, root, state.CurrentSessionID())
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: warning: could not record the lead session: %v\n", err)
+		}
+		if leadAlreadyRecorded {
+			fmt.Fprintln(os.Stderr, "fellowship: a lead session is already recorded for this repo and was left alone. If this session is the lead, run \"fellowship state init --claim-lead\" from the main working tree.")
+		} else {
+			warnNoSessionID()
+		}
 	}
 
 	// Register the worktree-guard hook in the project's .claude/settings.local.json.

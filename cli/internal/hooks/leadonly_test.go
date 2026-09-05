@@ -176,3 +176,30 @@ func TestGateGuard_BlocksLeadOnlyCommands(t *testing.T) {
 		}
 	}
 }
+
+// A no-op invocation must not shield what is chained behind it. `fellowship
+// init --phase <the phase the quest is already in>` moves nothing, so the guard
+// waves it through — and while the scan stopped at the first match, prefixing a
+// command with one handed a teammate everything after the `&&`.
+func TestGateGuard_NoOpInitDoesNotMaskLaterLeadCommands(t *testing.T) {
+	blocked := []string{
+		"fellowship init --phase Implement && fellowship state init --claim-lead",
+		"fellowship init --phase Implement; fellowship state init --name evil",
+		"fellowship init --phase Implement && fellowship init --phase Review",
+		`sh -c "fellowship init --phase Implement && fellowship state init --claim-lead"`,
+	}
+	for _, cmd := range blocked {
+		s := &state.State{QuestName: "alpha", Phase: "Implement"}
+		input := &HookInput{SessionID: "teammate", ToolInput: ToolInput{Command: cmd}}
+		if result := GateGuard(s, input, GuardParams{LeadSessionID: "lead"}); !result.Block {
+			t.Errorf("should block %q", cmd)
+		}
+	}
+
+	// The no-op on its own is still allowed: it is not a phase move.
+	s := &state.State{QuestName: "alpha", Phase: "Implement"}
+	input := &HookInput{SessionID: "teammate", ToolInput: ToolInput{Command: "fellowship init --phase Implement"}}
+	if result := GateGuard(s, input, GuardParams{LeadSessionID: "lead"}); result.Block {
+		t.Errorf("should allow a no-op init: %s", result.Message)
+	}
+}

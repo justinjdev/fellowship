@@ -295,7 +295,7 @@ func ensureSchema(conn *Conn) error {
 		return nil
 	}
 	if v > latest {
-		return fmt.Errorf("db: database is from a newer fellowship (schema version %d, this binary supports up to %d); upgrade the binary", v, latest)
+		return fmt.Errorf("%w (schema version %d, this binary supports up to %d); upgrade the binary", ErrSchemaNewer, v, latest)
 	}
 	if err := sqlitex.ExecuteTransient(conn, "PRAGMA journal_mode = WAL", nil); err != nil {
 		return err
@@ -312,6 +312,11 @@ func ensureSchema(conn *Conn) error {
 // is reading; the upgrade belongs to `fellowship init`.
 var ErrSchemaOutOfDate = errors.New("db: fellowship store is out of date")
 
+// ErrSchemaNewer reports a store written by a NEWER fellowship binary than this
+// one. Like ErrSchemaOutOfDate it is an answer, not a transient failure: no
+// retry, on any connection, will make it succeed.
+var ErrSchemaNewer = errors.New("db: fellowship store is from a newer fellowship")
+
 // checkSchemaCurrent verifies the store is at the version this binary expects,
 // writing nothing whatsoever. It is what ensureSchema would have decided, minus
 // the permission to act on it.
@@ -325,7 +330,7 @@ func checkSchemaCurrent(conn *Conn) error {
 	case v == latest:
 		return nil
 	case v > latest:
-		return fmt.Errorf("db: database is from a newer fellowship (schema version %d, this binary supports up to %d); upgrade the binary", v, latest)
+		return fmt.Errorf("%w (schema version %d, this binary supports up to %d); upgrade the binary", ErrSchemaNewer, v, latest)
 	default:
 		return fmt.Errorf("%w (schema version %d, this binary expects %d) — run \"fellowship init\" to upgrade", ErrSchemaOutOfDate, v, latest)
 	}
@@ -347,19 +352,32 @@ func userVersion(conn *Conn) (int, error) {
 }
 
 // applySchema creates all tables, indexes, and triggers for a brand-new
-// store and stamps it at latestSchemaVersion. Uses IF NOT EXISTS so it is
-// idempotent.
+// store and stamps it at latestSchemaVersion.
+//
+// It runs in one transaction, exactly as applyMigrations does, so the DDL and
+// the user_version stamp land together or not at all. Most statements say IF
+// NOT EXISTS, but the migrations' ALTER TABLE ... ADD COLUMN cannot: a run
+// interrupted after the tables were created but before the version was stamped
+// would leave a store that re-enters this function on the next open and fails
+// on "duplicate column name", never to open again.
 func applySchema(conn *Conn) error {
 	applySchemaCalls++
-	for _, stmt := range schema {
-		if err := sqlitex.ExecuteTransient(conn, stmt, nil); err != nil {
-			return fmt.Errorf("db: schema: %w\nStatement: %.80s", err, stmt)
+	endFn, err := sqlitex.ImmediateTransaction(conn)
+	if err != nil {
+		return fmt.Errorf("db: begin schema tx: %w", err)
+	}
+	fnErr := func() error {
+		for _, stmt := range schema {
+			if err := sqlitex.ExecuteTransient(conn, stmt, nil); err != nil {
+				return fmt.Errorf("db: schema: %w\nStatement: %.80s", err, stmt)
+			}
 		}
-	}
-
-	// Set schema version.
-	if err := sqlitex.ExecuteTransient(conn, fmt.Sprintf("PRAGMA user_version = %d", latestSchemaVersion()), nil); err != nil {
-		return fmt.Errorf("db: set user_version: %w", err)
-	}
-	return nil
+		// Set schema version.
+		if err := sqlitex.ExecuteTransient(conn, fmt.Sprintf("PRAGMA user_version = %d", latestSchemaVersion()), nil); err != nil {
+			return fmt.Errorf("db: set user_version: %w", err)
+		}
+		return nil
+	}()
+	endFn(&fnErr)
+	return fnErr
 }

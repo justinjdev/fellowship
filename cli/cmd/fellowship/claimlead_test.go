@@ -122,4 +122,45 @@ func TestStateInit_ClaimLeadRefusedOutsideMainTree(t *testing.T) {
 	if got := recordedLead(t, d, root); got != "lead-1" {
 		t.Errorf("recorded lead = %q, want lead-1 (unchanged)", got)
 	}
+
+	// The same refusal applies to the combined form: --name must not be a way
+	// around the main-worktree check that guards the lead row.
+	if got := runStateInit(d, []string{"--name", "evil", "--skip-hook-install", "--claim-lead"}); got == 0 {
+		t.Error("state init --name --claim-lead from a worktree = 0, want a refusal")
+	}
+	if got := recordedLead(t, d, root); got != "lead-1" {
+		t.Errorf("recorded lead = %q, want lead-1 (unchanged)", got)
+	}
+}
+
+// --claim-lead alongside --name is a request to re-record the lead, not a flag
+// to drop on the floor: `state init` leaves an existing lead alone precisely so
+// that re-recording has to be asked for, and this is how it is asked for.
+func TestStateInit_ClaimLeadWithName(t *testing.T) {
+	root := newMainRepo(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Chdir(root)
+	d := db.OpenTest(t)
+
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "lead-1")
+	if got := runStateInit(d, []string{"--name", "demo", "--skip-hook-install"}); got != 0 {
+		t.Fatalf("state init = %d, want 0", got)
+	}
+
+	// Re-running without the flag leaves the recorded lead alone.
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "lead-2")
+	if got := runStateInit(d, []string{"--name", "demo", "--skip-hook-install"}); got != 0 {
+		t.Fatalf("state init = %d, want 0", got)
+	}
+	if got := recordedLead(t, d, root); got != "lead-1" {
+		t.Errorf("recorded lead = %q, want lead-1 (unchanged)", got)
+	}
+
+	// Asking for it re-records.
+	if got := runStateInit(d, []string{"--name", "demo", "--skip-hook-install", "--claim-lead"}); got != 0 {
+		t.Fatalf("state init --claim-lead = %d, want 0", got)
+	}
+	if got := recordedLead(t, d, root); got != "lead-2" {
+		t.Errorf("recorded lead = %q, want lead-2", got)
+	}
 }

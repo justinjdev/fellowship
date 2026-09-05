@@ -134,10 +134,11 @@ func openForHookPath(dbPath string, readOnly bool) (*DB, error) {
 		if err == nil {
 			return d, nil
 		}
-		// An out-of-date store is the answer, not an obstacle to work around.
-		// Anything else (a WAL database whose -shm a read-only connection
-		// cannot create) falls back to the writable open.
-		if errors.Is(err, ErrSchemaOutOfDate) {
+		// A schema verdict — out of date, or newer than this binary — is the
+		// answer, not an obstacle to work around; reopening read-write would
+		// only reach it again. Anything else (a WAL database whose -shm a
+		// read-only connection cannot create) falls back to the writable open.
+		if errors.Is(err, ErrSchemaOutOfDate) || errors.Is(err, ErrSchemaNewer) {
 			return nil, err
 		}
 	}
