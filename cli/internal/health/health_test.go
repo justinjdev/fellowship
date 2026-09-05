@@ -1,4 +1,4 @@
-package eagles
+package health
 
 import (
 	"context"
@@ -14,8 +14,8 @@ import (
 )
 
 // testTiding mirrors herald.Tiding's shape for seeding the herald table
-// directly. The eagles package can't import the herald package (herald now
-// imports eagles for its classification, see problems.go), so tests insert
+// directly. The health package can't import the events package (events now
+// imports health for its classification, see problems.go), so tests insert
 // rows with the literal type strings instead of herald's constants.
 type testTiding struct {
 	Timestamp string
@@ -93,7 +93,7 @@ func TestClassifyHealthy(t *testing.T) {
 		Now:           now,
 	}
 
-	var report *EaglesReport
+	var report *HealthReport
 	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		report, err = Sweep(conn, opts)
@@ -145,7 +145,7 @@ func TestClassifyStalledWithGateID(t *testing.T) {
 		Now:           now,
 	}
 
-	var report *EaglesReport
+	var report *HealthReport
 	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		report, err = Sweep(conn, opts)
@@ -200,7 +200,7 @@ func TestClassifyStalledGatePendingWithinThreshold(t *testing.T) {
 		Now:           now,
 	}
 
-	var report *EaglesReport
+	var report *HealthReport
 	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		report, err = Sweep(conn, opts)
@@ -240,7 +240,7 @@ func TestClassifyZombie(t *testing.T) {
 		Now:           now,
 	}
 
-	var report *EaglesReport
+	var report *HealthReport
 	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		report, err = Sweep(conn, opts)
@@ -290,7 +290,7 @@ func TestClassifyZombieWithCheckpoint(t *testing.T) {
 		Now:           now,
 	}
 
-	var report *EaglesReport
+	var report *HealthReport
 	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		report, err = Sweep(conn, opts)
@@ -330,7 +330,7 @@ func TestClassifyComplete(t *testing.T) {
 		Now:           now,
 	}
 
-	var report *EaglesReport
+	var report *HealthReport
 	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		report, err = Sweep(conn, opts)
@@ -364,7 +364,7 @@ func TestClassifyIdle(t *testing.T) {
 		Now:           now,
 	}
 
-	var report *EaglesReport
+	var report *HealthReport
 	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		report, err = Sweep(conn, opts)
@@ -405,7 +405,7 @@ func TestClassifyStalledNoGateID(t *testing.T) {
 		Now:           now,
 	}
 
-	var report *EaglesReport
+	var report *HealthReport
 	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		report, err = Sweep(conn, opts)
@@ -467,7 +467,7 @@ func TestClassifyStruggling(t *testing.T) {
 		Now:           now,
 	}
 
-	var report *EaglesReport
+	var report *HealthReport
 	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		report, err = Sweep(conn, opts)
@@ -511,7 +511,7 @@ func TestClassifyNotStrugglingWithOneRejection(t *testing.T) {
 		Now:           now,
 	}
 
-	var report *EaglesReport
+	var report *HealthReport
 	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		report, err = Sweep(conn, opts)
@@ -527,7 +527,7 @@ func TestClassifyNotStrugglingWithOneRejection(t *testing.T) {
 }
 
 func TestFormatTable(t *testing.T) {
-	report := &EaglesReport{
+	report := &HealthReport{
 		Timestamp: "2025-01-15T10:30:00Z",
 		Quests: []QuestHealth{
 			{
@@ -547,7 +547,7 @@ func TestFormatTable(t *testing.T) {
 		t.Fatal("FormatTable returned empty string")
 	}
 
-	for _, want := range []string{"Fellowship Eagles Report", "quest-api", "Implement", "working", "none", "Problems: 0"} {
+	for _, want := range []string{"Fellowship Health Report", "quest-api", "Implement", "working", "none", "Problems: 0"} {
 		if !contains(output, want) {
 			t.Errorf("output missing %q", want)
 		}
@@ -555,7 +555,7 @@ func TestFormatTable(t *testing.T) {
 }
 
 func TestProblemCount(t *testing.T) {
-	report := &EaglesReport{
+	report := &HealthReport{
 		Timestamp: "2025-01-15T10:30:00Z",
 		Quests:    []QuestHealth{},
 	}
@@ -620,7 +620,7 @@ func TestSweepMultipleQuests(t *testing.T) {
 		Now:           now,
 	}
 
-	var report *EaglesReport
+	var report *HealthReport
 	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		report, err = Sweep(conn, opts)
@@ -665,7 +665,7 @@ func TestSweepEmptyDB(t *testing.T) {
 		Now:           now,
 	}
 
-	var report *EaglesReport
+	var report *HealthReport
 	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
 		report, err = Sweep(conn, opts)

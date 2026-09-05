@@ -1,4 +1,4 @@
-package eagles
+package health
 
 import (
 	"encoding/json"
@@ -27,7 +27,7 @@ const (
 )
 
 // QuestHealth holds the health assessment for a single quest. This is the one
-// classification both `fellowship eagles` and `fellowship herald --problems`
+// classification both `fellowship health` and `fellowship events --problems`
 // read — the latter translates it into its own Problem shape rather than
 // recomputing thresholds independently.
 type QuestHealth struct {
@@ -47,14 +47,14 @@ type QuestHealth struct {
 	RejectionCount int  `json:"rejection_count,omitempty"`
 }
 
-// EaglesReport holds the full eagles scan result.
-type EaglesReport struct {
+// HealthReport holds the full health scan result.
+type HealthReport struct {
 	Timestamp string        `json:"timestamp"`
 	Quests    []QuestHealth `json:"quests"`
 	Problems  int           `json:"problems"` // count of non-working/non-complete
 }
 
-// Options configures the eagles scan.
+// Options configures the health scan.
 type Options struct {
 	GateThreshold        time.Duration // how long a gate can be pending before "stalled"
 	ZombieTimeout        time.Duration // how long since last file change before "zombie"
@@ -72,7 +72,7 @@ func DefaultOptions() Options {
 }
 
 // Sweep scans all quests in the database and classifies their health.
-func Sweep(conn *db.Conn, opts Options) (*EaglesReport, error) {
+func Sweep(conn *db.Conn, opts Options) (*HealthReport, error) {
 	if opts.Now.IsZero() {
 		opts.Now = time.Now()
 	}
@@ -83,17 +83,17 @@ func Sweep(conn *db.Conn, opts Options) (*EaglesReport, error) {
 	// Load all quest states from quest_state table.
 	states, err := listAllQuests(conn)
 	if err != nil {
-		return nil, fmt.Errorf("eagles: list quests: %w", err)
+		return nil, fmt.Errorf("health: list quests: %w", err)
 	}
 
 	// Review is terminal, so a finished quest is not distinguishable by
 	// phase — the fellowship entry's status is what says the quest is done.
 	finished, err := finishedQuests(conn)
 	if err != nil {
-		return nil, fmt.Errorf("eagles: list finished quests: %w", err)
+		return nil, fmt.Errorf("health: list finished quests: %w", err)
 	}
 
-	report := &EaglesReport{
+	report := &HealthReport{
 		Timestamp: opts.Now.UTC().Format(time.RFC3339),
 		Quests:    []QuestHealth{},
 	}
@@ -237,8 +237,8 @@ func classifyQuest(conn *db.Conn, s *state.State, finished bool, opts Options) Q
 
 // lastActivity returns the most recent timestamp from herald tidings for a quest,
 // or falls back to the quest_state updated_at. It queries the herald table
-// directly rather than importing the herald package, so eagles carries no
-// dependency on it — herald depends on eagles for classification instead.
+// directly rather than importing the events package, so health carries no
+// dependency on it — events depends on health for classification instead.
 func lastActivity(conn *db.Conn, s *state.State) string {
 	var timestamp string
 	sqlitex.Execute(conn,
@@ -271,7 +271,7 @@ func lastActivity(conn *db.Conn, s *state.State) string {
 // rejectionCount returns how many gate_rejected tidings a quest has recorded
 // in its current phase — the "struggling" signal. It uses the literal tiding
 // type string rather than the herald package's constant for the same reason
-// lastActivity queries the table directly: keeping eagles free of a
+// lastActivity queries the table directly: keeping health free of a
 // dependency on herald.
 func rejectionCount(conn *db.Conn, questName, phase string) int {
 	var count int
@@ -303,10 +303,10 @@ func hasCheckpoint(conn *db.Conn, questName string) bool {
 	return found
 }
 
-// FormatTable returns a human-readable table of the eagles report.
-func FormatTable(report *EaglesReport) string {
+// FormatTable returns a human-readable table of the health report.
+func FormatTable(report *HealthReport) string {
 	var sb strings.Builder
-	sb.WriteString("Fellowship Eagles Report\n")
+	sb.WriteString("Fellowship Health Report\n")
 	sb.WriteString(strings.Repeat("\u2501", 80) + "\n")
 	sb.WriteString(fmt.Sprintf("%-20s \u2502 %-10s \u2502 %-8s \u2502 %-8s \u2502 %s\n",
 		"Quest", "Phase", "Health", "Action", "Last Activity"))

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
-	"github.com/justinjdev/fellowship/cli/internal/eagles"
+	"github.com/justinjdev/fellowship/cli/internal/health"
 )
 
 // Severity represents the severity level of a detected problem.
@@ -25,12 +25,13 @@ type Problem struct {
 }
 
 // DetectProblems scans the database for potential quest issues. It is a view
-// over eagles' health sweep — the same classification behind `fellowship
-// eagles` — translated into the Problem shape `fellowship events --problems`
-// and the dashboard expect, rather than a second set of thresholds.
+// over the health package's sweep — the same classification behind
+// `fellowship health` — translated into the Problem shape `fellowship
+// events --problems` and the dashboard expect, rather than a second set of
+// thresholds.
 func DetectProblems(conn *db.Conn) ([]Problem, error) {
-	opts := eagles.DefaultOptions()
-	report, err := eagles.Sweep(conn, opts)
+	opts := health.DefaultOptions()
+	report, err := health.Sweep(conn, opts)
 	if err != nil {
 		return nil, fmt.Errorf("detect problems: %w", err)
 	}
@@ -38,14 +39,14 @@ func DetectProblems(conn *db.Conn) ([]Problem, error) {
 	var problems []Problem
 	for _, qh := range report.Quests {
 		switch qh.Health {
-		case eagles.Stalled:
+		case health.Stalled:
 			problems = append(problems, Problem{
 				Quest:    qh.Name,
 				Type:     "stalled",
 				Severity: Warning,
 				Message:  fmt.Sprintf("Gate pending for %s", formatDuration(time.Duration(qh.GatePendingSec)*time.Second)),
 			})
-		case eagles.Zombie:
+		case health.Zombie:
 			problems = append(problems, Problem{
 				Quest:    qh.Name,
 				Type:     "zombie",
@@ -53,7 +54,7 @@ func DetectProblems(conn *db.Conn) ([]Problem, error) {
 				Message:  fmt.Sprintf("No activity for %s", formatDuration(activityAge(qh.LastActivity, opts.Now))),
 			})
 		}
-		// Struggling is orthogonal to Health (see eagles.QuestHealth), so it's
+		// Struggling is orthogonal to Health (see health.QuestHealth), so it's
 		// checked independently of the switch above.
 		if qh.Struggling {
 			problems = append(problems, Problem{

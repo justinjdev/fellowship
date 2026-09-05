@@ -19,9 +19,9 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/company"
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/db"
-	"github.com/justinjdev/fellowship/cli/internal/eagles"
 	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
+	"github.com/justinjdev/fellowship/cli/internal/health"
 	"github.com/justinjdev/fellowship/cli/internal/history"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -100,13 +100,13 @@ func runEagles(d *db.DB, args []string) int {
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Parse(args)
 
-	opts := eagles.DefaultOptions()
+	opts := health.DefaultOptions()
 	opts.GateThreshold = time.Duration(*threshold) * time.Minute
 
-	var report *eagles.EaglesReport
+	var report *health.HealthReport
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		var err error
-		report, err = eagles.Sweep(conn, opts)
+		report, err = health.Sweep(conn, opts)
 		return err
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -119,7 +119,7 @@ func runEagles(d *db.DB, args []string) int {
 		return 0
 	}
 
-	fmt.Print(eagles.FormatTable(report))
+	fmt.Print(health.FormatTable(report))
 	return 0
 }
 

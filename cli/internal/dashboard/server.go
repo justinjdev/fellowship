@@ -13,9 +13,9 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/bulletin"
 	"github.com/justinjdev/fellowship/cli/internal/company"
 	"github.com/justinjdev/fellowship/cli/internal/db"
-	"github.com/justinjdev/fellowship/cli/internal/eagles"
 	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/fellowship"
+	"github.com/justinjdev/fellowship/cli/internal/health"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/todo"
 )
@@ -301,11 +301,11 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEagles(w http.ResponseWriter, r *http.Request) {
-	opts := eagles.DefaultOptions()
-	var report *eagles.EaglesReport
+	opts := health.DefaultOptions()
+	var report *health.HealthReport
 	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		var sweepErr error
-		report, sweepErr = eagles.Sweep(conn, opts)
+		report, sweepErr = health.Sweep(conn, opts)
 		return sweepErr
 	})
 	if err != nil {
