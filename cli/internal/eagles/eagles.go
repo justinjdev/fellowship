@@ -3,7 +3,6 @@ package eagles
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -11,10 +10,8 @@ import (
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 
-	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -29,7 +26,10 @@ const (
 	Complete HealthState = "complete" // Quest finished
 )
 
-// QuestHealth holds the health assessment for a single quest.
+// QuestHealth holds the health assessment for a single quest. This is the one
+// classification both `fellowship eagles` and `fellowship herald --problems`
+// read — the latter translates it into its own Problem shape rather than
+// recomputing thresholds independently.
 type QuestHealth struct {
 	Name           string      `json:"name"`
 	Worktree       string      `json:"worktree"`
@@ -39,6 +39,12 @@ type QuestHealth struct {
 	HasCheckpoint  bool        `json:"has_checkpoint"`
 	LastActivity   string      `json:"last_activity"` // ISO 8601
 	Action         string      `json:"action"`        // recommended action: "none", "nudge", "respawn"
+
+	// Struggling is orthogonal to Health: a quest can be actively Working and
+	// still be struggling (repeated rejections in its current phase), so it's
+	// reported alongside rather than folded into the Health chain.
+	Struggling     bool `json:"struggling,omitempty"`
+	RejectionCount int  `json:"rejection_count,omitempty"`
 }
 
 // EaglesReport holds the full eagles scan result.
@@ -50,16 +56,18 @@ type EaglesReport struct {
 
 // Options configures the eagles scan.
 type Options struct {
-	GateThreshold time.Duration // how long a gate can be pending before "stalled"
-	ZombieTimeout time.Duration // how long since last file change before "zombie"
-	Now           time.Time     // injectable clock for testing
+	GateThreshold        time.Duration // how long a gate can be pending before "stalled"
+	ZombieTimeout        time.Duration // how long since last file change before "zombie"
+	StrugglingRejections int           // gate rejections in the same phase before "struggling"
+	Now                  time.Time     // injectable clock for testing
 }
 
 // DefaultOptions returns sensible defaults.
 func DefaultOptions() Options {
 	return Options{
-		GateThreshold: 10 * time.Minute,
-		ZombieTimeout: 15 * time.Minute,
+		GateThreshold:        10 * time.Minute,
+		ZombieTimeout:        15 * time.Minute,
+		StrugglingRejections: 2,
 	}
 }
 
@@ -67,6 +75,9 @@ func DefaultOptions() Options {
 func Sweep(conn *db.Conn, opts Options) (*EaglesReport, error) {
 	if opts.Now.IsZero() {
 		opts.Now = time.Now()
+	}
+	if opts.StrugglingRejections <= 0 {
+		opts.StrugglingRejections = DefaultOptions().StrugglingRejections
 	}
 
 	// Load all quest states from quest_state table.
@@ -89,7 +100,7 @@ func Sweep(conn *db.Conn, opts Options) (*EaglesReport, error) {
 
 	for _, s := range states {
 		qh := classifyQuest(conn, s, finished[s.QuestName], opts)
-		if qh.Health != Working && qh.Health != Complete {
+		if (qh.Health != Working && qh.Health != Complete) || qh.Struggling {
 			report.Problems++
 		}
 		report.Quests = append(report.Quests, qh)
@@ -176,6 +187,11 @@ func classifyQuest(conn *db.Conn, s *state.State, finished bool, opts Options) Q
 		return qh
 	}
 
+	// Struggling is orthogonal to the Health chain below — a quest can be
+	// actively Working and still be repeatedly rejected in its current phase.
+	qh.RejectionCount = rejectionCount(conn, s.QuestName, s.Phase)
+	qh.Struggling = qh.RejectionCount >= opts.StrugglingRejections
+
 	// Check for stalled gates.
 	if s.GatePending {
 		if s.GateID != nil {
@@ -220,11 +236,22 @@ func classifyQuest(conn *db.Conn, s *state.State, finished bool, opts Options) Q
 }
 
 // lastActivity returns the most recent timestamp from herald tidings for a quest,
-// or falls back to the quest_state updated_at.
+// or falls back to the quest_state updated_at. It queries the herald table
+// directly rather than importing the herald package, so eagles carries no
+// dependency on it — herald depends on eagles for classification instead.
 func lastActivity(conn *db.Conn, s *state.State) string {
-	tidings, err := herald.Read(conn, s.QuestName, 1)
-	if err == nil && len(tidings) > 0 {
-		return tidings[0].Timestamp
+	var timestamp string
+	sqlitex.Execute(conn,
+		`SELECT timestamp FROM herald WHERE quest = :name ORDER BY id DESC LIMIT 1`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":name": s.QuestName},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				timestamp = stmt.ColumnText(0)
+				return nil
+			},
+		})
+	if timestamp != "" {
+		return timestamp
 	}
 
 	// Fall back to updated_at from quest_state.
@@ -241,6 +268,25 @@ func lastActivity(conn *db.Conn, s *state.State) string {
 	return updatedAt
 }
 
+// rejectionCount returns how many gate_rejected tidings a quest has recorded
+// in its current phase — the "struggling" signal. It uses the literal tiding
+// type string rather than the herald package's constant for the same reason
+// lastActivity queries the table directly: keeping eagles free of a
+// dependency on herald.
+func rejectionCount(conn *db.Conn, questName, phase string) int {
+	var count int
+	sqlitex.Execute(conn,
+		`SELECT count(*) FROM herald WHERE quest = :name AND type = 'gate_rejected' AND phase = :phase`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":name": questName, ":phase": phase},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				count = stmt.ColumnInt(0)
+				return nil
+			},
+		})
+	return count
+}
+
 // hasCheckpoint checks if the quest has a checkpoint by looking for
 // a lembas_completed herald tiding, which indicates checkpoint creation.
 func hasCheckpoint(conn *db.Conn, questName string) bool {
@@ -255,29 +301,6 @@ func hasCheckpoint(conn *db.Conn, questName string) bool {
 			},
 		})
 	return found
-}
-
-// WriteReport writes the eagles report to the data directory in the git root.
-func WriteReport(gitRoot string, report *EaglesReport) error {
-	dir := filepath.Join(gitRoot, datadir.Name())
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("creating data dir %s: %w", dir, err)
-	}
-	data, err := json.MarshalIndent(report, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshaling report: %w", err)
-	}
-	data = append(data, '\n')
-	path := filepath.Join(dir, "eagles-report.json")
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		return fmt.Errorf("writing report: %w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
-		return fmt.Errorf("renaming report: %w", err)
-	}
-	return nil
 }
 
 // FormatTable returns a human-readable table of the eagles report.

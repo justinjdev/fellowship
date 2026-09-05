@@ -64,9 +64,21 @@ digraph gandalf {
 }
 ```
 
+## Health Monitoring Without Palantir
+
+Health monitoring (the `fellowship eagles` sweep — stalled/zombie/struggling quests) must not depend on an extra agent being spawned. Palantir is only worth spawning when `config.palantir.enabled` is true (default) and `config.palantir.minQuests` or more quests are active (default 2) — see fellowship/SKILL.md's "Spawn Palantir". Whenever that condition is *not* met, Gandalf runs the sweep itself:
+
+```bash
+~/.claude/fellowship/bin/fellowship eagles --json
+```
+
+**When to run it:** after every gate transition (the same moment Gandalf would otherwise send palantir a "check" message) and after every spawn (quest or scout) — whenever palantir is disabled or the fellowship is below its quest threshold. If palantir is active, skip this — messaging it to "check" already covers the sweep, and running it twice is redundant.
+
+**What to do with it:** for any quest whose `health` is `stalled`, `zombie`, or `idle`, or whose `struggling` is `true`, report it the same way a palantir STUCK alert would — to the user, not by spawning palantir just to relay it. Don't recompute the classification yourself; `eagles --json` already did.
+
 ## Reactive (responding to teammate events)
 
-- **Gate message received** → check `config.gates.autoApprove` (default: empty — no auto-approvals). If the specific gate name is explicitly listed in the config, auto-approve and relay. Otherwise (including when no config exists), surface to user for approval — never auto-approve by default. After handling the gate, send a "check" message to palantir (if active) to trigger a monitoring sweep. **Track the gate** — increment the gate count for this teammate (see Gate Tracking below).
+- **Gate message received** → check `config.gates.autoApprove` (default: empty — no auto-approvals). If the specific gate name is explicitly listed in the config, auto-approve and relay. Otherwise (including when no config exists), surface to user for approval — never auto-approve by default. After handling the gate, send a "check" message to palantir (if active) to trigger a monitoring sweep, or run `fellowship eagles --json` yourself if palantir is not active (see Health Monitoring Without Palantir above). **Track the gate** — increment the gate count for this teammate (see Gate Tracking below).
 - **Quest completed** → **FIRST verify gate completeness** (see Gate Tracking below). If the teammate has not sent all expected gates, reject the completion and demand the missing gates. Only after all gates are accounted for: record PR URL, mark task done via `TaskUpdate`, report to user.
 - **Quest stuck/errored** → report to user with context (phase, error), offer respawn
 - **Teammate idle** → normal, no action needed
@@ -96,7 +108,7 @@ This is defense-in-depth — the `completion-guard` hook also mechanically block
 
 ## Proactive (responding to user commands)
 
-- **"quest: {desc}"** → spawn new quest teammate (see Spawn a Quest). After spawning, send a "check" message to palantir (if active) with the updated quest list.
+- **"quest: {desc}"** → spawn new quest teammate (see Spawn a Quest). After spawning, send a "check" message to palantir (if active) with the updated quest list, or run `fellowship eagles --json` yourself if palantir is not active (see Health Monitoring Without Palantir above).
 - **Issue references detected** (`#\d+` in quest description) → invoke `/missive` to fetch issue context before spawning. Use missive output for `{issue_context}` placeholder and branch name suggestion. Spawn one quest per issue if multiple references found.
 - **"scout: {question}"** → spawn new scout teammate (see Spawn a Scout). Scouts don't count toward palantir's quest threshold.
 - **"status"** → read task list (including metadata), present structured progress report (see [progress-tracking.md](progress-tracking.md))

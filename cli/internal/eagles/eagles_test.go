@@ -2,10 +2,7 @@ package eagles
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -13,8 +10,24 @@ import (
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
+)
+
+// testTiding mirrors herald.Tiding's shape for seeding the herald table
+// directly. The eagles package can't import the herald package (herald now
+// imports eagles for its classification, see problems.go), so tests insert
+// rows with the literal type strings instead of herald's constants.
+type testTiding struct {
+	Timestamp string
+	Quest     string
+	Type      string
+	Phase     string
+}
+
+const (
+	tidingPhaseTransition = "phase_transition"
+	tidingGateSubmitted   = "gate_submitted"
+	tidingLembasCompleted = "lembas_completed"
 )
 
 // seedQuest inserts a quest state and optionally herald tidings into the test DB.
@@ -44,11 +57,14 @@ func seedFinished(t *testing.T, d *db.DB, questName, status string) {
 	}
 }
 
-// seedTiding inserts a herald tiding.
-func seedTiding(t *testing.T, d *db.DB, tiding herald.Tiding) {
+// seedTiding inserts a herald tiding directly (see testTiding).
+func seedTiding(t *testing.T, d *db.DB, tiding testTiding) {
 	t.Helper()
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		return herald.Announce(conn, tiding)
+		return sqlitex.Execute(conn,
+			`INSERT INTO herald (timestamp, quest, type, phase, detail) VALUES (?, ?, ?, ?, '')`,
+			&sqlitex.ExecOptions{Args: []any{tiding.Timestamp, tiding.Quest, tiding.Type, tiding.Phase}},
+		)
 	}); err != nil {
 		t.Fatalf("seeding tiding for %s: %v", tiding.Quest, err)
 	}
@@ -64,10 +80,10 @@ func TestClassifyHealthy(t *testing.T) {
 		TeamName:  "team",
 		Phase:     "Implement",
 	})
-	seedTiding(t, d, herald.Tiding{
+	seedTiding(t, d, testTiding{
 		Timestamp: now.Add(-2 * time.Minute).Format(time.RFC3339),
 		Quest:     "quest-api",
-		Type:      herald.PhaseTransition,
+		Type:      tidingPhaseTransition,
 		Phase:     "Implement",
 	})
 
@@ -171,10 +187,10 @@ func TestClassifyStalledGatePendingWithinThreshold(t *testing.T) {
 		GatePending: true,
 		GateID:      &gateID,
 	})
-	seedTiding(t, d, herald.Tiding{
+	seedTiding(t, d, testTiding{
 		Timestamp: now.Add(-1 * time.Minute).Format(time.RFC3339),
 		Quest:     "quest-fresh",
-		Type:      herald.GateSubmitted,
+		Type:      tidingGateSubmitted,
 		Phase:     "Plan",
 	})
 
@@ -211,10 +227,10 @@ func TestClassifyZombie(t *testing.T) {
 		Phase:     "Implement",
 	})
 	// Last activity was 30 minutes ago
-	seedTiding(t, d, herald.Tiding{
+	seedTiding(t, d, testTiding{
 		Timestamp: now.Add(-30 * time.Minute).Format(time.RFC3339),
 		Quest:     "quest-dead",
-		Type:      herald.PhaseTransition,
+		Type:      tidingPhaseTransition,
 		Phase:     "Implement",
 	})
 
@@ -254,17 +270,17 @@ func TestClassifyZombieWithCheckpoint(t *testing.T) {
 		Phase:     "Implement",
 	})
 	// Last activity was 30 minutes ago
-	seedTiding(t, d, herald.Tiding{
+	seedTiding(t, d, testTiding{
 		Timestamp: now.Add(-30 * time.Minute).Format(time.RFC3339),
 		Quest:     "quest-resumable",
-		Type:      herald.PhaseTransition,
+		Type:      tidingPhaseTransition,
 		Phase:     "Implement",
 	})
 	// Has a lembas_completed checkpoint
-	seedTiding(t, d, herald.Tiding{
+	seedTiding(t, d, testTiding{
 		Timestamp: now.Add(-30 * time.Minute).Format(time.RFC3339),
 		Quest:     "quest-resumable",
-		Type:      herald.LembasCompleted,
+		Type:      tidingLembasCompleted,
 		Phase:     "Implement",
 	})
 
@@ -432,64 +448,81 @@ func TestGateAge(t *testing.T) {
 	}
 }
 
-func TestWriteReport(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	root := t.TempDir()
-	report := &EaglesReport{
-		Timestamp: "2025-01-15T10:30:00Z",
-		Quests: []QuestHealth{
-			{
-				Name:          "quest-api",
-				Worktree:      "/tmp/wt/quest-api",
-				Phase:         "Implement",
-				Health:        Working,
-				HasCheckpoint: false,
-				LastActivity:  "2025-01-15T10:25:00Z",
-				Action:        "none",
-			},
-			{
-				Name:           "quest-auth",
-				Worktree:       "/tmp/wt/quest-auth",
-				Phase:          "Plan",
-				Health:         Stalled,
-				GatePendingSec: 1200,
-				HasCheckpoint:  true,
-				LastActivity:   "2025-01-15T10:10:00Z",
-				Action:         "nudge",
-			},
-		},
-		Problems: 1,
+func TestClassifyStruggling(t *testing.T) {
+	d := db.OpenTest(t)
+	now := time.Now().UTC()
+
+	seedQuest(t, d, &state.State{
+		QuestName: "quest-struggling",
+		TaskID:    "t8",
+		TeamName:  "team",
+		Phase:     "Plan",
+	})
+	seedTiding(t, d, testTiding{Timestamp: now.Format(time.RFC3339), Quest: "quest-struggling", Type: "gate_rejected", Phase: "Plan"})
+	seedTiding(t, d, testTiding{Timestamp: now.Format(time.RFC3339), Quest: "quest-struggling", Type: "gate_rejected", Phase: "Plan"})
+
+	opts := Options{
+		GateThreshold: 10 * time.Minute,
+		ZombieTimeout: 15 * time.Minute,
+		Now:           now,
 	}
 
-	if err := WriteReport(root, report); err != nil {
-		t.Fatalf("WriteReport: %v", err)
-	}
-
-	path := filepath.Join(root, ".fellowship", "eagles-report.json")
-	data, err := os.ReadFile(path)
+	var report *EaglesReport
+	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		report, err = Sweep(conn, opts)
+		return err
+	})
 	if err != nil {
-		t.Fatalf("reading report: %v", err)
+		t.Fatalf("Sweep: %v", err)
 	}
 
-	var loaded EaglesReport
-	if err := json.Unmarshal(data, &loaded); err != nil {
-		t.Fatalf("unmarshaling report: %v", err)
+	qh := report.Quests[0]
+	if !qh.Struggling {
+		t.Error("Struggling = false, want true (2 rejections)")
+	}
+	if qh.RejectionCount != 2 {
+		t.Errorf("RejectionCount = %d, want 2", qh.RejectionCount)
+	}
+	// Struggling is orthogonal to Health — this quest is otherwise working.
+	if qh.Health != Working {
+		t.Errorf("Health = %q, want %q", qh.Health, Working)
+	}
+	if report.Problems != 1 {
+		t.Errorf("Problems = %d, want 1 (struggling counts even though Health is Working)", report.Problems)
+	}
+}
+
+func TestClassifyNotStrugglingWithOneRejection(t *testing.T) {
+	d := db.OpenTest(t)
+	now := time.Now().UTC()
+
+	seedQuest(t, d, &state.State{
+		QuestName: "quest-one-rejection",
+		TaskID:    "t9",
+		TeamName:  "team",
+		Phase:     "Plan",
+	})
+	seedTiding(t, d, testTiding{Timestamp: now.Format(time.RFC3339), Quest: "quest-one-rejection", Type: "gate_rejected", Phase: "Plan"})
+
+	opts := Options{
+		GateThreshold: 10 * time.Minute,
+		ZombieTimeout: 15 * time.Minute,
+		Now:           now,
 	}
 
-	if loaded.Timestamp != report.Timestamp {
-		t.Errorf("Timestamp = %q, want %q", loaded.Timestamp, report.Timestamp)
+	var report *EaglesReport
+	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		report, err = Sweep(conn, opts)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
 	}
-	if len(loaded.Quests) != 2 {
-		t.Fatalf("len(Quests) = %d, want 2", len(loaded.Quests))
-	}
-	if loaded.Problems != 1 {
-		t.Errorf("Problems = %d, want 1", loaded.Problems)
-	}
-	if loaded.Quests[0].Health != Working {
-		t.Errorf("Quests[0].Health = %q, want %q", loaded.Quests[0].Health, Working)
-	}
-	if loaded.Quests[1].Health != Stalled {
-		t.Errorf("Quests[1].Health = %q, want %q", loaded.Quests[1].Health, Stalled)
+
+	if report.Quests[0].Struggling {
+		t.Error("Struggling = true, want false (only 1 rejection)")
 	}
 }
 
@@ -560,10 +593,10 @@ func TestSweepMultipleQuests(t *testing.T) {
 		QuestName: "quest-a",
 		Phase:     "Implement",
 	})
-	seedTiding(t, d, herald.Tiding{
+	seedTiding(t, d, testTiding{
 		Timestamp: now.Add(-1 * time.Minute).Format(time.RFC3339),
 		Quest:     "quest-a",
-		Type:      herald.PhaseTransition,
+		Type:      tidingPhaseTransition,
 		Phase:     "Implement",
 	})
 

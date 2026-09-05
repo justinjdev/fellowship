@@ -47,15 +47,18 @@
 					</div>
 				</div>
 				<p class="agent-desc">
-					Watches quest progress via task metadata during fellowship execution.
-					Detects stuck quests (no phase change in extended periods), scope drift
-					(implementation diverging from plan), and file conflicts between parallel quests.
-					Reports issues to Gandalf for intervention.
+					A thin reporter over the CLI's health sweep during fellowship execution —
+					runs <code>fellowship eagles</code> and reports its stalled, zombie, and
+					struggling classification rather than recomputing it. Reads each quest's
+					tome for scope drift (files touched outside the described scope) and file
+					conflicts between parallel quests. Reports issues to Gandalf for intervention.
 				</p>
 				<div class="agent-note config-note">
 					Enabled by default. Spawns at 2+ active quests. Uses the <code>haiku</code> model by
 					default (configurable via <code>models.palantir</code>). Configure via
 					<code>palantir.enabled</code> and <code>palantir.minQuests</code> in settings.
+					Below the threshold, or with palantir disabled, Gandalf runs the same health
+					sweep itself — monitoring never depends on the extra agent.
 				</div>
 			</div>
 

@@ -273,6 +273,10 @@ func runStateShow(d *db.DB, args []string) int {
 	ctx := context.Background()
 	fs := flag.NewFlagSet("state show", flag.ExitOnError)
 	dir := fs.String("dir", "", "Repo or worktree directory (default: current directory)")
+	// Output is always JSON; --json is accepted (and a no-op) so callers don't
+	// need to special-case this command among the others that gate JSON
+	// behind the flag.
+	fs.Bool("json", false, "Output as JSON (default; accepted for consistency)")
 	fs.Parse(args)
 
 	if err := checkDir(*dir); err != nil {

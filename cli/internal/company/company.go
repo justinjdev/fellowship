@@ -133,6 +133,45 @@ func List(conn *sqlite.Conn) error {
 	return nil
 }
 
+// QuestSummary is one quest's status within a company, for `company show --json`.
+type QuestSummary struct {
+	Name        string `json:"name"`
+	Phase       string `json:"phase,omitempty"`
+	GatePending bool   `json:"gate_pending"`
+	Unavailable bool   `json:"unavailable,omitempty"` // state could not be loaded
+}
+
+// Detail is a company's full detail, for `company show --json`.
+type Detail struct {
+	Name   string         `json:"name"`
+	Quests []QuestSummary `json:"quests"`
+	Scouts []string       `json:"scouts"`
+}
+
+// LoadDetail loads a company's full detail — the same data Show prints as a
+// table, structured for JSON output.
+func LoadDetail(conn *sqlite.Conn, name string) (*Detail, error) {
+	company, err := findCompany(conn, name)
+	if err != nil {
+		return nil, err
+	}
+
+	d := &Detail{
+		Name:   company.Name,
+		Quests: []QuestSummary{},
+		Scouts: append([]string{}, company.Scouts...),
+	}
+	for _, qName := range company.Quests {
+		st, err := state.Load(conn, qName)
+		if err != nil {
+			d.Quests = append(d.Quests, QuestSummary{Name: qName, Unavailable: true})
+			continue
+		}
+		d.Quests = append(d.Quests, QuestSummary{Name: qName, Phase: st.Phase, GatePending: st.GatePending})
+	}
+	return d, nil
+}
+
 // Show prints detailed status for a single company.
 func Show(conn *sqlite.Conn, name string) error {
 	company, err := findCompany(conn, name)

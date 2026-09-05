@@ -2,14 +2,10 @@ package herald
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
-	"zombiezen.com/go/sqlite"
-	"zombiezen.com/go/sqlite/sqlitex"
-
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/eagles"
 )
 
 // Severity represents the severity level of a detected problem.
@@ -28,106 +24,43 @@ type Problem struct {
 	Message  string   `json:"message"`
 }
 
-// DetectProblems scans the database for potential quest issues.
+// DetectProblems scans the database for potential quest issues. It is a view
+// over eagles' health sweep — the same classification behind `fellowship
+// eagles` — translated into the Problem shape `fellowship herald --problems`
+// and the dashboard expect, rather than a second set of thresholds.
 func DetectProblems(conn *db.Conn) ([]Problem, error) {
+	opts := eagles.DefaultOptions()
+	report, err := eagles.Sweep(conn, opts)
+	if err != nil {
+		return nil, fmt.Errorf("detect problems: %w", err)
+	}
+
 	var problems []Problem
-
-	// Query all active quests. Review is terminal, so "still going" is the
-	// fellowship entry's status rather than a phase the quest has not
-	// reached yet; a quest with no entry row at all counts as active.
-	type questInfo struct {
-		questName   string
-		phase       string
-		gatePending bool
-		gateID      string
-	}
-
-	var quests []questInfo
-	if err := sqlitex.Execute(conn,
-		`SELECT qs.quest_name, qs.phase, qs.gate_pending, qs.gate_id
-		 FROM quest_state qs
-		 LEFT JOIN fellowship_quests fq ON fq.name = qs.quest_name
-		 WHERE COALESCE(fq.status, 'active') NOT IN ('completed', 'cancelled')`,
-		&sqlitex.ExecOptions{
-			ResultFunc: func(stmt *sqlite.Stmt) error {
-				quests = append(quests, questInfo{
-					questName:   stmt.ColumnText(0),
-					phase:       stmt.ColumnText(1),
-					gatePending: stmt.ColumnInt(2) != 0,
-					gateID:      stmt.ColumnText(3),
-				})
-				return nil
-			},
-		},
-	); err != nil {
-		return nil, fmt.Errorf("detect problems: query quests: %w", err)
-	}
-
-	for _, qs := range quests {
-		// Stalled detection: gate pending for too long
-		if qs.gatePending && qs.gateID != "" {
-			if ts := extractTimestamp(qs.gateID); ts > 0 {
-				age := time.Since(time.Unix(ts, 0))
-				if age > 10*time.Minute {
-					problems = append(problems, Problem{
-						Quest:    qs.questName,
-						Type:     "stalled",
-						Severity: Warning,
-						Message:  fmt.Sprintf("Gate pending for %s", formatDuration(age)),
-					})
-				}
-			}
-		}
-
-		// Zombie detection: no recent activity
-		var lastTimestamp string
-		if err := sqlitex.Execute(conn,
-			`SELECT timestamp FROM herald WHERE quest = ? ORDER BY id DESC LIMIT 1`,
-			&sqlitex.ExecOptions{
-				Args: []any{qs.questName},
-				ResultFunc: func(stmt *sqlite.Stmt) error {
-					lastTimestamp = stmt.ColumnText(0)
-					return nil
-				},
-			},
-		); err != nil {
-			return nil, fmt.Errorf("detect problems: query herald for %s: %w", qs.questName, err)
-		}
-		if lastTimestamp != "" {
-			lastTime, err := time.Parse(time.RFC3339, lastTimestamp)
-			if err == nil {
-				age := time.Since(lastTime)
-				if age > 15*time.Minute {
-					problems = append(problems, Problem{
-						Quest:    qs.questName,
-						Type:     "zombie",
-						Severity: Critical,
-						Message:  fmt.Sprintf("No activity for %s", formatDuration(age)),
-					})
-				}
-			}
-		}
-
-		// Struggling detection: multiple rejections in same phase
-		var rejections int
-		if err := sqlitex.Execute(conn,
-			`SELECT count(*) FROM herald WHERE quest = ? AND type = ? AND phase = ?`,
-			&sqlitex.ExecOptions{
-				Args: []any{qs.questName, string(GateRejected), qs.phase},
-				ResultFunc: func(stmt *sqlite.Stmt) error {
-					rejections = stmt.ColumnInt(0)
-					return nil
-				},
-			},
-		); err != nil {
-			return nil, fmt.Errorf("detect problems: query rejections for %s: %w", qs.questName, err)
-		}
-		if rejections >= 2 {
+	for _, qh := range report.Quests {
+		switch qh.Health {
+		case eagles.Stalled:
 			problems = append(problems, Problem{
-				Quest:    qs.questName,
+				Quest:    qh.Name,
+				Type:     "stalled",
+				Severity: Warning,
+				Message:  fmt.Sprintf("Gate pending for %s", formatDuration(time.Duration(qh.GatePendingSec)*time.Second)),
+			})
+		case eagles.Zombie:
+			problems = append(problems, Problem{
+				Quest:    qh.Name,
+				Type:     "zombie",
+				Severity: Critical,
+				Message:  fmt.Sprintf("No activity for %s", formatDuration(activityAge(qh.LastActivity, opts.Now))),
+			})
+		}
+		// Struggling is orthogonal to Health (see eagles.QuestHealth), so it's
+		// checked independently of the switch above.
+		if qh.Struggling {
+			problems = append(problems, Problem{
+				Quest:    qh.Name,
 				Type:     "struggling",
 				Severity: Warning,
-				Message:  fmt.Sprintf("Gate rejected %d times in %s phase", rejections, qs.phase),
+				Message:  fmt.Sprintf("Gate rejected %d times in %s phase", qh.RejectionCount, qh.Phase),
 			})
 		}
 	}
@@ -135,16 +68,15 @@ func DetectProblems(conn *db.Conn) ([]Problem, error) {
 	return problems, nil
 }
 
-func extractTimestamp(gateID string) int64 {
-	parts := strings.Split(gateID, "-")
-	if len(parts) < 2 {
-		return 0
-	}
-	ts, err := strconv.ParseInt(parts[len(parts)-1], 10, 64)
+// activityAge returns how long ago the given ISO 8601 timestamp was, relative
+// to now. An unparseable or empty timestamp reports zero rather than erroring
+// — the zombie classification itself already required a valid timestamp.
+func activityAge(lastActivity string, now time.Time) time.Duration {
+	t, err := time.Parse(time.RFC3339, lastActivity)
 	if err != nil {
 		return 0
 	}
-	return ts
+	return now.Sub(t)
 }
 
 func formatDuration(d time.Duration) string {
