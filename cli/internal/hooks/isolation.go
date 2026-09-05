@@ -95,7 +95,7 @@ func IsolationGuard(p IsolationParams) HookResult {
 	if p.SessionID != "" && p.LeadSessionID != "" {
 		marker := "lead marker in the fellowship data directory"
 		if p.DataDirName != "" {
-			marker = p.DataDirName + "/lead"
+			marker = p.DataDirName + "/lead marker"
 		}
 		return blockMainTreeWrite(rel, fmt.Sprintf(
 			"this session is not the lead recorded by \"fellowship state init\" — if it is, delete the %s", marker))
