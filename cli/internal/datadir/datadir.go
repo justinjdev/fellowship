@@ -35,22 +35,38 @@ var (
 // User config always wins. Result is cached after the first call.
 func Name() string {
 	nameOnce.Do(func() {
-		dataDir := ""
-
-		if p := readProjectConfig(); p.DataDir != "" {
-			dataDir = p.DataDir
+		root, err := gitRoot()
+		if err != nil {
+			root = ""
 		}
-		if u := readUserConfig(); u.DataDir != "" {
-			dataDir = u.DataDir
-		}
-
-		if dataDir == "" || strings.ContainsAny(dataDir, "/\\") || strings.Contains(dataDir, "..") {
-			cachedName = DefaultName
-			return
-		}
-		cachedName = dataDir
+		cachedName = Resolve(root)
 	})
 	return cachedName
+}
+
+// Resolve returns the data directory name for the repo rooted at root, reading
+// the configs each time instead of caching. Callers that already know which
+// repo they mean — the store path resolver above all, which must land in the
+// same directory the guards look in — use this rather than Name(), whose git
+// lookup is relative to the process working directory.
+//
+// A name containing a path separator or ".." is rejected: the data directory is
+// a single directory name inside the repo, not a path.
+func Resolve(root string) string {
+	dataDir := ""
+	if root != "" {
+		if p := readConfigFile(filepath.Join(root, DefaultName, "config.json")); p.DataDir != "" {
+			dataDir = p.DataDir
+		}
+	}
+	if u := readUserConfig(); u.DataDir != "" {
+		dataDir = u.DataDir
+	}
+
+	if dataDir == "" || strings.ContainsAny(dataDir, "/\\") || strings.Contains(dataDir, "..") {
+		return DefaultName
+	}
+	return dataDir
 }
 
 // IsDataDirPath reports whether the given path is inside the fellowship data directory.
@@ -68,16 +84,6 @@ func readUserConfig() cfg {
 		return cfg{}
 	}
 	return readConfigFile(filepath.Join(home, ".claude", "fellowship.json"))
-}
-
-// readProjectConfig reads .fellowship/config.json from the git root.
-// Returns empty config if git root cannot be determined or the file does not exist.
-func readProjectConfig() cfg {
-	root, err := gitRoot()
-	if err != nil {
-		return cfg{}
-	}
-	return readConfigFile(filepath.Join(root, DefaultName, "config.json"))
 }
 
 // readConfigFile parses a fellowship JSON config file, returning empty cfg on any error.

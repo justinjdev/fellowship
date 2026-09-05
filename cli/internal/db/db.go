@@ -11,6 +11,8 @@ import (
 
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
+
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 )
 
 // Conn is an alias for sqlite.Conn to simplify consumer imports.
@@ -30,12 +32,17 @@ var ErrNoStore = errors.New("db: no fellowship store")
 
 // StorePath returns the fellowship database path for the repo containing
 // fromDir, without touching the filesystem.
+//
+// The directory name comes from the repo's own configuration (datadir.Resolve),
+// not the ".fellowship" default: a project that sets dataDir kept its store in
+// .fellowship while every guard, marker, and coordination write went to the
+// configured directory, so half the fellowship looked at the wrong place.
 func StorePath(fromDir string) (string, error) {
 	mainRepo, err := resolveMainRepo(fromDir)
 	if err != nil {
 		return "", fmt.Errorf("db: resolve main repo: %w", err)
 	}
-	return filepath.Join(mainRepo, ".fellowship", "fellowship.db"), nil
+	return filepath.Join(mainRepo, datadir.Resolve(mainRepo), "fellowship.db"), nil
 }
 
 // Open resolves the main repo from fromDir (via git rev-parse --git-common-dir),

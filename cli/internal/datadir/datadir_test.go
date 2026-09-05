@@ -327,3 +327,51 @@ func TestIsDataDirPath_CustomDir(t *testing.T) {
 		})
 	}
 }
+
+func TestResolve(t *testing.T) {
+	writeConfig := func(t *testing.T, path, body string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	tests := []struct {
+		name    string
+		project string
+		user    string
+		want    string
+	}{
+		{name: "no config anywhere", want: DefaultName},
+		{name: "project config wins over the default", project: `{"dataDir":".project-dir"}`, want: ".project-dir"},
+		{name: "user config wins over the project", project: `{"dataDir":".project-dir"}`, user: `{"dataDir":".user-dir"}`, want: ".user-dir"},
+		{name: "path-like names fall back to the default", project: `{"dataDir":"../escape"}`, want: DefaultName},
+		{name: "malformed project config falls back", project: `{not json`, want: DefaultName},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			root := t.TempDir()
+			if tt.project != "" {
+				writeConfig(t, filepath.Join(root, DefaultName, "config.json"), tt.project)
+			}
+			if tt.user != "" {
+				writeConfig(t, filepath.Join(home, ".claude", "fellowship.json"), tt.user)
+			}
+			if got := Resolve(root); got != tt.want {
+				t.Errorf("Resolve(%q) = %q, want %q", root, got, tt.want)
+			}
+		})
+	}
+
+	// An unknown root is not an error: the default applies.
+	t.Setenv("HOME", t.TempDir())
+	if got := Resolve(""); got != DefaultName {
+		t.Errorf("Resolve(\"\") = %q, want %q", got, DefaultName)
+	}
+}
