@@ -375,12 +375,18 @@ func hookLeadSessionID(conn *db.Conn, cwd string) string {
 }
 
 // unregisteredQuestWorktree reports whether cwd sits in a git worktree that is
-// NOT the main repo root while a fellowship is initialized in that repo's
+// NOT the main repo root while a fellowship is actually RUNNING in that repo's
 // store. That combination means a teammate is running somewhere no quest was
 // ever registered (a stale or mistyped path, a tree created outside the
 // fellowship), so gate hooks must not treat it as a lead session. Anything it
 // cannot determine reads as false: the lead session in the main tree must
 // never be blocked by this.
+//
+// "Running" is fellowshipRunning's definition, the same one worktree-guard
+// arms itself with — a live quest with a worktree on disk. The fellowship row
+// is never deleted, so "a row exists" is sticky: it made every linked worktree
+// of the repo unusable forever after one `state init`, long after the last
+// quest had merged.
 func unregisteredQuestWorktree(ctx context.Context, d *db.DB, cwd, gitRoot string) bool {
 	mainRoot, err := gitutil.MainRepoRoot(cwd)
 	if err != nil {
@@ -389,17 +395,19 @@ func unregisteredQuestWorktree(ctx context.Context, d *db.DB, cwd, gitRoot strin
 	if hooks.CanonicalPath(mainRoot) == hooks.CanonicalPath(gitRoot) {
 		return false // the main tree — this really is the lead session
 	}
-	initialized := false
+	running := false
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
-		if _, err := fellowship.LoadFellowship(conn); err == nil {
-			initialized = true
+		fs, err := fellowship.LoadFellowship(conn)
+		if err != nil {
+			return nil
 		}
+		running = fellowshipRunning(fs)
 		return nil
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: could not check for a running fellowship: %v\n", err)
 		return false
 	}
-	return initialized
+	return running
 }
 
 // runWorktreeGuard is the fail-OPEN backstop that keeps quest teammates from
