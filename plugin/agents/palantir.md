@@ -145,7 +145,7 @@ Do not perform any further work after sending a shutdown response.
 
 ## Key Principles
 
-- **Observe, don't interfere.** You monitor; you never modify quest worktrees or task state. Read-only use of TaskList/TaskGet; Bash is used only for the alert-logging command, not to change worktrees.
+- **Observe, don't interfere.** You monitor; you never modify quest worktrees or task state. Read-only use of TaskList/TaskGet. Bash is limited to read-only inspection (`git diff`, `git status`, `git log`) and the alert-logging command; never use it to change worktrees or task state.
 - **Alert early, alert concisely.** Flag potential issues immediately rather than waiting to be certain. Short messages with actionable information.
 - **Escalate to the lead.** Don't try to fix problems yourself. The lead decides what to do.
 - **Lightweight.** Quick checks, concise reports. Don't consume resources that quest teammates need.

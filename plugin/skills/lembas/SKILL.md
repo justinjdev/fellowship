@@ -95,7 +95,7 @@ Write the Compacted Context block to `.fellowship/checkpoint.md` (repo root) so 
 [Compacted Context block from Step 3]
 ```
 
-Gitignore the `.fellowship/` directory — checkpoints are developer-local ephemeral state, not shared via git. They only need to survive a session crash, not persist across machines.
+Add `.fellowship/*` to `.gitignore` but keep `.fellowship/config.json` trackable (`!.fellowship/config.json`) — checkpoints are developer-local ephemeral state, not shared via git. They only need to survive a session crash, not persist across machines.
 
 ### Step 5: Trigger Built-in Compaction
 

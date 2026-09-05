@@ -64,7 +64,7 @@
     "enabled": false
   },
   "gates": {
-    "autoApprove": ["Research", "Plan", "Implement", "Review"]
+    "autoApprove": ["Onboard", "Research", "Plan", "Implement", "Adversarial", "Review"]
   },
   "palantir": {
     "enabled": false
@@ -190,12 +190,12 @@
 		{
 			title: 'Team workflow with draft PRs',
 			code: example2,
-			explanation: 'Creates draft PRs with a custom template. Auto-approves Research and Plan gates for faster iteration \u2014 you still review at Implement, Review, and Complete.'
+			explanation: 'Creates draft PRs with a custom template. Auto-approves Research and Plan gates for faster iteration \u2014 you still review at Implement, Adversarial, and Review.'
 		},
 		{
 			title: 'No worktrees, minimal oversight',
 			code: example3,
-			explanation: 'Works on the current branch without worktree isolation. Auto-approves everything except Complete (PR creation). No palantir monitoring. Use for trusted, low-risk tasks.'
+			explanation: 'Works on the current branch without worktree isolation. Auto-approves every gate (Complete has no gate; PR creation still happens in that phase). No palantir monitoring. Use for trusted, low-risk tasks.'
 		}
 	];
 </script>

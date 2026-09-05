@@ -27,6 +27,12 @@
 			skill: 'test-driven-development'
 		},
 		{
+			number: 3.5,
+			name: 'Adversarial',
+			description: 'Spawns the balrog agent to attack the implementation: edge cases, error paths, targeted tests. Findings are fixed before review.',
+			skill: 'balrog'
+		},
+		{
 			number: 4,
 			name: 'Review',
 			description: 'Convention review via /warden. Code quality verification. Runs full test suite.',
@@ -73,7 +79,7 @@
 	<section class="section" id="quest">
 		<h2>Single Task &mdash; /quest</h2>
 		<p class="section-intro">
-			Run <code>/quest</code> for any non-trivial task. It walks through six phases with hard gates between each.
+			Run <code>/quest</code> for any non-trivial task. It walks through seven phases with hard gates between each.
 		</p>
 
 		<div class="timeline">
