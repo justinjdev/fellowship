@@ -25,6 +25,7 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/eagles"
 	"github.com/justinjdev/fellowship/cli/internal/errand"
+	"github.com/justinjdev/fellowship/cli/internal/gate"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
@@ -558,7 +559,6 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			if err != nil {
 				return err
 			}
-			prevPhase := s.Phase
 			sr := hooks.GateSubmit(s, input)
 			result = hooks.HookResult{Block: sr.Block, Message: sr.Message}
 			if sr.StateChanged {
@@ -567,16 +567,26 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 				}
 				if !sr.Block {
 					gateSubmitEnrich = true
-					if err := hooks.RecordGateSubmitted(conn, questName, prevPhase, s.Phase != prevPhase); err != nil {
+					if err := hooks.RecordGateSubmitted(conn, questName, sr.PrevPhase); err != nil {
 						return err
 					}
-					herald.Announce(conn, herald.Tiding{
+					if err := herald.Announce(conn, herald.Tiding{
 						Timestamp: time.Now().UTC().Format(time.RFC3339),
 						Quest:     questName,
 						Type:      herald.GateSubmitted,
 						Phase:     s.Phase,
 						Detail:    "Gate submitted for review",
-					})
+					}); err != nil {
+						return err
+					}
+					// An auto-approved gate is recorded exactly as the lead's
+					// `gate approve` records one, so the tome and herald look
+					// the same whoever (or whatever) approved it.
+					if sr.AutoApproved {
+						if err := gate.RecordApproval(conn, questName, sr.PrevPhase, sr.NextPhase, "Auto-approved by gates.autoApprove"); err != nil {
+							return err
+						}
+					}
 				}
 			}
 			return nil
@@ -841,37 +851,15 @@ func runGate(d *db.DB, args []string) int {
 			if err != nil {
 				return err
 			}
-			if !s.GatePending {
-				return fmt.Errorf("no gate pending")
-			}
-			np, err := state.NextPhase(s.Phase)
+			prev, next, err := state.Approve(s)
 			if err != nil {
 				return err
 			}
-			prevPhase = s.Phase
-			nextPhase = np
-			s.GatePending = false
-			s.Phase = nextPhase
-			s.GateID = nil
-			s.LembasCompleted = false
-			s.MetadataUpdated = false
+			prevPhase, nextPhase = prev, next
 			if err := state.Upsert(conn, s); err != nil {
 				return err
 			}
-
-			tome.RecordGate(conn, questName, prevPhase, "approved", "")
-			tome.RecordPhase(conn, questName, prevPhase, 0)
-
-			now := time.Now().UTC().Format(time.RFC3339)
-			herald.Announce(conn, herald.Tiding{
-				Timestamp: now, Quest: questName, Type: herald.GateApproved,
-				Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
-			})
-			herald.Announce(conn, herald.Tiding{
-				Timestamp: now, Quest: questName, Type: herald.PhaseTransition,
-				Phase: nextPhase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, nextPhase),
-			})
-			return nil
+			return gate.RecordApproval(conn, questName, prevPhase, nextPhase, "")
 		}); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
@@ -886,24 +874,14 @@ func runGate(d *db.DB, args []string) int {
 			if err != nil {
 				return err
 			}
-			if !s.GatePending {
-				return fmt.Errorf("no gate pending")
+			if err := state.Reject(s); err != nil {
+				return err
 			}
-			s.GatePending = false
-			s.GateID = nil
 			phase = s.Phase
 			if err := state.Upsert(conn, s); err != nil {
 				return err
 			}
-
-			tome.RecordGate(conn, questName, phase, "rejected", "")
-
-			herald.Announce(conn, herald.Tiding{
-				Timestamp: time.Now().UTC().Format(time.RFC3339),
-				Quest:     questName, Type: herald.GateRejected,
-				Phase: phase, Detail: fmt.Sprintf("Gate rejected for %s", phase),
-			})
-			return nil
+			return gate.RecordRejection(conn, questName, phase, "")
 		}); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
@@ -1102,13 +1080,11 @@ func runInit(d *db.DB) int {
 			return fmt.Errorf("loading quest state: %w", loadErr)
 		}
 		if loadErr == nil {
-			// Reset existing state.
-			existing.GatePending = false
-			existing.GateID = nil
+			// Reset existing state: the gate and prerequisite flags go back to
+			// their starting values, the phase is kept unless --phase moves it.
+			state.Reset(existing)
 			if *phase != "" {
 				existing.Phase = *phase
-				existing.LembasCompleted = false
-				existing.MetadataUpdated = false
 			}
 			existing.AutoApproveGates = autoApprove
 			if err := state.Upsert(conn, existing); err != nil {
@@ -2196,8 +2172,9 @@ func runStateCleanWorktrees(d *db.DB, args []string) int {
 			if err != nil {
 				continue
 			}
-			s.GatePending = false
-			s.GateID = nil
+			state.Reset(s)
+			// Reset owns the gate flags; a hold is separate state and this
+			// command's whole job is to release both.
 			s.Held = false
 			s.HeldReason = nil
 			if err := state.Upsert(conn, s); err != nil {

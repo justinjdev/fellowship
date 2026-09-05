@@ -5,15 +5,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
+	"github.com/justinjdev/fellowship/cli/internal/gate"
 	"github.com/justinjdev/fellowship/cli/internal/state"
-	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
 // CompanyProgress returns aggregate progress for a company.
@@ -80,38 +78,22 @@ func BatchApprove(conn *sqlite.Conn, company dashboard.CompanyEntry) (approved [
 			continue
 		}
 
-		prevPhase := st.Phase
-
-		nextPhase, err := state.NextPhase(st.Phase)
+		// Same transition the lead's `gate approve` performs.
+		prevPhase, nextPhase, err := state.Approve(st)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("advancing phase for %s: %w", qName, err))
 			continue
 		}
-
-		st.GatePending = false
-		st.Phase = nextPhase
-		st.GateID = nil
-		st.LembasCompleted = false
-		st.MetadataUpdated = false
 
 		if err := state.Upsert(conn, st); err != nil {
 			errs = append(errs, fmt.Errorf("saving state for %s: %w", qName, err))
 			continue
 		}
 
-		now := time.Now().UTC().Format(time.RFC3339)
-		herald.Announce(conn, herald.Tiding{
-			Timestamp: now, Quest: qName, Type: herald.GateApproved,
-			Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
-		})
-		herald.Announce(conn, herald.Tiding{
-			Timestamp: now, Quest: qName, Type: herald.PhaseTransition,
-			Phase: nextPhase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, nextPhase),
-		})
-
-		// Record gate and phase in tome.
-		tome.RecordGate(conn, qName, prevPhase, "approved", fmt.Sprintf("Batch approved for company %s", company.Name))
-		tome.RecordPhase(conn, qName, prevPhase, 0)
+		if err := gate.RecordApproval(conn, qName, prevPhase, nextPhase,
+			fmt.Sprintf("Batch approved for company %s", company.Name)); err != nil {
+			errs = append(errs, err)
+		}
 
 		approved = append(approved, qName)
 	}
@@ -167,11 +149,11 @@ func Show(conn *sqlite.Conn, name string) error {
 				continue
 			}
 
-			gate := ""
+			pending := ""
 			if st.GatePending {
-				gate = " [GATE PENDING]"
+				pending = " [GATE PENDING]"
 			}
-			fmt.Printf("  %-25s %-12s%s\n", qName, st.Phase, gate)
+			fmt.Printf("  %-25s %-12s%s\n", qName, st.Phase, pending)
 		}
 	}
 
