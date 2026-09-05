@@ -1,5 +1,5 @@
 ---
-description: Recover a fellowship after a session crash. Scans worktrees and state files, presents a recovery dashboard, and re-spawns Gandalf with recovered quest context. Use when returning to a crashed or expired fellowship session.
+description: Recover a fellowship after a session crash. Scans worktrees and quest state, presents a recovery dashboard, and re-spawns Gandalf with recovered quest context. Use when returning to a crashed or expired fellowship session.
 ---
 
 # Rekindle — Fellowship Crash Recovery
@@ -67,11 +67,12 @@ On user confirmation, transition into Gandalf coordinator mode:
 1. **Load config:** Read `~/.claude/fellowship.json` if it exists (same as `/fellowship`)
 2. **Create team:** `TeamCreate` with name `fellowship-{timestamp}`
 3. **Record fellowship state:** From the repo root, run `~/.claude/fellowship/bin/fellowship state init --name fellowship-{timestamp}` (it has no `--dir` — it operates on the current directory), then re-register each recovered quest with `~/.claude/fellowship/bin/fellowship state add-quest --name <quest_name> --task "<task>" [--branch <branch>] [--worktree <path>]` (same as `/fellowship` startup)
-4. **Write failure records for dead quests:** Before respawning, run `~/.claude/fellowship/bin/fellowship failures infer --dir <worktree>` for each quest classified as `stale`. This preserves failure knowledge from the crashed session for future quests to learn from.
-5. **For each quest that has not shipped:**
+4. **Clean up stale flags:** Run `~/.claude/fellowship/bin/fellowship state clean-worktrees` to reset any `gate_pending`/`held` flags a crashed session left set — a quest that crashed mid-gate or mid-hold should not resume already blocked.
+5. **Write failure records for dead quests:** Before respawning, run `~/.claude/fellowship/bin/fellowship failures infer --dir <worktree>` for each quest classified as `stale`. This preserves failure knowledge from the crashed session for future quests to learn from.
+6. **For each quest that has not shipped:**
    a. `TaskCreate` with the original task description (from `~/.claude/fellowship/bin/fellowship state show --json` or inferred from quest name)
    b. Spawn a quest runner teammate with the **resume spawn prompt** (see below)
-6. **Enter Gandalf coordinator loop** — same behavior as `/fellowship` (gate handling, status reports, user commands)
+7. **Enter Gandalf coordinator loop** — same behavior as `/fellowship` (gate handling, status reports, user commands)
 
 **Resume spawn prompt:** use the **Resume** variant of the base quest spawn
 template in `plugin/skills/fellowship/resources/spawn-prompts.md`. Rekindle

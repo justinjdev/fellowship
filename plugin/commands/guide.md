@@ -126,14 +126,14 @@ After the PR is created, present:
 
 If `~/.claude/fellowship.json` does not exist, also offer:
 
-> Want me to set up a config file so your first `/quest` auto-approves the early checkpoints? (Recommended — it keeps the flow moving while still pausing before code is written.)
+> Want me to set up a config file so your first `/quest` auto-approves the Research checkpoint? (Recommended — it keeps the flow moving while still pausing before you approve a plan and before code is written.)
 
 If the user says yes, create `~/.claude/fellowship.json` with:
 
 ```json
 {
   "gates": {
-    "autoApprove": ["Research", "Plan"]
+    "autoApprove": ["Research"]
   }
 }
 ```

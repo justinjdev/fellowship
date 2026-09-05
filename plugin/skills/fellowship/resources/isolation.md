@@ -47,9 +47,10 @@ always safe; it never blocks work outside a fellowship.
 ## Provisioning, for each quest
 
 1. **Create the worktree yourself.** Run
-   `git worktree add -b <branch> <path> <base>` with `<path>` OUTSIDE the main
-   tree. Passing the harness `isolation` flag as well MAY work, but it must be
-   verified, never assumed.
+   `git worktree add -b <branch> <path> <base>` with `<path>` a distinct git
+   worktree root (any path; the default is `.claude/worktrees` under the
+   repo). Passing the harness `isolation` flag as well MAY work, but it must
+   be verified, never assumed.
 2. **Make it usable.** Provision dependencies so the teammate's tests run (for
    example symlink or install `node_modules`), and copy the settings file in
    so the guard is armed there:
