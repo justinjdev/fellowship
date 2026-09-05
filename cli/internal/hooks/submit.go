@@ -15,6 +15,16 @@ type SubmitResult struct {
 	Block        bool
 	Message      string
 	StateChanged bool
+	// AutoApproved reports that the gate's phase was on the quest's
+	// auto-approve list, so the submission advanced the phase immediately
+	// instead of leaving a gate pending for the lead.
+	AutoApproved bool
+	// PrevPhase is the phase the gate was submitted from; NextPhase is the
+	// phase it advances to (reached already when AutoApproved). The caller
+	// needs both to write the same tome entries and heralds the lead's
+	// `gate approve` writes.
+	PrevPhase string
+	NextPhase string
 }
 
 func GateSubmit(s *state.State, input *HookInput) SubmitResult {
@@ -24,7 +34,7 @@ func GateSubmit(s *state.State, input *HookInput) SubmitResult {
 		return SubmitResult{}
 	}
 
-	if strings.Count(content, "[GATE]") > 1 {
+	if countGateMarkers(content) > 1 {
 		return SubmitResult{Block: true, Message: "Multiple [GATE] markers detected — send one gate per message."}
 	}
 
@@ -55,35 +65,34 @@ func GateSubmit(s *state.State, input *HookInput) SubmitResult {
 		return SubmitResult{Block: true, Message: msg}
 	}
 
-	// Auto-approve checks current (leaving) phase.
-	if slices.Contains(s.AutoApproveGates, s.Phase) {
-		s.Phase = nextPhase
-		s.LembasCompleted = false
-		s.MetadataUpdated = false
-		return SubmitResult{StateChanged: true}
+	// Every submission goes through the same state machine the lead's
+	// `gate approve` uses, including the auto-approved one — which used to
+	// advance the phase by hand and so left gate_id behind.
+	prevPhase := s.Phase
+	gateID := fmt.Sprintf("gate-%s-%d", prevPhase, time.Now().Unix())
+	if err := state.Submit(s, gateID); err != nil {
+		return SubmitResult{Block: true, Message: fmt.Sprintf("Gate blocked: %v.", err)}
 	}
 
-	gateID := fmt.Sprintf("gate-%s-%d", s.Phase, time.Now().Unix())
-	s.GatePending = true
-	s.GateID = &gateID
-	return SubmitResult{StateChanged: true}
+	// Auto-approve checks the current (leaving) phase.
+	if !slices.Contains(s.AutoApproveGates, prevPhase) {
+		return SubmitResult{StateChanged: true, PrevPhase: prevPhase, NextPhase: nextPhase}
+	}
+
+	prev, next, err := state.Approve(s)
+	if err != nil {
+		// Unreachable: Submit just set the gate and NextPhase already succeeded.
+		return SubmitResult{Block: true, Message: fmt.Sprintf("fellowship: auto-approve failed: %v", err)}
+	}
+	return SubmitResult{StateChanged: true, AutoApproved: true, PrevPhase: prev, NextPhase: next}
 }
 
-// RecordGateSubmitted records a "submitted" gate event in the quest tome.
-// If autoApproved is true, the phase is also recorded as completed.
-func RecordGateSubmitted(conn *sqlite.Conn, questName, phase string, autoApproved bool) error {
-	if err := tome.RecordGate(conn, questName, phase, "submitted", ""); err != nil {
-		return err
-	}
-	if autoApproved {
-		if err := tome.RecordGate(conn, questName, phase, "approved", ""); err != nil {
-			return err
-		}
-		if err := tome.RecordPhase(conn, questName, phase, 0); err != nil {
-			return err
-		}
-	}
-	return nil
+// RecordGateSubmitted records a "submitted" gate event in the quest tome. An
+// auto-approved gate is *also* an approval: the caller records that half with
+// gate.RecordApproval, exactly as the lead's `gate approve` does, so the two
+// paths cannot drift.
+func RecordGateSubmitted(conn *sqlite.Conn, questName, phase string) error {
+	return tome.RecordGate(conn, questName, phase, "submitted", "")
 }
 
 // HookSpecificOutput is the JSON structure Claude Code expects from
@@ -122,11 +131,21 @@ func NewDenyOutput(reason string) HookSpecificOutput {
 	}
 }
 
-func hasGateMarker(content string) bool {
+// countGateMarkers counts the lines that begin with the gate marker. Detection
+// and the duplicate check must agree on what a marker is: counting bare
+// occurrences of "[GATE]" anywhere in the message rejected a gate that merely
+// quoted the token in prose, while the message that opened the gate had to
+// carry it at the start of a line.
+func countGateMarkers(content string) int {
+	n := 0
 	for line := range strings.SplitSeq(content, "\n") {
 		if strings.HasPrefix(line, "[GATE]") {
-			return true
+			n++
 		}
 	}
-	return false
+	return n
+}
+
+func hasGateMarker(content string) bool {
+	return countGateMarkers(content) > 0
 }

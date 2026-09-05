@@ -26,17 +26,28 @@ type IsolationParams struct {
 	// (datadir.Name(), e.g. ".fellowship" or a user override). Writes under it
 	// are coordination state, always allowed even in the main tree.
 	DataDirName string
+	// SessionID is the Claude Code session id from the hook payload, or "" if
+	// the payload carried none.
+	SessionID string
+	// LeadSessionID is the session id `fellowship state init` recorded in the
+	// lead marker, or "" when there is no marker or it holds no id.
+	LeadSessionID string
+	// SessionIsRegisteredQuest reports that the session's git top-level is
+	// registered as a quest worktree in fellowship state. Combined with a
+	// top-level that IS the main root, it is a positive mis-placement: a quest
+	// was provisioned in the main working tree.
+	SessionIsRegisteredQuest bool
 }
 
 // IsolationGuard is the fail-OPEN backstop for worktree isolation: it blocks
 // only on a positive mis-placement detection, and every uncertainty (no
-// fellowship active, unresolved paths, non-mutating tool) allows. During an
-// active fellowship, a quest teammate must operate inside its own git worktree.
-// If a session whose top-level IS the main worktree root tries to Edit/Write a
-// source file there, the teammate was mis-placed (isolation was skipped) and the
-// write is blocked. Teammates in their own worktree, and non-mutating tools, are
-// never blocked. This is defense-in-depth: lead-created `isolation: "worktree"`
-// is the primary guarantee.
+// fellowship active, unresolved paths, non-mutating tool, an unidentifiable
+// writer) allows. During an active fellowship, a quest teammate must operate
+// inside its own git worktree; a session whose top-level IS the main worktree
+// root and that is not the lead has had isolation skipped, and its source
+// writes are blocked. Teammates in their own worktree, non-mutating tools, and
+// the lead's own session are never blocked. This is defense-in-depth:
+// lead-created `isolation: "worktree"` is the primary guarantee.
 func IsolationGuard(p IsolationParams) HookResult {
 	// Inert unless a fellowship is active — installing the guard is always safe.
 	if !p.FellowshipActive {
@@ -61,11 +72,45 @@ func IsolationGuard(p IsolationParams) HookResult {
 	if isCoordinationPath(rel, p.DataDirName) {
 		return HookResult{}
 	}
+
+	// Everything above says "a source write is happening in the main working
+	// tree". That alone is NOT a mis-placement: the main tree is the lead's own
+	// workspace, and blocking it blocked the lead out of its own repo. Who is
+	// writing decides, in this order:
+	//
+	//  1. The session that ran `fellowship state init` is the lead — allow.
+	//  2. A session whose top-level is BOTH the main root and a registered
+	//     quest worktree is a quest provisioned into the main tree — block,
+	//     with or without session ids.
+	//  3. A known session that is not the recorded lead, during an active
+	//     fellowship, is a teammate in the wrong tree — block.
+	//  4. Otherwise the writer cannot be identified. The guard is a fail-open
+	//     backstop behind lead-provisioned isolation, so it allows.
+	if p.SessionID != "" && p.SessionID == p.LeadSessionID {
+		return HookResult{}
+	}
+	if p.SessionIsRegisteredQuest {
+		return blockMainTreeWrite(rel, "this worktree is registered as a quest but resolves to the main working tree")
+	}
+	if p.SessionID != "" && p.LeadSessionID != "" {
+		marker := "lead marker in the fellowship data directory"
+		if p.DataDirName != "" {
+			marker = p.DataDirName + "/lead marker"
+		}
+		return blockMainTreeWrite(rel, fmt.Sprintf(
+			"this session is not the lead recorded by \"fellowship state init\" — if it is, delete the %s", marker))
+	}
+	return HookResult{}
+}
+
+// blockMainTreeWrite builds the guard's refusal, naming the file and why the
+// writer was taken for a mis-placed teammate rather than the lead.
+func blockMainTreeWrite(rel, reason string) HookResult {
 	return HookResult{
 		Block: true,
 		Message: fmt.Sprintf(
-			"worktree-guard: refusing to write '%s' in the MAIN working tree during an active fellowship; quest work belongs in your isolated worktree",
-			filepath.ToSlash(rel),
+			"worktree-guard: refusing to write '%s' in the MAIN working tree during an active fellowship; quest work belongs in your isolated worktree (%s)",
+			filepath.ToSlash(rel), reason,
 		),
 	}
 }

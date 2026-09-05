@@ -1,0 +1,64 @@
+// Package gate records the journal side of a gate decision: the tome entries
+// and herald tidings that accompany a state transition made by
+// state.Approve/Reject/Submit.
+//
+// The state machine lives in the state package and owns the quest's fields;
+// this package owns what gets written down about a transition. Keeping them
+// apart means state stays free of the tome and herald dependencies (tome
+// imports state), while every approval path — the lead's `gate approve`, a
+// company batch approval, and the gate-submit hook's auto-approve — records the
+// same three things instead of each remembering its own subset.
+package gate
+
+import (
+	"fmt"
+	"time"
+
+	"zombiezen.com/go/sqlite"
+
+	"github.com/justinjdev/fellowship/cli/internal/herald"
+	"github.com/justinjdev/fellowship/cli/internal/tome"
+)
+
+// RecordApproval writes the tome and herald records for a gate that has just
+// been approved, moving the quest from prev to next. detail is the reason
+// recorded in the tome ("" for an ordinary approval); the heralds always
+// describe the approval and the phase transition.
+func RecordApproval(conn *sqlite.Conn, questName, prev, next, detail string) error {
+	if err := tome.RecordGate(conn, questName, prev, "approved", detail); err != nil {
+		return fmt.Errorf("recording gate approval for %s: %w", questName, err)
+	}
+	if err := tome.RecordPhase(conn, questName, prev, 0); err != nil {
+		return fmt.Errorf("recording phase %s for %s: %w", prev, questName, err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := herald.Announce(conn, herald.Tiding{
+		Timestamp: now, Quest: questName, Type: herald.GateApproved,
+		Phase: prev, Detail: fmt.Sprintf("Gate approved for %s", prev),
+	}); err != nil {
+		return fmt.Errorf("announcing gate approval for %s: %w", questName, err)
+	}
+	if err := herald.Announce(conn, herald.Tiding{
+		Timestamp: now, Quest: questName, Type: herald.PhaseTransition,
+		Phase: next, Detail: fmt.Sprintf("Phase advanced from %s to %s", prev, next),
+	}); err != nil {
+		return fmt.Errorf("announcing phase transition for %s: %w", questName, err)
+	}
+	return nil
+}
+
+// RecordRejection writes the tome entry and herald tiding for a rejected gate.
+// The quest stays in phase, so there is no phase record to write.
+func RecordRejection(conn *sqlite.Conn, questName, phase, detail string) error {
+	if err := tome.RecordGate(conn, questName, phase, "rejected", detail); err != nil {
+		return fmt.Errorf("recording gate rejection for %s: %w", questName, err)
+	}
+	if err := herald.Announce(conn, herald.Tiding{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Quest:     questName, Type: herald.GateRejected,
+		Phase: phase, Detail: fmt.Sprintf("Gate rejected for %s", phase),
+	}); err != nil {
+		return fmt.Errorf("announcing gate rejection for %s: %w", questName, err)
+	}
+	return nil
+}

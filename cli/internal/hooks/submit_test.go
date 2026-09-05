@@ -144,3 +144,47 @@ func TestGateSubmit_AllPhaseTransitions(t *testing.T) {
 		}
 	}
 }
+
+func TestGateSubmit_AutoApproveClearsGateID(t *testing.T) {
+	// The auto-approve path used to advance the phase by hand and never touch
+	// gate_id, leaving the quest carrying the id of a gate nobody is waiting on.
+	s := &state.State{Phase: "Research", LembasCompleted: true, MetadataUpdated: true, AutoApproveGates: []string{"Research"}}
+	input := &HookInput{ToolInput: ToolInput{Content: "[GATE] Research complete"}}
+	result := GateSubmit(s, input)
+	if result.Block {
+		t.Fatalf("auto-approved gate must not block: %s", result.Message)
+	}
+	if s.GateID != nil {
+		t.Errorf("GateID = %q, want nil after auto-approval", *s.GateID)
+	}
+	if !result.AutoApproved {
+		t.Error("AutoApproved should be true")
+	}
+	if result.PrevPhase != "Research" || result.NextPhase != "Plan" {
+		t.Errorf("transition = %s -> %s, want Research -> Plan", result.PrevPhase, result.NextPhase)
+	}
+}
+
+func TestGateSubmit_ReportsTransitionForPendingGate(t *testing.T) {
+	s := &state.State{Phase: "Implement", LembasCompleted: true, MetadataUpdated: true}
+	input := &HookInput{ToolInput: ToolInput{Content: "[GATE] Implement complete"}}
+	result := GateSubmit(s, input)
+	if result.AutoApproved {
+		t.Error("AutoApproved should be false without a matching autoApprove entry")
+	}
+	if result.PrevPhase != "Implement" || result.NextPhase != "Adversarial" {
+		t.Errorf("transition = %s -> %s, want Implement -> Adversarial", result.PrevPhase, result.NextPhase)
+	}
+}
+
+func TestGateSubmit_BlocksWhenHeld(t *testing.T) {
+	s := &state.State{Phase: "Implement", Held: true, LembasCompleted: true, MetadataUpdated: true}
+	input := &HookInput{ToolInput: ToolInput{Content: "[GATE] Implement complete"}}
+	result := GateSubmit(s, input)
+	if !result.Block {
+		t.Fatal("a held quest must not be able to submit a gate")
+	}
+	if s.GatePending {
+		t.Error("a blocked submission must not set gate_pending")
+	}
+}

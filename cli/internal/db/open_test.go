@@ -121,3 +121,69 @@ func TestOpenExisting_CorruptStore(t *testing.T) {
 		t.Fatalf("a corrupt store must not read as a missing store: %v", err)
 	}
 }
+
+// A project that configures a custom dataDir must get its store there. The
+// store path used to be hardcoded to ".fellowship" while every other part of
+// the CLI honored the configured name, so the database and the guards that
+// read it ended up in different directories.
+func TestStorePath_CustomDataDir(t *testing.T) {
+	// Keep the user config out of it: ~/.claude/fellowship.json would win.
+	t.Setenv("HOME", t.TempDir())
+	dir := newRepo(t)
+
+	if got, err := StorePath(dir); err != nil {
+		t.Fatalf("StorePath: %v", err)
+	} else if want := filepath.Join(dir, ".fellowship", "fellowship.db"); got != want {
+		t.Fatalf("StorePath with no config = %q, want %q", got, want)
+	}
+
+	cfgDir := filepath.Join(dir, ".fellowship")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.json"),
+		[]byte(`{"dataDir":".questdata"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := StorePath(dir)
+	if err != nil {
+		t.Fatalf("StorePath: %v", err)
+	}
+	if want := filepath.Join(dir, ".questdata", "fellowship.db"); got != want {
+		t.Fatalf("StorePath with dataDir configured = %q, want %q", got, want)
+	}
+
+	// And Open must actually create it there.
+	d, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer d.Close()
+	if _, err := os.Stat(filepath.Join(dir, ".questdata", "fellowship.db")); err != nil {
+		t.Fatalf("store was not created in the configured data directory: %v", err)
+	}
+}
+
+// A dataDir that is a path rather than a directory name is rejected, so the
+// store cannot be steered out of the repo.
+func TestStorePath_RejectsPathLikeDataDir(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := newRepo(t)
+	cfgDir := filepath.Join(dir, ".fellowship")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.json"),
+		[]byte(`{"dataDir":"../elsewhere"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := StorePath(dir)
+	if err != nil {
+		t.Fatalf("StorePath: %v", err)
+	}
+	if want := filepath.Join(dir, ".fellowship", "fellowship.db"); got != want {
+		t.Fatalf("StorePath = %q, want the default %q", got, want)
+	}
+}

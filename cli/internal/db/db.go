@@ -5,12 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
+
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
+	"github.com/justinjdev/fellowship/cli/internal/gitutil"
 )
 
 // Conn is an alias for sqlite.Conn to simplify consumer imports.
@@ -30,12 +31,17 @@ var ErrNoStore = errors.New("db: no fellowship store")
 
 // StorePath returns the fellowship database path for the repo containing
 // fromDir, without touching the filesystem.
+//
+// The directory name comes from the repo's own configuration (datadir.Resolve),
+// not the ".fellowship" default: a project that sets dataDir kept its store in
+// .fellowship while every guard, marker, and coordination write went to the
+// configured directory, so half the fellowship looked at the wrong place.
 func StorePath(fromDir string) (string, error) {
 	mainRepo, err := resolveMainRepo(fromDir)
 	if err != nil {
 		return "", fmt.Errorf("db: resolve main repo: %w", err)
 	}
-	return filepath.Join(mainRepo, ".fellowship", "fellowship.db"), nil
+	return filepath.Join(mainRepo, datadir.Resolve(mainRepo), "fellowship.db"), nil
 }
 
 // Open resolves the main repo from fromDir (via git rev-parse --git-common-dir),
@@ -166,36 +172,30 @@ func (d *DB) WithConn(ctx context.Context, fn func(conn *Conn) error) error {
 	return fn(conn)
 }
 
-// WithTx runs fn inside an IMMEDIATE transaction. If fn returns an error,
-// the transaction is rolled back; otherwise it is committed.
+// WithTx runs fn inside an IMMEDIATE transaction. If fn returns an error, the
+// transaction is rolled back; otherwise it is committed.
+//
+// The transaction is ended from a defer, so a panic inside fn cannot leave it
+// open on a connection that goes straight back into the pool. The error is
+// seeded non-nil for exactly that case: endFn commits only when the error it is
+// handed is nil, so an fn that never returns rolls back. A named return keeps a
+// commit failure visible to the caller.
 func (d *DB) WithTx(ctx context.Context, fn func(conn *Conn) error) error {
-	return d.WithConn(ctx, func(conn *Conn) error {
-		endFn, err := sqlitex.ImmediateTransaction(conn)
-		if err != nil {
-			return fmt.Errorf("db: begin tx: %w", err)
+	return d.WithConn(ctx, func(conn *Conn) (err error) {
+		endFn, txErr := sqlitex.ImmediateTransaction(conn)
+		if txErr != nil {
+			return fmt.Errorf("db: begin tx: %w", txErr)
 		}
-		fnErr := fn(conn)
-		endFn(&fnErr)
-		return fnErr
+		err = errors.New("db: transaction abandoned")
+		defer func() { endFn(&err) }()
+		err = fn(conn)
+		return err
 	})
 }
 
-// resolveMainRepo returns the main repo root from any worktree or the main repo itself.
+// resolveMainRepo returns the main repo root from any worktree or the main repo
+// itself. It is gitutil.MainRepoRoot, which every other caller shares, so the
+// store, the data directory and the guards cannot disagree about the root.
 func resolveMainRepo(fromDir string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--git-common-dir")
-	cmd.Dir = fromDir
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("git rev-parse --git-common-dir: %w", err)
-	}
-	gitCommon := strings.TrimSpace(string(out))
-
-	// --git-common-dir returns absolute or relative path to the shared .git dir.
-	if !filepath.IsAbs(gitCommon) {
-		gitCommon = filepath.Join(fromDir, gitCommon)
-	}
-	gitCommon = filepath.Clean(gitCommon)
-
-	// The main repo root is the parent of the .git (or equivalent) directory.
-	return filepath.Dir(gitCommon), nil
+	return gitutil.MainRepoRoot(fromDir)
 }
