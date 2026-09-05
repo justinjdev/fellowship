@@ -7,10 +7,30 @@ import (
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-const schemaVersion = 1
+// baseSchemaVersion is the schema version that predates the migration
+// ladder in migrations.go — the shape every store was created with before
+// versioned migrations existed. ensureSchema treats a fresh file (PRAGMA
+// user_version reading 0) as "apply schema and stamp it at
+// latestSchemaVersion"; baseSchemaVersion only ever appears already stamped
+// on a store created by an older binary.
+const baseSchemaVersion = 1
 
-// Schema contains all CREATE TABLE, INDEX, and TRIGGER statements.
-var schema = []string{
+// questWorktreeUniqueIndexSQL enforces one fellowship_quests row per
+// worktree. Two quests could otherwise share a worktree (nothing stopped
+// it), and FindQuest would silently return whichever row its table scan
+// happened to see last. This is migration version 2 in migrations.go;
+// declared once here so the fresh-install schema below and the upgrade
+// migration apply byte-identical DDL — see
+// TestFreshSchemaMatchesMigratedSchema in migrations_test.go.
+const questWorktreeUniqueIndexSQL = `CREATE UNIQUE INDEX IF NOT EXISTS idx_fellowship_quests_worktree ON fellowship_quests(worktree) WHERE worktree IS NOT NULL AND worktree != ''`
+
+// baseSchema contains every CREATE TABLE, INDEX, and TRIGGER statement from
+// the original version-1 schema. Do not edit a statement here to ship a
+// schema change — add a migration step in migrations.go instead (see
+// "Schema changes" in CONTRIBUTING.md); this slice must keep producing
+// exactly what it always has, since applySchema also replays it verbatim
+// for every brand-new store on the way to the current version.
+var baseSchema = []string{
 	// Quest state (replaces quest-state.json)
 	`CREATE TABLE IF NOT EXISTS quest_state (
 		quest_name       TEXT PRIMARY KEY,
@@ -210,27 +230,46 @@ var schema = []string{
 	END`,
 }
 
+// schema is the full DDL for a brand-new store: the frozen version-1
+// baseSchema plus the additive DDL from every migration step in
+// migrations.go, so a fresh install and a store upgraded through the ladder
+// always converge on identical schema objects.
+var schema = append(append([]string{}, baseSchema...), questWorktreeUniqueIndexSQL)
+
 // applySchemaCalls counts how many times applySchema has actually run DDL.
 // Tests use it to assert that opening an already-current store takes the
 // read-only path; nothing in production reads it.
 var applySchemaCalls int
 
-// ensureSchema brings the store up to schemaVersion, doing nothing at all when
-// it is already there. The check matters for enforcement: every hook opens the
-// store, and re-running the DDL on each open would append to the WAL and take
-// a write lock on what should be a read-only decision.
+// ensureSchema brings the store up to latestSchemaVersion, doing nothing at
+// all when it is already there. The check matters for enforcement: every
+// hook opens the store, and re-running DDL on each open would append to the
+// WAL and take a write lock on what should be a read-only decision.
+//
+// A fresh file (user_version 0) gets the current schema applied directly.
+// A store below the latest version runs each pending migration step in
+// migrations.go, in order, inside one transaction. A store above the
+// latest version was created by a newer fellowship binary than this one —
+// that's not safe to touch, so it errors instead of guessing.
 func ensureSchema(conn *Conn) error {
 	v, err := userVersion(conn)
 	if err != nil {
 		return err
 	}
-	if v == schemaVersion {
+	latest := latestSchemaVersion()
+	if v == latest {
 		return nil
+	}
+	if v > latest {
+		return fmt.Errorf("db: database is from a newer fellowship (schema version %d, this binary supports up to %d); upgrade the binary", v, latest)
 	}
 	if err := sqlitex.ExecuteTransient(conn, "PRAGMA journal_mode = WAL", nil); err != nil {
 		return err
 	}
-	return applySchema(conn)
+	if v == 0 {
+		return applySchema(conn)
+	}
+	return applyMigrations(conn, v, latest)
 }
 
 // userVersion reads PRAGMA user_version, the stamp applySchema leaves behind.
@@ -248,8 +287,9 @@ func userVersion(conn *Conn) (int, error) {
 	return v, nil
 }
 
-// applySchema creates all tables, indexes, and triggers.
-// Uses IF NOT EXISTS so it is idempotent.
+// applySchema creates all tables, indexes, and triggers for a brand-new
+// store and stamps it at latestSchemaVersion. Uses IF NOT EXISTS so it is
+// idempotent.
 func applySchema(conn *Conn) error {
 	applySchemaCalls++
 	for _, stmt := range schema {
@@ -259,7 +299,7 @@ func applySchema(conn *Conn) error {
 	}
 
 	// Set schema version.
-	if err := sqlitex.ExecuteTransient(conn, fmt.Sprintf("PRAGMA user_version = %d", schemaVersion), nil); err != nil {
+	if err := sqlitex.ExecuteTransient(conn, fmt.Sprintf("PRAGMA user_version = %d", latestSchemaVersion()), nil); err != nil {
 		return fmt.Errorf("db: set user_version: %w", err)
 	}
 	return nil

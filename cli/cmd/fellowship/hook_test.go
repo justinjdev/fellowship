@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/fellowship"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -57,11 +57,11 @@ func fellowshipWith(t *testing.T, root string, quests map[string]string) *db.DB 
 	t.Helper()
 	d := db.OpenTest(t)
 	err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := dashboard.InitFellowship(conn, "test-fellowship", root, "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test-fellowship", root, "main"); err != nil {
 			return err
 		}
 		for name, wt := range quests {
-			if err := dashboard.AddQuest(conn, dashboard.QuestEntry{
+			if err := fellowship.AddQuest(conn, fellowship.QuestEntry{
 				Name: name, TaskDescription: "t", Worktree: wt, Branch: name,
 			}); err != nil {
 				return err

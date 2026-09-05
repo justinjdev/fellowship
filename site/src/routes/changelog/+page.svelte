@@ -15,6 +15,7 @@
 		<h2 class="version-heading"><a href="{base}/changelog#unreleased">Unreleased</a></h2>
 		<ul class="changes">
 			<li>
+				<strong><code>/dashboard</code> command</strong> — Starts the fellowship web dashboard in the background and prints its URL. The dashboard's company gate approval now shares <code>company.BatchApprove</code> with the CLI's <code>fellowship company approve</code> instead of a second, drifted copy that skipped tome recording. The core fellowship state model (<code>FellowshipState</code>, <code>QuestEntry</code>, <code>CompanyEntry</code>, and their SQLite CRUD) moved out of the <code>dashboard</code> package into a new <code>cli/internal/fellowship</code> package, removing the import cycle that forced <code>company</code> to duplicate that batch-approve logic. The dashboard's <code>/api/status</code> response now includes a <code>phases</code> field so the UI's phase list tracks the server instead of a hardcoded array (which was previously missing the Adversarial phase).
 				<strong>The lead is no longer locked out of the main tree</strong> &mdash; <code>worktree-guard</code> blocked every <code>Edit</code>/<code>Write</code> in the main working tree while a fellowship was active, including the lead's own. <code>fellowship state init</code> now records the lead's Claude Code session in a <code>lead</code> marker inside the data directory, and the guard allows that session, blocks a quest worktree that resolves to the main root, blocks a session known not to be the lead, and allows anything it cannot identify.
 			</li>
 			<li>

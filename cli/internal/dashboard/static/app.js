@@ -1,8 +1,12 @@
 (function () {
   "use strict";
 
-  const PHASES = ["Onboard", "Research", "Plan", "Implement", "Review", "Complete"];
+  // Fallback only: the server's /api/status response carries the
+  // authoritative phase list (`phases`). This is used only if that
+  // field is ever missing from an older server build.
+  const FALLBACK_PHASES = ["Onboard", "Research", "Plan", "Implement", "Adversarial", "Review", "Complete"];
 
+  let PHASES = FALLBACK_PHASES;
   let prevStatus = null;
   let pollTimer = null;
   let eaglesData = null;
@@ -12,6 +16,7 @@
   async function init() {
     try {
       const data = await fetchStatus();
+      if (data.phases && data.phases.length > 0) PHASES = data.phases;
       eaglesData = await fetchEagles();
       render(data);
       await fetchAndRenderTidings();
@@ -47,6 +52,7 @@
     dot.classList.add("active");
     try {
       const data = await fetchStatus();
+      if (data.phases && data.phases.length > 0) PHASES = data.phases;
       eaglesData = await fetchEagles();
       detectChanges(data);
       render(data);

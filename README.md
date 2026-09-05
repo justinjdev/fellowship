@@ -164,6 +164,7 @@ Commands are user-invoked only — Claude never calls them automatically, so the
 | Command | Purpose |
 |---------|---------|
 | `/chronicle` | One-time codebase bootstrapping. Walks through your project to extract conventions into CLAUDE.md. |
+| `/dashboard` | Starts the live web dashboard for the current fellowship — quest/scout progress, gate approvals, event history — in the background, and prints the URL. |
 | `/guide` | Interactive, learn-by-doing walkthrough of fellowship using a real task on your codebase. |
 | `/red-book` | Post-PR convention capture. Extracts conventions from reviewer comments and adds them to CLAUDE.md. |
 | `/rekindle` | Recovers a fellowship after a session crash — scans worktrees and state files, then re-spawns Gandalf with recovered context. |
@@ -220,6 +221,7 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 
 ### Unreleased
 
+- **`/dashboard` command** — Starts the fellowship web dashboard in the background and prints its URL. The dashboard's own company gate approval now shares `company.BatchApprove` with the CLI's `fellowship company approve` instead of a second, drifted copy that skipped tome recording. The core fellowship state model (`FellowshipState`, `QuestEntry`, `CompanyEntry`, and their SQLite CRUD) moved out of the `dashboard` package into a new `cli/internal/fellowship` package, removing the import cycle that forced `company` to duplicate that batch-approve logic. The dashboard's `/api/status` response now includes a `phases` field so the UI's phase list tracks the server instead of a hardcoded array (which was previously missing the Adversarial phase).
 - **The lead is no longer locked out of the main tree** — `worktree-guard` blocked every `Edit`/`Write` in the main working tree while a fellowship was active, including the lead's own. `fellowship state init` now records the lead's Claude Code session in a `lead` marker inside the data directory, and the guard allows that session, blocks a quest worktree that resolves to the main root, blocks a session that is known not to be the lead, and allows anything it cannot identify.
 - **`dataDir` moves the store too** — the fellowship database was always created in `.fellowship/` even when `dataDir` named a different directory, so the store and everything that reads it lived in different places. The store now follows the configured data directory.
 - **`hold`/`unhold` report an unregistered `--dir`** — instead of guessing the quest from the directory's name, which could hold a different quest that happened to share it.

@@ -78,6 +78,15 @@ README.md                           # User-facing docs and changelog
 CLAUDE.md                           # AI assistant conventions
 ```
 
+## Schema changes
+
+`cli/internal/db` tracks the SQLite schema version with `PRAGMA user_version` and upgrades a store through an ordered ladder of steps (`cli/internal/db/migrations.go`). To ship a schema change:
+
+- Bump the version: add a new entry to the `migrations` slice, one version higher than the current last entry.
+- Add a step, don't inline it elsewhere: the step's `up` func is the only place that DDL or data transformation runs for stores upgrading from an older version.
+- Never edit an existing step. A store that already recorded that version in `user_version` will never run it again — an edit only reaches stores that haven't upgraded yet, and silently diverges from ones that already did. This applies to purely additive changes too (a new column, a new index): there's no safe edit to a step that may already be applied somewhere. Ship a corrective follow-up migration instead.
+- Keep the fresh-install schema (`schema` in `cli/internal/db/schema.go`) in sync with the ladder, so a brand-new store and one upgraded through every migration always end up with identical schema objects (`TestFreshSchemaMatchesMigratedSchema` in `migrations_test.go` enforces this).
+
 ## Testing
 
 For CLI changes, run from `cli/`:

@@ -11,9 +11,11 @@ import (
 	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/bulletin"
+	"github.com/justinjdev/fellowship/cli/internal/company"
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/eagles"
 	"github.com/justinjdev/fellowship/cli/internal/errand"
+	"github.com/justinjdev/fellowship/cli/internal/fellowship"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
@@ -65,7 +67,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) validWorktreeDir(dir string) (bool, error) {
 	var valid bool
 	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
-		status, err := DiscoverQuests(conn)
+		status, err := fellowship.DiscoverQuests(conn)
 		if err != nil {
 			return err
 		}
@@ -95,7 +97,7 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var result QuestStatus
+	var result fellowship.QuestStatus
 	var prevPhase string
 	err := s.db.WithTx(context.Background(), func(conn *db.Conn) error {
 		// Find the quest name for this worktree
@@ -130,7 +132,7 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 
-		result = QuestStatus{
+		result = fellowship.QuestStatus{
 			Name:            st.QuestName,
 			Worktree:        req.Dir,
 			Phase:           st.Phase,
@@ -183,7 +185,7 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var result QuestStatus
+	var result fellowship.QuestStatus
 	err := s.db.WithTx(context.Background(), func(conn *db.Conn) error {
 		questName, err := state.FindQuest(conn, req.Dir)
 		if err != nil || questName == "" {
@@ -206,7 +208,7 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 
-		result = QuestStatus{
+		result = fellowship.QuestStatus{
 			Name:            st.QuestName,
 			Worktree:        req.Dir,
 			Phase:           st.Phase,
@@ -259,12 +261,12 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 	resp.Approved = []string{}
 
 	err := s.db.WithTx(context.Background(), func(conn *db.Conn) error {
-		fs, err := LoadFellowship(conn)
+		fs, err := fellowship.LoadFellowship(conn)
 		if err != nil {
 			return err
 		}
 
-		var target *CompanyEntry
+		var target *fellowship.CompanyEntry
 		for i := range fs.Companies {
 			if fs.Companies[i].Name == name {
 				target = &fs.Companies[i]
@@ -275,7 +277,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("company not found: %s", name)
 		}
 
-		approved, errs := batchApproveCompany(conn, *target, fs)
+		approved, errs := company.BatchApprove(conn, *target)
 		resp.Approved = approved
 		if resp.Approved == nil {
 			resp.Approved = []string{}
@@ -296,64 +298,6 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
-}
-
-// batchApproveCompany approves all pending gates within a company.
-func batchApproveCompany(conn *db.Conn, c CompanyEntry, fs *FellowshipState) (approved []string, errs []error) {
-	for _, qName := range c.Quests {
-		// Find worktree from fellowship quests
-		var wt string
-		for _, q := range fs.Quests {
-			if q.Name == qName {
-				wt = q.Worktree
-				break
-			}
-		}
-
-		st, err := state.Load(conn, qName)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("loading state for %s: %w", qName, err))
-			continue
-		}
-
-		if !st.GatePending {
-			continue
-		}
-
-		prevPhase := st.Phase
-
-		nextPhase, err := state.NextPhase(st.Phase)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("advancing phase for %s: %w", qName, err))
-			continue
-		}
-
-		st.GatePending = false
-		st.Phase = nextPhase
-		st.GateID = nil
-		st.LembasCompleted = false
-		st.MetadataUpdated = false
-
-		if err := state.Upsert(conn, st); err != nil {
-			errs = append(errs, fmt.Errorf("saving state for %s: %w", qName, err))
-			continue
-		}
-
-		now := time.Now().UTC().Format(time.RFC3339)
-		herald.Announce(conn, herald.Tiding{
-			Timestamp: now, Quest: qName, Type: herald.GateApproved,
-			Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
-		})
-		herald.Announce(conn, herald.Tiding{
-			Timestamp: now, Quest: qName, Type: herald.PhaseTransition,
-			Phase: nextPhase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, nextPhase),
-		})
-
-		_ = wt // worktree used for context but not needed for DB operations
-		approved = append(approved, qName)
-	}
-
-	return approved, errs
 }
 
 func (s *Server) handleEagles(w http.ResponseWriter, r *http.Request) {
@@ -425,7 +369,7 @@ func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
 func (s *Server) worktreeDirs() []string {
 	var dirs []string
 	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
-		status, err := DiscoverQuests(conn)
+		status, err := fellowship.DiscoverQuests(conn)
 		if err != nil {
 			return nil
 		}
@@ -492,10 +436,10 @@ func (s *Server) handleBulletin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	var status *DashboardStatus
+	var status *fellowship.DashboardStatus
 	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		var e error
-		status, e = DiscoverQuests(conn)
+		status, e = fellowship.DiscoverQuests(conn)
 		return e
 	})
 	if err != nil {
@@ -503,6 +447,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status.PollInterval = s.pollInterval
+	status.Phases = state.Phases()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)
 }

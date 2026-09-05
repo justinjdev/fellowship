@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/fellowship"
 	"github.com/justinjdev/fellowship/cli/internal/gate"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
@@ -346,7 +346,7 @@ func unregisteredQuestWorktree(ctx context.Context, d *db.DB, cwd, gitRoot strin
 	}
 	initialized := false
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
-		if _, err := dashboard.LoadFellowship(conn); err == nil {
+		if _, err := fellowship.LoadFellowship(conn); err == nil {
 			initialized = true
 		}
 		return nil
@@ -382,7 +382,7 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 	active := false
 	sessionIsQuest := false
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
-		fs, err := dashboard.LoadFellowship(conn)
+		fs, err := fellowship.LoadFellowship(conn)
 		if err != nil {
 			return nil
 		}
@@ -437,9 +437,9 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 // quest worktree on disk is the signal that teammates may currently be running
 // and the guard should be armed. A finished (or never-started) fellowship whose
 // row lingers has no live worktree and reads as inert.
-func fellowshipRunning(fs *dashboard.FellowshipState) bool {
+func fellowshipRunning(fs *fellowship.FellowshipState) bool {
 	for _, q := range fs.Quests {
-		switch dashboard.QuestEntryStatus(q) {
+		switch fellowship.QuestEntryStatus(q) {
 		case "completed", "cancelled":
 			continue
 		}
