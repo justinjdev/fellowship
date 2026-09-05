@@ -9,7 +9,11 @@
 #     location and moved into place atomically; a failed or interrupted
 #     install never leaves a partial/corrupt binary at $BINARY.
 #   - A mkdir-based lock keeps two concurrent sessions from racing the
-#     same install.
+#     same install. The lock records its holder's PID and a timestamp, so a
+#     session killed mid-install (kill -9, OOM) doesn't wedge every future
+#     install: a contending session reclaims the lock once the recorded PID
+#     is no longer alive, or once 120s have passed regardless. Leftover
+#     scratch dirs from a killed install are swept once they're 10 minutes old.
 #   - "installed" is only ever printed after the binary is verified,
 #     executable, and moved into place.
 
@@ -145,18 +149,64 @@ download() {
 
 mkdir -p "$INSTALL_DIR"
 
+# Sweep scratch dirs left behind by a session that was killed (kill -9, OOM,
+# etc.) mid-install — the EXIT trap that would normally remove them never
+# gets to run. Bounded to dirs older than 10 minutes so a scratch dir from an
+# install that is still genuinely in flight is never touched.
+find "$INSTALL_DIR" -maxdepth 1 -name '.install.*' -mmin +10 -exec rm -rf {} + 2>/dev/null || true
+
+LOCK_DIR_OWNER="$LOCK_DIR/owner"
+STALE_LOCK_SECONDS=120
+
+# lock_is_stale: the lock dir has no identifiable, still-running owner, so it
+# is safe to reclaim. True (0) when: there's no owner record at all, the
+# recorded PID is not alive (kill -0 fails — the holder session exited
+# without running its EXIT trap, e.g. kill -9), or the owner's timestamp is
+# older than STALE_LOCK_SECONDS regardless of liveness (a wedged holder).
+lock_is_stale() {
+  local pid ts now
+  if [ ! -f "$LOCK_DIR_OWNER" ]; then
+    return 0
+  fi
+  read -r pid ts < "$LOCK_DIR_OWNER" 2>/dev/null || true
+  if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+    return 0
+  fi
+  if [ -z "$ts" ]; then
+    return 0
+  fi
+  now=$(date +%s)
+  if [ $((now - ts)) -ge "$STALE_LOCK_SECONDS" ]; then
+    return 0
+  fi
+  return 1
+}
+
 LOCK_ACQUIRED=0
 acquire_lock() {
   local tries=0
-  while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+  while true; do
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+      LOCK_ACQUIRED=1
+      # Record who holds the lock so a contending session can tell a live
+      # install apart from an abandoned one. Best-effort: if this write
+      # fails, the lock still works, it just always looks reclaimable.
+      echo "$$ $(date +%s)" > "$LOCK_DIR_OWNER" 2>/dev/null || true
+      return 0
+    fi
+    if lock_is_stale; then
+      # Reclaim: the holder is gone or wedged. Remove the whole lock dir
+      # (owner file included) and retry mkdir immediately, without counting
+      # it against the contention budget below.
+      rm -rf "$LOCK_DIR" 2>/dev/null || true
+      continue
+    fi
     tries=$((tries + 1))
     if [ "$tries" -ge 100 ]; then
       return 1
     fi
     sleep 0.1
   done
-  LOCK_ACQUIRED=1
-  return 0
 }
 
 TMP_DIR=""
@@ -166,7 +216,7 @@ cleanup() {
     rm -rf "$TMP_DIR"
   fi
   if [ "$LOCK_ACQUIRED" = "1" ]; then
-    rmdir "$LOCK_DIR" 2>/dev/null || true
+    rm -rf "$LOCK_DIR" 2>/dev/null || true
   fi
   exit "$ec"
 }
