@@ -32,6 +32,22 @@
 			</li>
 			<li>
 				<strong>Archived the <code>gate-state-machine</code> OpenSpec change</strong> — superseded by the Go CLI + SQLite gate enforcement design (v1.5.1&ndash;v2.2.0); moved to <code>openspec/changes/archive/</code> with a SUPERSEDED note.
+				<strong>Documented CLI invocations now work</strong> &mdash; <code>--dir &lt;path&gt;</code> is accepted by <code>gate status|approve|reject</code>, <code>state add-quest|add-scout|add-company|update-quest|show</code>, <code>errand init|list|add|update|show</code>, <code>autopsy create|scan|infer</code>, and <code>tome show</code>, resolving the quest exactly as if the process were running in that directory. <code>gate</code> previously had no flag parsing at all, so every documented <code>--dir</code> call failed.
+			</li>
+			<li>
+				<strong><code>fellowship init</code> name resolution</strong> &mdash; Without <code>--quest</code>, init now uses the quest name the lead registered with <code>state add-quest</code> for that worktree, falling back to the directory name only when the worktree is unregistered.
+			</li>
+			<li>
+				<strong><code>fellowship init</code> reads <code>gates.autoApprove</code></strong> &mdash; Auto-approved gates come from the merged config (project <code>.fellowship/config.json</code>, then <code>~/.claude/fellowship.json</code>) instead of always being empty. Unknown phase names are rejected.
+			</li>
+			<li>
+				<strong><code>fellowship status</code> honors the base branch</strong> &mdash; Merged-branch detection compares against the fellowship's stored <code>base_branch</code> instead of a hardcoded <code>main</code>.
+			</li>
+			<li>
+				<strong><code>fellowship herald post</code></strong> &mdash; Records a tiding from the CLI, so the palantir logs alerts without <code>jq</code> or a hand-written JSONL file. <code>herald</code> gained <code>--quest</code> and <code>--limit</code>; <code>autopsy scan --all</code> returns every unexpired autopsy.
+			</li>
+			<li>
+				<strong>Prompt layer matches the binary</strong> &mdash; Skills, agents, and commands now call the CLI by its full path, use only flags that exist, and read state through the CLI instead of the pre-2.0 JSON files.
 			</li>
 		</ul>
 	</section>

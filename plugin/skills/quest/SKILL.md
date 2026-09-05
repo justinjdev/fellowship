@@ -89,7 +89,7 @@ Both steps 1 and 2 must complete before step 3 — the hooks will block gate sub
 
 > **Note:** `.fellowship/` is the default data directory. Users can override it via `dataDir` in `~/.claude/fellowship.json`. All `fellowship` CLI commands resolve the correct directory automatically. When this document references `.fellowship/`, it means the configured data directory.
 
-When running as a fellowship teammate, a state file at `.fellowship/quest-state.json` enforces gate discipline via plugin hooks. The hooks structurally prevent you from working after submitting a gate, skipping lembas, or skipping metadata updates. You do not need to manage this file — the hooks handle it automatically.
+When running as a fellowship teammate, quest state stored in the fellowship database enforces gate discipline via plugin hooks. Read it any time with `~/.claude/fellowship/bin/fellowship gate status`. The hooks structurally prevent you from working after submitting a gate, skipping lembas, or skipping metadata updates. You do not need to manage this state — the hooks handle it automatically.
 
 **What the hooks enforce:**
 - **Phase-aware file guard:** During Onboard, Research, and Plan phases, Edit/Write to files outside `.fellowship/` are blocked. You cannot modify production code until you reach the Implement phase by submitting gates. Bash, Agent, Skill, and reads are allowed in all phases.
@@ -99,7 +99,7 @@ When running as a fellowship teammate, a state file at `.fellowship/quest-state.
 - You cannot send a second gate while one is pending
 - You cannot mark your task as completed unless your phase is `Complete`
 
-**State file initialization** happens at Phase 0 (see below). If you are resuming a failed quest and `.fellowship/quest-state.json` already exists, the file is preserved with `gate_pending` reset to `false`.
+**State initialization** happens at Phase 0 (see below). If you are resuming a failed quest, existing state is preserved with `gate_pending` reset to `false`.
 
 ### Phase 0: Onboard
 
@@ -108,13 +108,13 @@ When running as a fellowship teammate, a state file at `.fellowship/quest-state.
 If the spawn prompt contains a `RESUME CONTEXT:` block, this is a recovered quest:
 
 1. **Skip worktree creation** — your worktree already exists and you're already in it
-2. **Reset state file:** Run `fellowship init --dir $(pwd)` (you're already in the worktree) to clear `gate_pending` while preserving the current phase. If a gate was still pending when the previous session died, the hooks block this command — message the lead to clear it, since only the lead may clear a pending gate.
+2. **Reset quest state:** Run `~/.claude/fellowship/bin/fellowship init --dir $(pwd)` (you're already in the worktree) to clear `gate_pending` while preserving the current phase. If a gate was still pending when the previous session died, the hooks block this command — message the lead to clear it, since only the lead may clear a pending gate.
 3. **Update task metadata:** `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})` with the new task ID from the recovery spawn
 4. **Load checkpoint:** If `.fellowship/checkpoint.md` exists, read it as your initial context — this replaces `/council` orientation
 5. **Skip `/council`** — the checkpoint provides equivalent context from the previous session
-6. **Jump to current phase:** Begin executing from the phase recorded in the state file (e.g., if phase is "Implement", skip Research and Plan, go directly to Implement)
+6. **Jump to current phase:** Begin executing from the phase reported by `~/.claude/fellowship/bin/fellowship gate status` (e.g., if phase is "Implement", skip Research and Plan, go directly to Implement)
 
-On respawn, your tome at `.fellowship/quest-tome.json` contains your full history — phases completed, gates passed/rejected, files touched. Use this to orient faster than the checkpoint alone.
+On respawn, your tome contains your full history — phases completed, gates passed/rejected, files touched. Read it with `~/.claude/fellowship/bin/fellowship tome show --dir $(pwd)` to orient faster than the checkpoint alone.
 
 If no checkpoint exists (stale classification), restart the current phase from scratch — run `/council` for orientation, then begin the phase normally.
 
@@ -136,28 +136,17 @@ After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, upda
      2. Call `EnterWorktree` with the resolved branch name. If `config.worktree.directory` is set, create the worktree there instead of the default location.
      3. **Immediately** after entering the worktree — before ANY other action — run `git reset --hard <sha>` using the exact SHA from step 1. `EnterWorktree` bases off the default branch, not the current branch. This reset is what makes the worktree start from the correct point. Skip this and the worktree will be wrong.
      4. **Verify CWD:** Run `pwd` and confirm the output contains your branch name or expected worktree path. When multiple quests spawn in parallel, a race condition can place your CWD in another quest's worktree. If `pwd` shows a different quest's worktree, run `cd <expected_worktree_path>` to correct it before proceeding. The expected path is the one printed by `EnterWorktree` (typically `.claude/worktrees/<branch_name>/`).
-3. **State file (fellowship only):** This MUST happen before any other tool calls (Skill, Bash, etc.) so that hooks can enforce gates from the start. Run `fellowship init --dir <worktree_path>` (using the path from `EnterWorktree` in step 2.2, verified correct in step 2.4) to ensure the state file is created in the correct worktree, regardless of CWD. If running as a fellowship teammate:
-   - If `.fellowship/quest-state.json` already exists (respawn), reset `gate_pending` to `false` and preserve the existing `phase`.
-   - Otherwise, create `.fellowship/quest-state.json`:
-     ```json
-     {
-       "version": 1,
-       "quest_name": "<quest_name>",
-       "task_id": "<task_id>",
-       "team_name": "<team_name>",
-       "phase": "Onboard",
-       "gate_pending": false,
-       "gate_id": null,
-       "lembas_completed": false,
-       "metadata_updated": false,
-       "auto_approve_gates": [],
-       "held": false,
-       "held_reason": null
-     }
-     ```
-     Populate `auto_approve_gates` from `config.gates.autoApprove` if set.
+3. **Quest state (fellowship only):** This MUST happen before any other tool calls (Skill, Bash, etc.) so that hooks can enforce gates from the start. Run:
+   ```bash
+   ~/.claude/fellowship/bin/fellowship init --dir <worktree_path>
+   ```
+   using the path from `EnterWorktree` in step 2.2, verified correct in step 2.4, so state is created for the correct worktree regardless of CWD. One command does everything:
+   - On a respawn it resets `gate_pending` to `false` and preserves the existing `phase`; otherwise it creates fresh state at `Onboard`.
+   - It resolves your quest name from the worktree the lead registered — pass `--quest <quest_name>` only if you need to override it.
+   - It populates auto-approved gates from `gates.autoApprove` in the merged fellowship config. You do not set that yourself.
+   - Confirm the result with `~/.claude/fellowship/bin/fellowship gate status --dir <worktree_path>`.
    - Store the worktree path in task metadata: `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})`
-   - The quest tome at `.fellowship/quest-tome.json` is automatically maintained by hooks — it records phases completed, gate events, and files touched. You do not need to manage it manually.
+   - Your quest tome is automatically maintained by hooks — it records phases completed, gate events, and files touched. Read it with `~/.claude/fellowship/bin/fellowship tome show --dir <worktree_path>`; you never write it yourself.
 4. **Orient:** Invoke `/council` to load task-relevant context.
 
 If the user has already described their task, pass the description directly. Otherwise, council will ask.
@@ -170,8 +159,8 @@ If the spawn prompt contains `PRE-EXISTING PLAN:` with a plan file path:
 
 1. **Create worktree** as normal (follow the full 4-step sequence from Standard Onboard, including the immediate `git reset --hard <sha>` and CWD verification after `EnterWorktree`)
 2. **Copy plan file:** Read the plan file from the specified path and write it to `.fellowship/plan.md` in the worktree
-3. **Initialize state at Implement:** Run `fellowship init --dir <worktree_path> --phase Implement --plan-skip --quest <quest_name>` — this creates the state file starting at Implement and records Onboard/Research/Plan as skipped in the tome
-4. **Initialize errands:** Run `fellowship errand init` to create the errand file, then add one errand per plan task with `fellowship errand add`
+3. **Initialize state at Implement:** Run `~/.claude/fellowship/bin/fellowship init --dir <worktree_path> --phase Implement --plan-skip` — this creates quest state starting at Implement and records Onboard/Research/Plan as skipped in the tome
+4. **Initialize errands:** Run `~/.claude/fellowship/bin/fellowship errand init --dir <worktree_path>` to start errand tracking, then add one errand per plan task with `~/.claude/fellowship/bin/fellowship errand add --dir <worktree_path> "<task>"`
 5. **Skip /council** — the plan provides sufficient context
 6. **Proceed directly to Phase 3 (Implement)** — skip the Onboard gate, Research, and Plan entirely
 
@@ -203,10 +192,10 @@ The same hard gate requirements apply — validation mode doesn't lower the bar,
 **Actions:**
 1. **Scan autopsies:** If running as a fellowship teammate, scan for prior failure records that may be relevant to this quest:
    ```bash
-   fellowship autopsy scan --dir <main_repo> --files "<target_files>" --modules "<target_modules>"
+   ~/.claude/fellowship/bin/fellowship autopsy scan --dir <main_repo> --files "<target_files>" --modules "<target_modules>"
    ```
    If matches are found, incorporate their warnings into your research findings — these are hard-won lessons from previous quests that failed in the same area.
-2. **Scan bulletin board:** Run `fellowship bulletin scan` with whatever filters you already know:
+2. **Scan bulletin board:** Run `~/.claude/fellowship/bin/fellowship bulletin scan` with whatever filters you already know:
    - `--topics "<relevant_topics>"` if you know the domain/problem area
    - `--files "<target_files>"` once likely files are known
    - both flags together when both are available
@@ -246,7 +235,7 @@ Goal: Outline explicit steps with file:line references and a test strategy.
 
 Goal: Execute the plan with small, verifiable changes and tight feedback loops. Default to TDD.
 
-**Errand tracking:** If `.fellowship/quest-errands.json` exists, use it as your errand checklist. The errand file is the source of truth for remaining work, not just the original prompt. Update errand status as you complete each one: `fellowship errand update --dir . <id> done`. Mark errands as `active` when you start them and `done` when finished. Check `fellowship errand list --dir .` to see what remains.
+**Errand tracking:** Run `~/.claude/fellowship/bin/fellowship errand list --dir .` to see your errand checklist. Errands are the source of truth for remaining work, not just the original prompt. Update each one as you go: `~/.claude/fellowship/bin/fellowship errand update --dir . <id> <status>`. Valid statuses are `pending`, `in_progress`, `done`, `blocked`, and `skipped` — mark an errand `in_progress` when you start it and `done` when it is finished.
 
 **Execution mode — choose based on plan structure:**
 
@@ -268,7 +257,7 @@ Goal: Execute the plan with small, verifiable changes and tight feedback loops. 
 - Small changes. One function, one test, one commit. Not a big-bang change.
 - Use conventional commits for all git commits (e.g., `feat:`, `fix:`, `docs:`, `refactor:`).
 - Verify as you go. Don't batch all testing to the end.
-- **Post discoveries to the bulletin board** when you find something likely relevant to sibling quests (during both Research and Implement). Run `fellowship bulletin post --quest "<quest_name>" --topic "<topic>" --files "<affected_files>" --discovery "<description>"`. Post refactors, API changes, infrastructure shifts, gotchas, deprecations, and research findings about shared code. Do NOT post phase progress, gate submissions, or file edit intentions.
+- **Post discoveries to the bulletin board** when you find something likely relevant to sibling quests (during both Research and Implement). Run `~/.claude/fellowship/bin/fellowship bulletin post --quest "<quest_name>" --topic "<topic>" --files "<affected_files>" --discovery "<description>"`. Post refactors, API changes, infrastructure shifts, gotchas, deprecations, and research findings about shared code. Do NOT post phase progress, gate submissions, or file edit intentions.
 
 **Recovery — when implementation hits a wall:**
 
@@ -282,7 +271,7 @@ Recovery procedure:
 2. **Document what went wrong.** Be specific: which step failed, what was discovered, why the plan doesn't hold.
 3. **Write autopsy:** If running as a fellowship teammate, record the failure for future quests:
    ```bash
-   echo '{"quest":"<quest_name>","task":"<task>","phase":"Implement","trigger":"recovery","files":["<affected_files>"],"modules":["<affected_modules>"],"what_failed":"<specific description>","resolution":"<what you learned or changed>","tags":["<relevant_tags>"]}' | fellowship autopsy create --dir <main_repo>
+   echo '{"quest":"<quest_name>","task":"<task>","phase":"Implement","trigger":"recovery","files":["<affected_files>"],"modules":["<affected_modules>"],"what_failed":"<specific description>","resolution":"<what you learned or changed>","tags":["<relevant_tags>"]}' | ~/.claude/fellowship/bin/fellowship autopsy create --dir <main_repo>
    ```
 4. **Return to Phase 2 (Plan).** Invoke `/lembas` with phase "Implement (partial)" to compact, then re-enter plan mode with the new information. Revise only the affected steps — don't replan from scratch.
 5. **Get user approval** on the revised plan before resuming implementation.

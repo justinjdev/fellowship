@@ -21,7 +21,41 @@ const (
 	MetadataUpdated TidingType = "metadata_updated"
 	QuestHeld       TidingType = "quest_held"
 	QuestUnheld     TidingType = "quest_unheld"
+
+	// Palantir alert types. The palantir monitor records its alerts as tidings
+	// so retrospectives can read them back with the same CLI as gate history.
+	PalantirStuck    TidingType = "palantir_stuck"
+	PalantirDrift    TidingType = "palantir_drift"
+	PalantirConflict TidingType = "palantir_conflict"
+	PalantirHealth   TidingType = "palantir_health"
+	PalantirBulletin TidingType = "palantir_bulletin"
 )
+
+// allTypes lists every tiding type the CLI accepts on `herald post`.
+var allTypes = []TidingType{
+	GateSubmitted, GateApproved, GateRejected, PhaseTransition,
+	LembasCompleted, MetadataUpdated, QuestHeld, QuestUnheld,
+	PalantirStuck, PalantirDrift, PalantirConflict, PalantirHealth, PalantirBulletin,
+}
+
+// Types returns the known tiding type names.
+func Types() []string {
+	out := make([]string, len(allTypes))
+	for i, t := range allTypes {
+		out[i] = string(t)
+	}
+	return out
+}
+
+// ValidType reports whether s names a known tiding type.
+func ValidType(s string) (TidingType, bool) {
+	for _, t := range allTypes {
+		if string(t) == s {
+			return t, true
+		}
+	}
+	return "", false
+}
 
 // Tiding represents a single quest event.
 type Tiding struct {

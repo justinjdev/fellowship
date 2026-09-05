@@ -41,6 +41,9 @@ type CreateInput struct {
 	WhatFailed string   `json:"what_failed"`
 	Resolution string   `json:"resolution,omitempty"`
 	Tags       []string `json:"tags,omitempty"`
+	// ExpiryDays overrides DefaultExpiryDays when > 0. Not read from JSON;
+	// the caller resolves it from config.
+	ExpiryDays int `json:"-"`
 }
 
 // ScanOptions configures which autopsies to match.
@@ -48,6 +51,8 @@ type ScanOptions struct {
 	Files   []string
 	Modules []string
 	Tags    []string
+	// All returns every non-expired autopsy, ignoring the other filters.
+	All bool
 }
 
 var validTriggers = map[string]bool{
@@ -74,7 +79,11 @@ func Create(conn *sqlite.Conn, input *CreateInput) (int64, error) {
 
 	now := time.Now().UTC()
 	timestamp := now.Format(time.RFC3339)
-	expiresAt := now.AddDate(0, 0, DefaultExpiryDays).Format(time.RFC3339)
+	days := input.ExpiryDays
+	if days <= 0 {
+		days = DefaultExpiryDays
+	}
+	expiresAt := now.AddDate(0, 0, days).Format(time.RFC3339)
 
 	err := sqlitex.Execute(conn,
 		`INSERT INTO autopsies (timestamp, quest, task, phase, trigger_type, what_failed, resolution, expires_at)
@@ -132,14 +141,19 @@ func Create(conn *sqlite.Conn, input *CreateInput) (int64, error) {
 
 // Scan queries autopsies from the DB, filtering by files/modules/tags and excluding expired entries.
 func Scan(conn *sqlite.Conn, opts ScanOptions, expiryDays int) ([]Autopsy, error) {
-	if len(opts.Files) == 0 && len(opts.Modules) == 0 && len(opts.Tags) == 0 {
-		return nil, fmt.Errorf("at least one of --files, --modules, or --tags is required")
+	if !opts.All && len(opts.Files) == 0 && len(opts.Modules) == 0 && len(opts.Tags) == 0 {
+		return nil, fmt.Errorf("at least one of --files, --modules, --tags, or --all is required")
 	}
 
 	// Build a query that joins across the junction tables.
 	// We select all non-expired autopsies that match any of the filter criteria.
 	var conditions []string
 	var args []any
+
+	// --all matches every non-expired autopsy; other filters become redundant.
+	if opts.All {
+		conditions = append(conditions, "1")
+	}
 
 	if len(opts.Files) > 0 {
 		var fileCondParts []string

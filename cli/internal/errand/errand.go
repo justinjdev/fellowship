@@ -34,14 +34,26 @@ type QuestErrandList struct {
 	Items     []Errand `json:"items"`
 }
 
+// allStatuses lists every accepted errand status, in the order shown to users.
+var allStatuses = []ErrandStatus{Pending, InProgress, Done, Blocked, Skipped}
+
+// Statuses returns the accepted errand status names.
+func Statuses() []string {
+	out := make([]string, len(allStatuses))
+	for i, st := range allStatuses {
+		out[i] = string(st)
+	}
+	return out
+}
+
 // ValidStatus checks whether a string is a valid ErrandStatus.
 func ValidStatus(s string) (ErrandStatus, bool) {
-	switch ErrandStatus(s) {
-	case Pending, InProgress, Done, Blocked, Skipped:
-		return ErrandStatus(s), true
-	default:
-		return "", false
+	for _, st := range allStatuses {
+		if string(st) == s {
+			return st, true
+		}
 	}
+	return "", false
 }
 
 // Init creates the initial errand list metadata for a quest.

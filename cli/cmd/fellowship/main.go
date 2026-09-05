@@ -238,14 +238,20 @@ Hook commands (called by Claude Code hooks, read stdin):
 
 Agent/lead commands:
   gate status            Show current phase, prereqs, pending/held state
+    --dir DIR            Worktree directory (default: current directory)
   gate approve           Approve a pending gate (advances to next phase)
+    --dir DIR            Worktree directory (default: current directory)
   gate reject            Reject a pending gate (clears pending, keeps phase)
+    --dir DIR            Worktree directory (default: current directory)
   hold                   Hold (pause) a quest — blocks Edit/Write/Bash/Agent/Skill/NotebookEdit
     --dir DIR            Worktree directory (required)
     --reason MSG         Reason for holding
   unhold                 Unhold (resume) a held quest
     --dir DIR            Worktree directory (required)
-  tome show [--json]     Show quest tome (phases, gates, files touched)
+  tome show              Show quest tome (phases, gates, files touched)
+    --quest NAME         Quest name (default: resolved from --dir/cwd)
+    --dir DIR            Worktree directory (default: current directory)
+    --json               Output as JSON
   status [--json]        Scan worktrees and show fellowship recovery status
   eagles                 Scan quest health and write eagles report
     --dir DIR            Git repo root (default: auto-detect)
@@ -257,7 +263,10 @@ Setup commands:
     --dir PATH           Worktree or repo root (default: auto-detect via git)
     --phase PHASE        Initial phase (default: Onboard)
     --plan-skip          Record Onboard/Research/Plan as skipped in tome
-    --quest NAME         Quest name for tome recording
+    --quest NAME         Quest name (default: the name registered for the
+                         worktree, else its directory name)
+                         Auto-approved gates are read from gates.autoApprove
+                         in the merged fellowship config.
 
 Company commands:
   company list            List all companies and their quest/scout counts
@@ -275,38 +284,50 @@ Fellowship state:
     --branch BRANCH       Branch name
     --worktree PATH       Worktree path
     --task-id ID          Task ID
+    --dir DIR             Repo or worktree directory (default: current dir)
   state add-scout         Add a scout entry to fellowship state
     --name NAME           Scout name (required)
     --question "Q"        Research question (required)
     --task-id ID          Task ID
+    --dir DIR             Repo or worktree directory (default: current dir)
   state add-company       Add a company entry to fellowship state
     --name NAME           Company name (required)
     --quests q1,q2        Comma-separated quest names
     --scouts s1,s2        Comma-separated scout names
+    --dir DIR             Repo or worktree directory (default: current dir)
   state update-quest      Update an existing quest entry
     --name NAME           Quest name (required)
     --worktree PATH       Worktree path
     --branch BRANCH       Branch name
     --task-id ID          Task ID
     --status STATUS       Quest status (active, completed, cancelled)
+    --dir DIR             Repo or worktree directory (default: current dir)
   state show              Show fellowship state as JSON
+    --dir DIR             Repo or worktree directory (default: current dir)
   state clean-worktrees   Reset stale gate_pending/held flags in all quests
 
-Errands (persistent work items):
+Errands (persistent work items). Every errand command resolves the quest from
+--quest, else from --dir, else from the current directory. Valid statuses:
+pending, in_progress, done, blocked, skipped.
   errand init            Initialize errands for a quest
     --quest NAME         Quest name
+    --dir DIR            Worktree directory (default: current directory)
     --task "DESC"        Task description
   errand list            Show all errands with status
     --quest NAME         Quest name
+    --dir DIR            Worktree directory (default: current directory)
   errand add             Add a new errand
     --quest NAME         Quest name
+    --dir DIR            Worktree directory (default: current directory)
     --phase PHASE        Quest phase (optional)
     "description"        Errand description (positional arg)
   errand update          Update an errand's status
     --quest NAME         Quest name
+    --dir DIR            Worktree directory (default: current directory)
     <id> <status>        Item ID and new status (positional args)
   errand show            Show all errands as JSON
     --quest NAME         Quest name
+    --dir DIR            Worktree directory (default: current directory)
 
 Bulletin (cross-quest knowledge sharing):
   bulletin post          Post a discovery to the shared bulletin board
@@ -325,7 +346,16 @@ Bulletin (cross-quest knowledge sharing):
 Herald (activity tidings):
   herald                 Show recent quest tidings
     --problems           Show only detected problems
+    --quest NAME         Show tidings for one quest only
+    --limit N            Maximum tidings to show (default: 20, 0 for all)
     --json               Output as JSON
+  herald post            Record a tiding (used by the palantir monitor)
+    --quest NAME         Quest the tiding is about (required)
+    --type TYPE          Tiding type (required) — e.g. palantir_stuck,
+                         palantir_drift, palantir_conflict, palantir_health,
+                         palantir_bulletin
+    --phase PHASE        Quest phase (optional)
+    --detail "TEXT"      Detail text (required)
 
 Dashboard:
   dashboard              Start live web dashboard
@@ -334,12 +364,16 @@ Dashboard:
 
 Autopsy (failure memory):
   autopsy create         Write a structured failure record (reads JSON from stdin)
+    --dir DIR            Repo or worktree directory (default: current dir)
   autopsy scan           Find autopsies matching files, modules, or tags
     --files f1,f2        Comma-separated file paths to match
     --modules m1,m2      Comma-separated module names to match
     --tags t1,t2         Comma-separated tags to match
+    --all                Return every unexpired autopsy (ignores filters)
+    --dir DIR            Repo or worktree directory (default: current dir)
   autopsy infer          Reconstruct autopsy from quest signals
-    --quest NAME         Quest name (required)
+    --quest NAME         Quest name (default: resolved from --dir/cwd)
+    --dir DIR            Worktree directory (default: current directory)
 
 Other:
   migrate                Migrate JSON files to SQLite
@@ -724,22 +758,59 @@ func fellowshipRunning(fs *dashboard.FellowshipState) bool {
 	return false
 }
 
+// gateArgs is the parsed form of a `fellowship gate ...` invocation.
+type gateArgs struct {
+	sub string
+	dir string
+}
+
+// parseGateArgs parses the gate subcommand and its flags. The FlagSet uses
+// ContinueOnError so an unknown flag returns a usage error to the caller
+// instead of terminating the process.
+func parseGateArgs(args []string) (gateArgs, error) {
+	usage := "usage: fellowship gate <status|approve|reject> [--dir <worktree>]"
+	if len(args) == 0 {
+		return gateArgs{}, errors.New(usage)
+	}
+	sub := args[0]
+	switch sub {
+	case "status", "approve", "reject":
+	default:
+		return gateArgs{}, fmt.Errorf("unknown gate command: %s\n%s", sub, usage)
+	}
+
+	fs := flag.NewFlagSet("gate "+sub, flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	dir := fs.String("dir", "", "Worktree directory (default: current directory)")
+	if err := fs.Parse(args[1:]); err != nil {
+		return gateArgs{}, fmt.Errorf("gate %s: %v\n%s", sub, err, usage)
+	}
+	if fs.NArg() > 0 {
+		return gateArgs{}, fmt.Errorf("gate %s: unexpected argument %q\n%s", sub, fs.Arg(0), usage)
+	}
+	return gateArgs{sub: sub, dir: *dir}, nil
+}
+
 func runGate(d *db.DB, args []string) int {
 	ctx := context.Background()
-	cwd, _ := os.Getwd()
-	gitRoot := gitRootFrom(cwd)
 
-	var questName string
-	d.WithConn(ctx, func(conn *db.Conn) error {
-		questName, _ = state.FindQuest(conn, gitRoot)
-		return nil
-	})
+	ga, err := parseGateArgs(args)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if err := checkDir(ga.dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	questName := resolveDirQuest(d, ga.dir)
 	if questName == "" {
 		fmt.Fprintln(os.Stderr, "fellowship: no quest state found")
 		return 1
 	}
 
-	switch args[0] {
+	switch ga.sub {
 	case "status":
 		var s *state.State
 		if err := d.WithConn(ctx, func(conn *db.Conn) error {
@@ -841,7 +912,7 @@ func runGate(d *db.DB, args []string) int {
 		return 0
 
 	default:
-		fmt.Fprintf(os.Stderr, "unknown gate command: %s\n", args[0])
+		fmt.Fprintf(os.Stderr, "unknown gate command: %s\n", ga.sub)
 		return 1
 	}
 }
@@ -968,9 +1039,14 @@ func runInit(d *db.DB) int {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	phase := fs.String("phase", "", "Initial phase (default: Onboard)")
 	planSkip := fs.Bool("plan-skip", false, "Record Onboard/Research/Plan as skipped in tome")
-	questName := fs.String("quest", "", "Quest name for tome recording")
+	questName := fs.String("quest", "", "Quest name (default: the name registered for this worktree)")
 	initDir := fs.String("dir", "", "Worktree or repo root (default: auto-detect via git)")
 	fs.Parse(os.Args[2:])
+
+	if err := checkDir(*initDir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
 
 	if *phase != "" && !state.IsValidPhase(*phase) {
 		fmt.Fprintf(os.Stderr, "fellowship: invalid phase %q (valid: %s)\n", *phase, strings.Join(state.Phases(), ", "))
@@ -997,15 +1073,26 @@ func runInit(d *db.DB) int {
 		return 1
 	}
 
-	// Determine quest name: explicit flag, or derive from directory.
-	qn := *questName
-	if qn == "" {
-		qn = filepath.Base(root)
-	}
+	qn := resolveInitQuestName(d, *questName, root)
 
 	initPhase := "Onboard"
 	if *phase != "" {
 		initPhase = *phase
+	}
+
+	// Auto-approved gates come from the merged fellowship config: the main
+	// repo's .fellowship/config.json, overridden by ~/.claude/fellowship.json.
+	configRoot := root
+	if mainRepo, err := resolveMainRepoFromCwd(root); err == nil {
+		configRoot = mainRepo
+	}
+	autoApprove := datadir.AutoApproveGates(configRoot)
+	if err := validateAutoApproveGates(autoApprove); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	if autoApprove == nil {
+		autoApprove = []string{}
 	}
 
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
@@ -1023,6 +1110,7 @@ func runInit(d *db.DB) int {
 				existing.LembasCompleted = false
 				existing.MetadataUpdated = false
 			}
+			existing.AutoApproveGates = autoApprove
 			if err := state.Upsert(conn, existing); err != nil {
 				return err
 			}
@@ -1032,7 +1120,7 @@ func runInit(d *db.DB) int {
 			s := &state.State{
 				QuestName:        qn,
 				Phase:            initPhase,
-				AutoApproveGates: []string{},
+				AutoApproveGates: autoApprove,
 			}
 			if err := state.Upsert(conn, s); err != nil {
 				return err
@@ -1205,13 +1293,21 @@ func runAutopsy(d *db.DB, args []string) int {
 func runAutopsyCreate(d *db.DB, args []string) int {
 	ctx := context.Background()
 	fs := flag.NewFlagSet("autopsy create", flag.ExitOnError)
+	dir := fs.String("dir", "", "Repo or worktree directory (default: current directory)")
 	fs.Parse(args)
+
+	if err := checkDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
 
 	var input autopsy.CreateInput
 	if err := json.NewDecoder(os.Stdin).Decode(&input); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: reading JSON from stdin: %v\n", err)
 		return 1
 	}
+
+	input.ExpiryDays = datadir.AutopsyExpiryDays(gitRootOrCwd(), autopsy.DefaultExpiryDays)
 
 	var id int64
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
@@ -1232,9 +1328,16 @@ func runAutopsyScan(d *db.DB, args []string) int {
 	files := fs.String("files", "", "Comma-separated file paths to match")
 	modules := fs.String("modules", "", "Comma-separated module names to match")
 	tags := fs.String("tags", "", "Comma-separated tags to match")
+	all := fs.Bool("all", false, "Return every unexpired autopsy (ignores the other filters)")
+	dir := fs.String("dir", "", "Repo or worktree directory (default: current directory)")
 	fs.Parse(args)
 
-	opts := autopsy.ScanOptions{}
+	if err := checkDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	opts := autopsy.ScanOptions{All: *all}
 	if *files != "" {
 		opts.Files = strings.Split(*files, ",")
 	}
@@ -1245,7 +1348,7 @@ func runAutopsyScan(d *db.DB, args []string) int {
 		opts.Tags = strings.Split(*tags, ",")
 	}
 
-	expiryDays := datadir.AutopsyExpiryDays(autopsy.DefaultExpiryDays)
+	expiryDays := datadir.AutopsyExpiryDays(gitRootOrCwd(), autopsy.DefaultExpiryDays)
 
 	var matches []autopsy.Autopsy
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
@@ -1265,18 +1368,28 @@ func runAutopsyScan(d *db.DB, args []string) int {
 func runAutopsyInfer(d *db.DB, args []string) int {
 	ctx := context.Background()
 	fs := flag.NewFlagSet("autopsy infer", flag.ExitOnError)
-	quest := fs.String("quest", "", "Quest name (required)")
+	quest := fs.String("quest", "", "Quest name (default: the quest registered for --dir)")
+	dir := fs.String("dir", "", "Worktree directory (default: current directory)")
 	fs.Parse(args)
 
-	if *quest == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship autopsy infer --quest <name>")
+	if err := checkDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	questName := *quest
+	if questName == "" {
+		questName = resolveDirQuest(d, *dir)
+	}
+	if questName == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship autopsy infer --quest <name> | --dir <worktree>")
 		return 1
 	}
 
 	var id int64
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
 		var err error
-		id, err = autopsy.Infer(conn, *quest)
+		id, err = autopsy.Infer(conn, questName)
 		return err
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -1288,8 +1401,14 @@ func runAutopsyInfer(d *db.DB, args []string) int {
 
 func runHerald(d *db.DB, args []string) int {
 	ctx := context.Background()
+	if len(args) > 0 && args[0] == "post" {
+		return runHeraldPost(d, args[1:])
+	}
+
 	fs := flag.NewFlagSet("herald", flag.ExitOnError)
 	problems := fs.Bool("problems", false, "Show only detected problems")
+	quest := fs.String("quest", "", "Show tidings for one quest only")
+	limit := fs.Int("limit", 20, "Maximum tidings to show (0 for all)")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Parse(args)
 
@@ -1324,7 +1443,11 @@ func runHerald(d *db.DB, args []string) int {
 	var evts []herald.Tiding
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		var err error
-		evts, err = herald.ReadAll(conn, 20)
+		if *quest != "" {
+			evts, err = herald.Read(conn, *quest, *limit)
+		} else {
+			evts, err = herald.ReadAll(conn, *limit)
+		}
 		return err
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -1348,6 +1471,45 @@ func runHerald(d *db.DB, args []string) int {
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", e.Timestamp, e.Quest, e.Type, e.Phase, e.Detail)
 	}
 	tw.Flush()
+	return 0
+}
+
+// runHeraldPost records a tiding. It exists so agents (notably the palantir
+// monitor) can append structured activity to the herald without hand-rolling
+// JSON lines.
+func runHeraldPost(d *db.DB, args []string) int {
+	ctx := context.Background()
+	fs := flag.NewFlagSet("herald post", flag.ExitOnError)
+	quest := fs.String("quest", "", "Quest the tiding is about (required)")
+	tidingType := fs.String("type", "", "Tiding type (required)")
+	phase := fs.String("phase", "", "Quest phase")
+	detail := fs.String("detail", "", "Detail text (required)")
+	fs.Parse(args)
+
+	if *quest == "" || *tidingType == "" || *detail == "" {
+		fmt.Fprintln(os.Stderr, `usage: fellowship herald post --quest <name> --type <type> --detail "TEXT" [--phase PHASE]`)
+		return 1
+	}
+
+	tt, ok := herald.ValidType(*tidingType)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "fellowship: invalid tiding type %q (valid: %s)\n", *tidingType, strings.Join(herald.Types(), ", "))
+		return 1
+	}
+
+	if err := d.WithTx(ctx, func(conn *db.Conn) error {
+		return herald.Announce(conn, herald.Tiding{
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Quest:     *quest,
+			Type:      tt,
+			Phase:     *phase,
+			Detail:    *detail,
+		})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Recorded %s tiding for %s.\n", tt, *quest)
 	return 0
 }
 
@@ -1414,23 +1576,24 @@ func runCompany(d *db.DB, args []string) int {
 func runTome(d *db.DB, args []string) int {
 	ctx := context.Background()
 	if len(args) < 1 || args[0] != "show" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship tome show [--quest <name>] [--json]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship tome show [--quest <name>] [--dir <worktree>] [--json]")
 		return 1
 	}
 
 	fs := flag.NewFlagSet("tome show", flag.ExitOnError)
 	quest := fs.String("quest", "", "Quest name (default: auto-detect from worktree)")
+	dir := fs.String("dir", "", "Worktree directory (default: current directory)")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Parse(args[1:])
 
+	if err := checkDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
 	questName := *quest
 	if questName == "" {
-		cwd, _ := os.Getwd()
-		gitRoot := gitRootFrom(cwd)
-		d.WithConn(ctx, func(conn *db.Conn) error {
-			questName, _ = state.FindQuest(conn, gitRoot)
-			return nil
-		})
+		questName = resolveDirQuest(d, *dir)
 	}
 	if questName == "" {
 		fmt.Fprintln(os.Stderr, "fellowship: no quest found. Use --quest <name>.")
@@ -1520,21 +1683,31 @@ func runErrandInit(d *db.DB, args []string) int {
 	ctx := context.Background()
 	fs := flag.NewFlagSet("errand init", flag.ExitOnError)
 	quest := fs.String("quest", "", "Quest name")
+	dir := fs.String("dir", "", "Worktree directory (default: current directory)")
 	task := fs.String("task", "", "Task description")
 	fs.Parse(args)
 
-	if *quest == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship errand init --quest <name> [--task \"desc\"]")
+	if err := checkDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
+	questName := *quest
+	if questName == "" {
+		questName = resolveDirQuest(d, *dir)
+	}
+	if questName == "" {
+		fmt.Fprintln(os.Stderr, "usage: fellowship errand init --quest <name> [--dir <worktree>] [--task \"desc\"]")
 		return 1
 	}
 
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
-		return errand.Init(conn, *quest, *task)
+		return errand.Init(conn, questName, *task)
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
-	fmt.Printf("Errand tracking initialized for quest %q\n", *quest)
+	fmt.Printf("Errand tracking initialized for quest %q\n", questName)
 	return 0
 }
 
@@ -1542,11 +1715,17 @@ func runErrandList(d *db.DB, args []string) int {
 	ctx := context.Background()
 	fs := flag.NewFlagSet("errand list", flag.ExitOnError)
 	quest := fs.String("quest", "", "Quest name")
+	dir := fs.String("dir", "", "Worktree directory (default: current directory)")
 	fs.Parse(args)
+
+	if err := checkDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
 
 	questName := *quest
 	if questName == "" {
-		questName = autoDetectQuest(d)
+		questName = resolveDirQuest(d, *dir)
 	}
 	if questName == "" {
 		fmt.Fprintln(os.Stderr, "fellowship: no quest found. Use --quest <name>.")
@@ -1593,18 +1772,24 @@ func runErrandAdd(d *db.DB, args []string) int {
 	ctx := context.Background()
 	fs := flag.NewFlagSet("errand add", flag.ExitOnError)
 	quest := fs.String("quest", "", "Quest name")
+	dir := fs.String("dir", "", "Worktree directory (default: current directory)")
 	phase := fs.String("phase", "", "Quest phase")
 	fs.Parse(args)
 
 	desc := strings.Join(fs.Args(), " ")
 	if desc == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship errand add --quest <name> \"description\"")
+		fmt.Fprintln(os.Stderr, "usage: fellowship errand add [--quest <name>] [--dir <worktree>] \"description\"")
+		return 1
+	}
+
+	if err := checkDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
 
 	questName := *quest
 	if questName == "" {
-		questName = autoDetectQuest(d)
+		questName = resolveDirQuest(d, *dir)
 	}
 	if questName == "" {
 		fmt.Fprintln(os.Stderr, "fellowship: no quest found. Use --quest <name>.")
@@ -1628,11 +1813,12 @@ func runErrandUpdate(d *db.DB, args []string) int {
 	ctx := context.Background()
 	fs := flag.NewFlagSet("errand update", flag.ExitOnError)
 	quest := fs.String("quest", "", "Quest name")
+	dir := fs.String("dir", "", "Worktree directory (default: current directory)")
 	fs.Parse(args)
 
 	remaining := fs.Args()
 	if len(remaining) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: fellowship errand update --quest <name> <id> <status>")
+		fmt.Fprintln(os.Stderr, "usage: fellowship errand update [--quest <name>] [--dir <worktree>] <id> <status>")
 		return 1
 	}
 
@@ -1641,13 +1827,18 @@ func runErrandUpdate(d *db.DB, args []string) int {
 
 	ws, ok := errand.ValidStatus(statusStr)
 	if !ok {
-		fmt.Fprintf(os.Stderr, "fellowship: invalid status %q (use: pending, active, done, blocked)\n", statusStr)
+		fmt.Fprintf(os.Stderr, "fellowship: invalid status %q (use: %s)\n", statusStr, strings.Join(errand.Statuses(), ", "))
+		return 1
+	}
+
+	if err := checkDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
 
 	questName := *quest
 	if questName == "" {
-		questName = autoDetectQuest(d)
+		questName = resolveDirQuest(d, *dir)
 	}
 	if questName == "" {
 		fmt.Fprintln(os.Stderr, "fellowship: no quest found. Use --quest <name>.")
@@ -1668,11 +1859,17 @@ func runErrandShow(d *db.DB, args []string) int {
 	ctx := context.Background()
 	fs := flag.NewFlagSet("errand show", flag.ExitOnError)
 	quest := fs.String("quest", "", "Quest name")
+	dir := fs.String("dir", "", "Worktree directory (default: current directory)")
 	fs.Parse(args)
+
+	if err := checkDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
 
 	questName := *quest
 	if questName == "" {
-		questName = autoDetectQuest(d)
+		questName = resolveDirQuest(d, *dir)
 	}
 	if questName == "" {
 		fmt.Fprintln(os.Stderr, "fellowship: no quest found. Use --quest <name>.")
@@ -1791,10 +1988,16 @@ func runStateAddQuest(d *db.DB, args []string) int {
 	branch := fs.String("branch", "", "Branch name")
 	worktree := fs.String("worktree", "", "Worktree path")
 	taskID := fs.String("task-id", "", "Task ID")
+	dir := fs.String("dir", "", "Repo or worktree directory (default: current directory)")
 	fs.Parse(args)
 
+	if err := checkDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
 	if *name == "" || *task == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship state add-quest --name <name> --task \"<desc>\" [--branch BRANCH] [--worktree PATH] [--task-id ID]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship state add-quest --name <name> --task \"<desc>\" [--branch BRANCH] [--worktree PATH] [--task-id ID] [--dir DIR]")
 		return 1
 	}
 
@@ -1820,10 +2023,16 @@ func runStateAddScout(d *db.DB, args []string) int {
 	name := fs.String("name", "", "Scout name (required)")
 	question := fs.String("question", "", "Research question (required)")
 	taskID := fs.String("task-id", "", "Task ID")
+	dir := fs.String("dir", "", "Repo or worktree directory (default: current directory)")
 	fs.Parse(args)
 
+	if err := checkDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
 	if *name == "" || *question == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship state add-scout --name <name> --question \"<question>\" [--task-id ID]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship state add-scout --name <name> --question \"<question>\" [--task-id ID] [--dir DIR]")
 		return 1
 	}
 
@@ -1847,10 +2056,16 @@ func runStateAddCompany(d *db.DB, args []string) int {
 	name := fs.String("name", "", "Company name (required)")
 	quests := fs.String("quests", "", "Comma-separated quest names")
 	scouts := fs.String("scouts", "", "Comma-separated scout names")
+	dir := fs.String("dir", "", "Repo or worktree directory (default: current directory)")
 	fs.Parse(args)
 
+	if err := checkDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
 	if *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship state add-company --name <name> [--quests q1,q2] [--scouts s1,s2]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship state add-company --name <name> [--quests q1,q2] [--scouts s1,s2] [--dir DIR]")
 		return 1
 	}
 
@@ -1881,10 +2096,16 @@ func runStateUpdateQuest(d *db.DB, args []string) int {
 	branch := fs.String("branch", "", "Branch name")
 	taskID := fs.String("task-id", "", "Task ID")
 	statusFlag := fs.String("status", "", "Quest status (active, completed, cancelled)")
+	dir := fs.String("dir", "", "Repo or worktree directory (default: current directory)")
 	fs.Parse(args)
 
+	if err := checkDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+
 	if *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship state update-quest --name <name> [--worktree PATH] [--branch BRANCH] [--task-id ID] [--status STATUS]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship state update-quest --name <name> [--worktree PATH] [--branch BRANCH] [--task-id ID] [--status STATUS] [--dir DIR]")
 		return 1
 	}
 
@@ -1920,7 +2141,13 @@ func runStateUpdateQuest(d *db.DB, args []string) int {
 func runStateShow(d *db.DB, args []string) int {
 	ctx := context.Background()
 	fs := flag.NewFlagSet("state show", flag.ExitOnError)
+	dir := fs.String("dir", "", "Repo or worktree directory (default: current directory)")
 	fs.Parse(args)
+
+	if err := checkDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
 
 	var s *dashboard.FellowshipState
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
@@ -2246,16 +2473,96 @@ func gitRootFrom(dir string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// autoDetectQuest tries to find the quest name for the current worktree.
-func autoDetectQuest(d *db.DB) string {
-	cwd, _ := os.Getwd()
-	gitRoot := gitRootFrom(cwd)
+// resolveDirQuest returns the quest name registered for dir, or for the
+// process working directory when dir is empty. Resolution mirrors the hooks:
+// canonicalize to the git root and look that up in fellowship state. A raw
+// path match is the fallback, so --dir also accepts a worktree path recorded
+// exactly as it was passed to `state add-quest`.
+func resolveDirQuest(d *db.DB, dir string) string {
+	if dir == "" {
+		dir, _ = os.Getwd()
+	}
 	var questName string
 	d.WithConn(context.Background(), func(conn *db.Conn) error {
-		questName, _ = state.FindQuest(conn, gitRoot)
+		if n, err := state.FindQuest(conn, gitRootFrom(dir)); err == nil && n != "" {
+			questName = n
+			return nil
+		}
+		questName, _ = state.FindQuest(conn, dir)
 		return nil
 	})
 	return questName
+}
+
+// checkDir validates a --dir value. The state database is resolved from the
+// process working directory and every worktree of a repo shares one database,
+// so a --dir pointing into a different repository would silently operate on
+// the wrong state. Reject that rather than write to the wrong fellowship.
+// When git cannot answer, the check passes — it is a guard, not a gate.
+func checkDir(dir string) error {
+	if dir == "" {
+		return nil
+	}
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf("--dir %q is not a directory", dir)
+	}
+	cwd, _ := os.Getwd()
+	want, wantErr := resolveMainRepoFromCwd(cwd)
+	got, gotErr := resolveMainRepoFromCwd(dir)
+	if wantErr != nil || gotErr != nil {
+		return nil
+	}
+	if hooks.CanonicalPath(want) != hooks.CanonicalPath(got) {
+		return fmt.Errorf("--dir %q belongs to a different repository than the current directory", dir)
+	}
+	return nil
+}
+
+// resolveInitQuestName picks the quest name `fellowship init` records: the
+// explicit --quest flag, else the name the lead registered for this worktree
+// with `state add-quest`, else the directory basename.
+func resolveInitQuestName(d *db.DB, flagName, root string) string {
+	if flagName != "" {
+		return flagName
+	}
+	if registered := resolveDirQuest(d, root); registered != "" {
+		return registered
+	}
+	return filepath.Base(root)
+}
+
+// autoApprovablePhases lists the phases a gate can be auto-approved for: every
+// quest phase except Complete, which no gate leaves.
+func autoApprovablePhases() []string {
+	all := state.Phases()
+	out := make([]string, 0, len(all))
+	for _, p := range all {
+		if p == "Complete" {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// validateAutoApproveGates rejects gates.autoApprove entries that do not name a
+// gate-bearing phase.
+func validateAutoApproveGates(gates []string) error {
+	valid := autoApprovablePhases()
+	for _, g := range gates {
+		ok := false
+		for _, p := range valid {
+			if p == g {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return fmt.Errorf("invalid gates.autoApprove entry %q (valid: %s)", g, strings.Join(valid, ", "))
+		}
+	}
+	return nil
 }
 
 // jsonFilesExist checks whether legacy JSON state files exist in the .fellowship

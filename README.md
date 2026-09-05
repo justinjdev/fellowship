@@ -124,7 +124,7 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 | `branch.ticketPattern` | `"[A-Z]+-\\d+"` | Regex to extract ticket IDs from quest descriptions. Default matches Jira-style IDs (e.g., `PROJ-123`). |
 | `worktree.enabled` | `true` | Whether quests create isolated worktrees. Set to `false` to work on the current branch. |
 | `worktree.directory` | `null` | Parent directory for worktrees. `null` uses Claude Code's default (`.claude/worktrees/`). |
-| `gates.autoApprove` | `[]` | Gate names to auto-approve: `"Onboard"`, `"Research"`, `"Plan"`, `"Implement"`, `"Adversarial"`, `"Review"` (the phase being left — `"Research"` auto-approves Research→Plan). Gates not listed still surface to you for approval. |
+| `gates.autoApprove` | `[]` | Gate names to auto-approve: `"Onboard"`, `"Research"`, `"Plan"`, `"Implement"`, `"Adversarial"`, `"Review"` (the phase being left — `"Research"` auto-approves Research→Plan). `"Complete"` is not a valid entry: no gate leaves it. `fellowship init` reads the merged value when it creates a quest's state and fails with a clear error on an unknown phase name. Gates not listed still surface to you for approval. |
 | `pr.draft` | `false` | Create PRs as drafts. |
 | `pr.template` | `null` | PR body template string. Supports `{task}`, `{summary}`, and `{changes}` placeholders. |
 | `palantir.enabled` | `true` | Whether to spawn a palantir monitoring agent during fellowships. |
@@ -227,6 +227,12 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 - **Removed orphaned `quest-runner` agent** — never spawned (quest teammates use `general-purpose`); removed from the plugin manifest, README, and the site's Agents and How It Works pages.
 - **Documentation drift fixes** — corrected `gates.autoApprove` valid values on the site config page, replaced the removed `using-git-worktrees` dependency with `writing-plans` (Plan phase), added the missing v1.6.1 changelog entry, fixed the quest phase/gate count, documented `autopsy.expiryDays` and added the missing `dataDir` row to `/settings`' schema table, corrected the `.fellowship/` gitignore wording in lembas, corrected palantir's Bash tool description, and fixed several command titles and skill/command wording.
 - **Archived the `gate-state-machine` OpenSpec change** — superseded by the Go CLI + SQLite gate enforcement design (v1.5.1–v2.2.0); moved to `openspec/changes/archive/` with a SUPERSEDED note.
+- **Documented CLI invocations now work** — `--dir <path>` is accepted by `gate status|approve|reject`, `state add-quest|add-scout|add-company|update-quest|show`, `errand init|list|add|update|show`, `autopsy create|scan|infer`, and `tome show`, resolving the quest exactly as if the process were running in that directory. `gate` previously had no flag parsing at all, so every documented `--dir` call failed.
+- **`fellowship init` name resolution** — Without `--quest`, init now uses the quest name the lead registered with `state add-quest` for that worktree, falling back to the directory name only when the worktree is unregistered.
+- **`fellowship init` reads `gates.autoApprove`** — Auto-approved gates come from the merged config (project `.fellowship/config.json`, then `~/.claude/fellowship.json`) instead of always being empty. Unknown phase names are rejected.
+- **`fellowship status` honors the base branch** — Merged-branch detection compares against the fellowship's stored `base_branch` instead of a hardcoded `main`.
+- **`fellowship herald post`** — Records a tiding from the CLI, so the palantir logs alerts without `jq` or a hand-written JSONL file. `herald` gained `--quest` and `--limit`; `autopsy scan --all` returns every unexpired autopsy.
+- **Prompt layer matches the binary** — Skills, agents, and commands now call the CLI by its full path, use only flags that exist, and read state through the CLI instead of the pre-2.0 JSON files (`quest-state.json`, `fellowship-state.json`, `quest-tome.json`, `quest-herald.jsonl`, `quest-errands.json`, `palantir-alerts.jsonl`, `autopsies/`).
 
 ### v2.2.0
 

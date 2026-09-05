@@ -213,3 +213,21 @@ func TestValidStatus(t *testing.T) {
 		}
 	}
 }
+
+func TestStatuses(t *testing.T) {
+	got := errand.Statuses()
+	want := []string{"pending", "in_progress", "done", "blocked", "skipped"}
+	if len(got) != len(want) {
+		t.Fatalf("Statuses() = %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("Statuses() = %q, want %q", got, want)
+		}
+	}
+	for _, s := range got {
+		if _, ok := errand.ValidStatus(s); !ok {
+			t.Errorf("Statuses() returned %q, which ValidStatus rejects", s)
+		}
+	}
+}

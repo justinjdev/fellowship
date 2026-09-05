@@ -99,9 +99,9 @@ This is defense-in-depth — the `completion-guard` hook also mechanically block
 - **"scout: {question}"** → spawn new scout teammate (see Spawn a Scout). Scouts don't count toward palantir's quest threshold.
 - **"status"** → read task list (including metadata), present structured progress report (see [progress-tracking.md](progress-tracking.md))
 - **"approve" / "reject"** → relay to the relevant teammate
-- **"approve all gates for {company_name}"** → batch-approve all pending gates in the named company using `fellowship company approve <name>`. Report which quests were approved.
-- **"hold quest-N"** → `fellowship hold --dir <worktree> [--reason "..."]`, notify teammate via SendMessage
-- **"unhold quest-N"** → `fellowship unhold --dir <worktree>`, notify teammate via SendMessage with updated instructions
+- **"approve all gates for {company_name}"** → batch-approve all pending gates in the named company using `~/.claude/fellowship/bin/fellowship company approve <name>`. Report which quests were approved.
+- **"hold quest-N"** → `~/.claude/fellowship/bin/fellowship hold --dir <worktree> [--reason "..."]`, notify teammate via SendMessage
+- **"unhold quest-N"** → `~/.claude/fellowship/bin/fellowship unhold --dir <worktree>`, notify teammate via SendMessage with updated instructions
 - **"cancel quest-N"** → send `shutdown_request` to teammate, preserve worktree
 - **"tell quest-N to ..."** → relay message to specific teammate via `SendMessage`
 - **"wrap up" / "disband"** → shutdown all teammates, synthesize summary, `TeamDelete`
@@ -119,7 +119,7 @@ When the user explicitly requests promotion (e.g., "promote scout-auth findings 
    - `TaskCreate` with the quest description
    - Read the findings file content
    - Spawn a teammate using the quest spawn prompt's **Promoted variant** from spawn-prompts.md, with `{scout_findings_content}` set to the full file content
-   - Add to state file via `fellowship state add-quest`
+   - Register the quest via `~/.claude/fellowship/bin/fellowship state add-quest`
 6. **Report:** Tell the user the promotion is underway
 
 **Important:** Promotion is always explicit — Gandalf never auto-promotes. Scout findings might suggest work that doesn't warrant a quest, or should be folded into an existing quest.
@@ -132,7 +132,7 @@ Never combine gate approvals. Approve one gate at a time. Each gate response tri
 
 **Never `cd` into a quest worktree.** Gandalf must stay at the repo root for the entire fellowship session. If you `cd` into a worktree, the gate-guard hooks will find that quest's state file and block your tools — creating a deadlock where you can't approve gates or take any action.
 
-- Use `--dir <worktree_path>` flags for all fellowship CLI commands (e.g., `fellowship gate approve --dir <path>`)
+- Use `--dir <worktree_path>` flags for all fellowship CLI commands (e.g., `~/.claude/fellowship/bin/fellowship gate approve --dir <path>`). `state init` is the exception — it has no `--dir` and operates on the current directory, which for Gandalf is the repo root.
 - Use absolute paths when reading files from quest worktrees
 - If you need to inspect a quest's files, use the Read tool with absolute paths — never `cd` first
 

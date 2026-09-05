@@ -92,10 +92,12 @@ Store the confirmed branch as `base_branch`. This is passed to all quest spawn p
 
 > **Note:** `.fellowship/` is the default data directory. Users can override it via `dataDir` in `~/.claude/fellowship.json`. All `fellowship` CLI commands resolve the correct directory automatically.
 
-Initialize the fellowship state file using the CLI (pass `--base-branch` if not on main/master):
+Initialize the fellowship using the CLI (pass `--base-branch` if not on main/master).
+`state init` has no `--dir` — it operates on the current directory, so run it from
+the repo root:
 
 ```bash
-~/.claude/fellowship/bin/fellowship state init --dir <repo_root> --name <fellowship_name> [--base-branch <base_branch>]
+~/.claude/fellowship/bin/fellowship state init --name <fellowship_name> [--base-branch <base_branch>]
 ```
 
 After spawning each quest/scout, add it to the state file:
@@ -130,7 +132,7 @@ tool do NOT inherit them. For the `worktree-guard` to fire in a session, a
 `.claude/settings.local.json` registering it must be present at that session's
 root.
 
-`fellowship state init` writes that file for you: it merges the `worktree-guard`
+`state init` writes that file for you: it merges the `worktree-guard`
 PreToolUse hook into the project `.claude/settings.local.json` (preserving any
 existing settings; idempotent). `settings.local.json` is **git-ignored**, so
 this touches no git history and leaves no untracked file. Pass
@@ -150,7 +152,7 @@ Before spawning any quest, Gandalf MUST:
 2. Confirm the guard binary is present — `~/.claude/fellowship/bin/fellowship
    version` should succeed.
 3. Confirm the fellowship state store exists (a fellowship has been initialized
-   via `fellowship state init`).
+   via `~/.claude/fellowship/bin/fellowship state init`).
 
 The guard is **inert unless a fellowship is active**, so installing it is always
 safe — it never blocks work outside a fellowship. Isolation itself is provisioned
@@ -261,7 +263,7 @@ When the user says "wrap up" or "disband":
 
 1. Send `shutdown_request` to all active teammates (including palantir)
 2. Synthesize a summary: quests completed, PR URLs, any open items
-3. **Clear the bulletin board:** Run `fellowship bulletin clear` to remove ephemeral discoveries
+3. **Clear the bulletin board:** Run `~/.claude/fellowship/bin/fellowship bulletin clear` to remove ephemeral discoveries
 4. **Suggest retrospective (optional):** Mention to the user: "Consider running `/retro` for a retrospective analysis of this fellowship — it identifies patterns across quests and can recommend configuration improvements." This is a suggestion only — the user can skip it and proceed directly to cleanup.
 5. Run `TeamDelete` to clean up
 
@@ -328,7 +330,7 @@ Keep it brief — one line, not a monologue. Functional information always comes
 
 - **Quest fails:** Report to user with context (which phase, what went wrong). Before respawning, write an autopsy to preserve failure knowledge for future quests:
   ```bash
-  fellowship autopsy infer --dir <worktree_path> --repo <main_repo>
+  ~/.claude/fellowship/bin/fellowship autopsy infer --dir <worktree_path>
   ```
   This reconstructs a best-effort failure record from the quest's tome, herald, and eagles data. Then offer to respawn. Worktree is preserved.
   - **Respawn procedure:** Spawn a new teammate with the same task description, but add to the spawn prompt: `"You are resuming a failed quest. Your working directory is already set to the existing worktree at {worktree_path}. Skip worktree creation in quest Phase 0 — you're already isolated. Check .fellowship/checkpoint.md for a checkpoint from the previous attempt."` Set the new teammate's working directory to the failed quest's worktree path.
