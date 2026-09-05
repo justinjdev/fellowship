@@ -47,18 +47,17 @@ func DetectProblems(conn *db.Conn, opts ...Options) ([]Problem, error) {
 		o = opts[0]
 	}
 
-	hOpts := health.DefaultOptions()
-	if !o.Now.IsZero() {
-		hOpts.Now = o.Now
+	// Resolve the clock once so classification (inside Sweep) and the
+	// message formatting below agree on "now".
+	now := o.Now
+	if now.IsZero() {
+		now = time.Now()
 	}
+	hOpts := health.DefaultOptions()
+	hOpts.Now = now
 	report, err := health.Sweep(conn, hOpts)
 	if err != nil {
 		return nil, fmt.Errorf("detect problems: %w", err)
-	}
-
-	now := hOpts.Now
-	if now.IsZero() {
-		now = time.Now()
 	}
 
 	var problems []Problem
