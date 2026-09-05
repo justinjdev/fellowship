@@ -20,8 +20,8 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/eagles"
+	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/status"
@@ -170,10 +170,10 @@ func runHerald(d *db.DB, args []string) int {
 	fs.Parse(args)
 
 	if *problems {
-		var detected []herald.Problem
+		var detected []events.Problem
 		if err := d.WithConn(ctx, func(conn *db.Conn) error {
 			var err error
-			detected, err = herald.DetectProblems(conn)
+			detected, err = events.DetectProblems(conn)
 			return err
 		}); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -197,13 +197,13 @@ func runHerald(d *db.DB, args []string) int {
 		return 0
 	}
 
-	var evts []herald.Tiding
+	var evts []events.Event
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		var err error
 		if *quest != "" {
-			evts, err = herald.Read(conn, *quest, *limit)
+			evts, err = events.Read(conn, *quest, *limit)
 		} else {
-			evts, err = herald.ReadAll(conn, *limit)
+			evts, err = events.ReadAll(conn, *limit)
 		}
 		return err
 	}); err != nil {
@@ -248,14 +248,14 @@ func runHeraldPost(d *db.DB, args []string) int {
 		return 1
 	}
 
-	tt, ok := herald.ValidType(*tidingType)
+	tt, ok := events.ValidType(*tidingType)
 	if !ok {
-		fmt.Fprintf(os.Stderr, "fellowship: invalid tiding type %q (valid: %s)\n", *tidingType, strings.Join(herald.Types(), ", "))
+		fmt.Fprintf(os.Stderr, "fellowship: invalid tiding type %q (valid: %s)\n", *tidingType, strings.Join(events.Types(), ", "))
 		return 1
 	}
 
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
-		return herald.Announce(conn, herald.Tiding{
+		return events.Record(conn, events.Event{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 			Quest:     *quest,
 			Type:      tt,

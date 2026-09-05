@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/gate"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
@@ -50,15 +50,15 @@ func TestRecordApproval(t *testing.T) {
 			t.Errorf("phases = %+v, want Implement completed", qt.PhasesCompleted)
 		}
 
-		tidings, err := herald.Read(conn, "quest-1", 10)
+		tidings, err := events.Read(conn, "quest-1", 10)
 		if err != nil {
 			return err
 		}
 		if len(tidings) != 2 {
 			t.Fatalf("tidings = %d, want 2", len(tidings))
 		}
-		types := []herald.TidingType{tidings[0].Type, tidings[1].Type}
-		wantSeen := map[herald.TidingType]bool{herald.GateApproved: false, herald.PhaseTransition: false}
+		types := []events.EventType{tidings[0].Type, tidings[1].Type}
+		wantSeen := map[events.EventType]bool{events.GateApproved: false, events.PhaseTransition: false}
 		for _, ty := range types {
 			if _, ok := wantSeen[ty]; !ok {
 				t.Errorf("unexpected tiding type %q", ty)
@@ -99,11 +99,11 @@ func TestRecordRejection(t *testing.T) {
 		if len(qt.PhasesCompleted) != 0 {
 			t.Errorf("phases = %+v, want none — a rejection does not complete a phase", qt.PhasesCompleted)
 		}
-		tidings, err := herald.Read(conn, "quest-1", 10)
+		tidings, err := events.Read(conn, "quest-1", 10)
 		if err != nil {
 			return err
 		}
-		if len(tidings) != 1 || tidings[0].Type != herald.GateRejected {
+		if len(tidings) != 1 || tidings[0].Type != events.GateRejected {
 			t.Errorf("tidings = %+v, want one gate_rejected", tidings)
 		}
 		return nil

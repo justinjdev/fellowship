@@ -97,6 +97,7 @@ var baseSchema = []string{
 
 	// Herald event log (replaces quest-herald.jsonl)
 	// No FK to quest_state — events logged before quest exists and survive deletion.
+	// table: herald -> package events (cli/internal/events); table name unchanged, no schema change.
 	`CREATE TABLE IF NOT EXISTS herald (
 		id        INTEGER PRIMARY KEY AUTOINCREMENT,
 		timestamp TEXT NOT NULL,

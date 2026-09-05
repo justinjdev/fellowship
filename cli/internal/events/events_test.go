@@ -1,4 +1,4 @@
-package herald
+package events
 
 import (
 	"context"
@@ -10,10 +10,10 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/db"
 )
 
-func TestAnnounceAndRead(t *testing.T) {
+func TestRecordAndRead(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := Announce(conn, Tiding{
+		if err := Record(conn, Event{
 			Timestamp: "2026-01-01T00:00:00Z",
 			Quest:     "q1",
 			Type:      GateSubmitted,
@@ -21,7 +21,7 @@ func TestAnnounceAndRead(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		if err := Announce(conn, Tiding{
+		if err := Record(conn, Event{
 			Timestamp: "2026-01-01T00:01:00Z",
 			Quest:     "q1",
 			Type:      GateApproved,
@@ -30,18 +30,18 @@ func TestAnnounceAndRead(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tidings, err := Read(conn, "q1", 0)
+		events, err := Read(conn, "q1", 0)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(tidings) != 2 {
-			t.Fatalf("expected 2, got %d", len(tidings))
+		if len(events) != 2 {
+			t.Fatalf("expected 2, got %d", len(events))
 		}
-		if tidings[0].Type != GateSubmitted {
-			t.Errorf("tidings[0].Type = %q, want %q", tidings[0].Type, GateSubmitted)
+		if events[0].Type != GateSubmitted {
+			t.Errorf("events[0].Type = %q, want %q", events[0].Type, GateSubmitted)
 		}
-		if tidings[1].Type != GateApproved {
-			t.Errorf("tidings[1].Type = %q, want %q", tidings[1].Type, GateApproved)
+		if events[1].Type != GateApproved {
+			t.Errorf("events[1].Type = %q, want %q", events[1].Type, GateApproved)
 		}
 		return nil
 	}); err != nil {
@@ -53,29 +53,29 @@ func TestReadReturnsLatestN(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		for i := 0; i < 10; i++ {
-			if err := Announce(conn, Tiding{
+			if err := Record(conn, Event{
 				Timestamp: fmt.Sprintf("2026-01-01T00:%02d:00Z", i),
 				Quest:     "q1",
 				Type:      MetadataUpdated,
-				Detail:    fmt.Sprintf("tiding-%d", i),
+				Detail:    fmt.Sprintf("event-%d", i),
 			}); err != nil {
 				t.Fatal(err)
 			}
 		}
 
-		tidings, err := Read(conn, "q1", 3)
+		events, err := Read(conn, "q1", 3)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(tidings) != 3 {
-			t.Fatalf("got %d tidings, want 3", len(tidings))
+		if len(events) != 3 {
+			t.Fatalf("got %d events, want 3", len(events))
 		}
 		// Should be last 3 in ascending order
-		if tidings[0].Detail != "tiding-7" {
-			t.Errorf("tidings[0].Detail = %q, want tiding-7", tidings[0].Detail)
+		if events[0].Detail != "event-7" {
+			t.Errorf("events[0].Detail = %q, want event-7", events[0].Detail)
 		}
-		if tidings[2].Detail != "tiding-9" {
-			t.Errorf("tidings[2].Detail = %q, want tiding-9", tidings[2].Detail)
+		if events[2].Detail != "event-9" {
+			t.Errorf("events[2].Detail = %q, want event-9", events[2].Detail)
 		}
 		return nil
 	}); err != nil {
@@ -86,12 +86,12 @@ func TestReadReturnsLatestN(t *testing.T) {
 func TestReadNoData(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		tidings, err := Read(conn, "nonexistent", 10)
+		events, err := Read(conn, "nonexistent", 10)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(tidings) != 0 {
-			t.Fatalf("got %d tidings, want 0", len(tidings))
+		if len(events) != 0 {
+			t.Fatalf("got %d events, want 0", len(events))
 		}
 		return nil
 	}); err != nil {
@@ -103,7 +103,7 @@ func TestReadAll_Limit(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		for i := 0; i < 5; i++ {
-			if err := Announce(conn, Tiding{
+			if err := Record(conn, Event{
 				Timestamp: fmt.Sprintf("2026-01-01T00:%02d:00Z", i),
 				Quest:     "q1",
 				Type:      PhaseTransition,
@@ -111,12 +111,12 @@ func TestReadAll_Limit(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		tidings, err := ReadAll(conn, 3)
+		events, err := ReadAll(conn, 3)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(tidings) != 3 {
-			t.Fatalf("expected 3, got %d", len(tidings))
+		if len(events) != 3 {
+			t.Fatalf("expected 3, got %d", len(events))
 		}
 		return nil
 	}); err != nil {
@@ -127,21 +127,21 @@ func TestReadAll_Limit(t *testing.T) {
 func TestReadAllAcrossQuests(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := Announce(conn, Tiding{
+		if err := Record(conn, Event{
 			Timestamp: "2026-01-01T00:00:00Z",
 			Quest:     "q1",
 			Type:      GateSubmitted,
 		}); err != nil {
 			t.Fatal(err)
 		}
-		if err := Announce(conn, Tiding{
+		if err := Record(conn, Event{
 			Timestamp: "2026-01-01T00:05:00Z",
 			Quest:     "q2",
 			Type:      PhaseTransition,
 		}); err != nil {
 			t.Fatal(err)
 		}
-		if err := Announce(conn, Tiding{
+		if err := Record(conn, Event{
 			Timestamp: "2026-01-01T00:10:00Z",
 			Quest:     "q1",
 			Type:      GateApproved,
@@ -149,22 +149,22 @@ func TestReadAllAcrossQuests(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tidings, err := ReadAll(conn, 0)
+		events, err := ReadAll(conn, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(tidings) != 3 {
-			t.Fatalf("got %d tidings, want 3", len(tidings))
+		if len(events) != 3 {
+			t.Fatalf("got %d events, want 3", len(events))
 		}
 		// Ascending order by id (insertion order)
-		if tidings[0].Quest != "q1" || tidings[0].Type != GateSubmitted {
-			t.Errorf("tidings[0] = %+v, want q1/gate_submitted", tidings[0])
+		if events[0].Quest != "q1" || events[0].Type != GateSubmitted {
+			t.Errorf("events[0] = %+v, want q1/gate_submitted", events[0])
 		}
-		if tidings[1].Quest != "q2" {
-			t.Errorf("tidings[1].Quest = %q, want q2", tidings[1].Quest)
+		if events[1].Quest != "q2" {
+			t.Errorf("events[1].Quest = %q, want q2", events[1].Quest)
 		}
-		if tidings[2].Quest != "q1" || tidings[2].Type != GateApproved {
-			t.Errorf("tidings[2] = %+v, want q1/gate_approved", tidings[2])
+		if events[2].Quest != "q1" || events[2].Type != GateApproved {
+			t.Errorf("events[2] = %+v, want q1/gate_approved", events[2])
 		}
 		return nil
 	}); err != nil {
@@ -183,10 +183,10 @@ func TestDetectProblems_Struggling(t *testing.T) {
 		}
 
 		// Add 2 rejections in Research phase
-		if err := Announce(conn, Tiding{Timestamp: "2026-01-01T00:01:00Z", Quest: "q1", Type: GateRejected, Phase: "Research"}); err != nil {
+		if err := Record(conn, Event{Timestamp: "2026-01-01T00:01:00Z", Quest: "q1", Type: GateRejected, Phase: "Research"}); err != nil {
 			t.Fatal(err)
 		}
-		if err := Announce(conn, Tiding{Timestamp: "2026-01-01T00:02:00Z", Quest: "q1", Type: GateRejected, Phase: "Research"}); err != nil {
+		if err := Record(conn, Event{Timestamp: "2026-01-01T00:02:00Z", Quest: "q1", Type: GateRejected, Phase: "Research"}); err != nil {
 			t.Fatal(err)
 		}
 

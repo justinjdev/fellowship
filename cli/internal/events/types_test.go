@@ -1,4 +1,4 @@
-package herald
+package events
 
 import "testing"
 
@@ -6,7 +6,7 @@ func TestValidType(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
-		want  TidingType
+		want  EventType
 		ok    bool
 	}{
 		{name: "gate type", input: "gate_approved", want: GateApproved, ok: true},

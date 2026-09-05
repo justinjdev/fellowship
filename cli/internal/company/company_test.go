@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/fellowship"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
@@ -286,17 +286,17 @@ func TestBatchApprove_HeraldLogging(t *testing.T) {
 			t.Fatalf("expected 1 approved, got %d", len(approved))
 		}
 
-		tidings, err := herald.Read(conn, "q1", 0)
+		tidings, err := events.Read(conn, "q1", 0)
 		if err != nil {
 			t.Fatalf("reading herald: %v", err)
 		}
 
 		var foundApproved, foundTransition bool
 		for _, td := range tidings {
-			if td.Type == herald.GateApproved && td.Phase == "Research" {
+			if td.Type == events.GateApproved && td.Phase == "Research" {
 				foundApproved = true
 			}
-			if td.Type == herald.PhaseTransition && td.Phase == "Plan" {
+			if td.Type == events.PhaseTransition && td.Phase == "Plan" {
 				foundTransition = true
 			}
 		}

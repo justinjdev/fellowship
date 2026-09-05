@@ -15,8 +15,8 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/eagles"
 	"github.com/justinjdev/fellowship/cli/internal/errand"
+	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/fellowship"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -155,12 +155,12 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 	// Best-effort herald announcements after tx commits.
 	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		now := time.Now().UTC().Format(time.RFC3339)
-		herald.Announce(conn, herald.Tiding{
-			Timestamp: now, Quest: result.Name, Type: herald.GateApproved,
+		events.Record(conn, events.Event{
+			Timestamp: now, Quest: result.Name, Type: events.GateApproved,
 			Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
 		})
-		herald.Announce(conn, herald.Tiding{
-			Timestamp: now, Quest: result.Name, Type: herald.PhaseTransition,
+		events.Record(conn, events.Event{
+			Timestamp: now, Quest: result.Name, Type: events.PhaseTransition,
 			Phase: result.Phase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, result.Phase),
 		})
 		return nil
@@ -230,9 +230,9 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 
 	// Best-effort herald announcement after tx commits.
 	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
-		herald.Announce(conn, herald.Tiding{
+		events.Record(conn, events.Event{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			Quest:     result.Name, Type: herald.GateRejected,
+			Quest:     result.Name, Type: events.GateRejected,
 			Phase: result.Phase, Detail: fmt.Sprintf("Gate rejected for %s", result.Phase),
 		})
 		return nil
@@ -382,10 +382,10 @@ func (s *Server) worktreeDirs() []string {
 }
 
 func (s *Server) handleHerald(w http.ResponseWriter, r *http.Request) {
-	var tidings []herald.Tiding
+	var tidings []events.Event
 	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
-		tidings, err = herald.ReadAll(conn, 50)
+		tidings, err = events.ReadAll(conn, 50)
 		return err
 	})
 	if err != nil {
@@ -393,17 +393,17 @@ func (s *Server) handleHerald(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if tidings == nil {
-		tidings = []herald.Tiding{}
+		tidings = []events.Event{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tidings)
 }
 
 func (s *Server) handleProblems(w http.ResponseWriter, r *http.Request) {
-	var problems []herald.Problem
+	var problems []events.Problem
 	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
-		problems, err = herald.DetectProblems(conn)
+		problems, err = events.DetectProblems(conn)
 		return err
 	})
 	if err != nil {
@@ -411,7 +411,7 @@ func (s *Server) handleProblems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if problems == nil {
-		problems = []herald.Problem{}
+		problems = []events.Problem{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(problems)

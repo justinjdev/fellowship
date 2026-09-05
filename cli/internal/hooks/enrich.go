@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/errand"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
+	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/tome"
 	"zombiezen.com/go/sqlite"
 )
@@ -56,13 +56,13 @@ func gatherDiffStats(dir string) string {
 }
 
 func gatherPhaseDuration(conn *sqlite.Conn, questName string) string {
-	tidings, err := herald.Read(conn, questName, 0)
+	tidings, err := events.Read(conn, questName, 0)
 	if err != nil || len(tidings) == 0 {
 		return ""
 	}
 	// Find the most recent gate_approved tiding (marks phase entry).
 	for i := len(tidings) - 1; i >= 0; i-- {
-		if tidings[i].Type == herald.GateApproved {
+		if tidings[i].Type == events.GateApproved {
 			ts, err := time.Parse(time.RFC3339, tidings[i].Timestamp)
 			if err != nil {
 				continue

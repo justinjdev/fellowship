@@ -15,9 +15,9 @@ import (
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/gate"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
@@ -189,10 +189,10 @@ func runHold(d *db.DB, args []string) int {
 		if *reason != "" {
 			detail += ": " + *reason
 		}
-		return herald.Announce(conn, herald.Tiding{
+		return events.Record(conn, events.Event{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 			Quest:     questName,
-			Type:      herald.QuestHeld,
+			Type:      events.QuestHeld,
 			Phase:     phase,
 			Detail:    detail,
 		})
@@ -241,10 +241,10 @@ func runUnhold(d *db.DB, args []string) int {
 			return err
 		}
 
-		return herald.Announce(conn, herald.Tiding{
+		return events.Record(conn, events.Event{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 			Quest:     questName,
-			Type:      herald.QuestUnheld,
+			Type:      events.QuestUnheld,
 			Phase:     s.Phase,
 			Detail:    "Quest unheld — resumed",
 		})

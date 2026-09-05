@@ -1,4 +1,4 @@
-package herald
+package events
 
 import (
 	"fmt"
@@ -26,7 +26,7 @@ type Problem struct {
 
 // DetectProblems scans the database for potential quest issues. It is a view
 // over eagles' health sweep — the same classification behind `fellowship
-// eagles` — translated into the Problem shape `fellowship herald --problems`
+// eagles` — translated into the Problem shape `fellowship events --problems`
 // and the dashboard expect, rather than a second set of thresholds.
 func DetectProblems(conn *db.Conn) ([]Problem, error) {
 	opts := eagles.DefaultOptions()

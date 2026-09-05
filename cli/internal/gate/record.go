@@ -16,7 +16,7 @@ import (
 
 	"zombiezen.com/go/sqlite"
 
-	"github.com/justinjdev/fellowship/cli/internal/herald"
+	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
@@ -32,14 +32,14 @@ func RecordApproval(conn *sqlite.Conn, questName, prev, next, detail string) err
 		return fmt.Errorf("recording phase %s for %s: %w", prev, questName, err)
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	if err := herald.Announce(conn, herald.Tiding{
-		Timestamp: now, Quest: questName, Type: herald.GateApproved,
+	if err := events.Record(conn, events.Event{
+		Timestamp: now, Quest: questName, Type: events.GateApproved,
 		Phase: prev, Detail: fmt.Sprintf("Gate approved for %s", prev),
 	}); err != nil {
 		return fmt.Errorf("announcing gate approval for %s: %w", questName, err)
 	}
-	if err := herald.Announce(conn, herald.Tiding{
-		Timestamp: now, Quest: questName, Type: herald.PhaseTransition,
+	if err := events.Record(conn, events.Event{
+		Timestamp: now, Quest: questName, Type: events.PhaseTransition,
 		Phase: next, Detail: fmt.Sprintf("Phase advanced from %s to %s", prev, next),
 	}); err != nil {
 		return fmt.Errorf("announcing phase transition for %s: %w", questName, err)
@@ -53,9 +53,9 @@ func RecordRejection(conn *sqlite.Conn, questName, phase, detail string) error {
 	if err := tome.RecordGate(conn, questName, phase, "rejected", detail); err != nil {
 		return fmt.Errorf("recording gate rejection for %s: %w", questName, err)
 	}
-	if err := herald.Announce(conn, herald.Tiding{
+	if err := events.Record(conn, events.Event{
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		Quest:     questName, Type: herald.GateRejected,
+		Quest:     questName, Type: events.GateRejected,
 		Phase: phase, Detail: fmt.Sprintf("Gate rejected for %s", phase),
 	}); err != nil {
 		return fmt.Errorf("announcing gate rejection for %s: %w", questName, err)

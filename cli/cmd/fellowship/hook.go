@@ -16,10 +16,10 @@ import (
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/fellowship"
 	"github.com/justinjdev/fellowship/cli/internal/gate"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
-	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
@@ -157,10 +157,10 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			if err := state.Upsert(conn, s); err != nil {
 				return err
 			}
-			return herald.Announce(conn, herald.Tiding{
+			return events.Record(conn, events.Event{
 				Timestamp: time.Now().UTC().Format(time.RFC3339),
 				Quest:     questName,
-				Type:      herald.LembasCompleted,
+				Type:      events.LembasCompleted,
 				Phase:     s.Phase,
 				Detail:    "Lembas skill completed",
 			})
@@ -224,10 +224,10 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 					if err := hooks.RecordGateSubmitted(conn, questName, sr.PrevPhase); err != nil {
 						return err
 					}
-					if err := herald.Announce(conn, herald.Tiding{
+					if err := events.Record(conn, events.Event{
 						Timestamp: time.Now().UTC().Format(time.RFC3339),
 						Quest:     questName,
-						Type:      herald.GateSubmitted,
+						Type:      events.GateSubmitted,
 						Phase:     s.Phase,
 						Detail:    "Gate submitted for review",
 					}); err != nil {
@@ -288,10 +288,10 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			if err := state.Upsert(conn, s); err != nil {
 				return err
 			}
-			return herald.Announce(conn, herald.Tiding{
+			return events.Record(conn, events.Event{
 				Timestamp: time.Now().UTC().Format(time.RFC3339),
 				Quest:     questName,
-				Type:      herald.MetadataUpdated,
+				Type:      events.MetadataUpdated,
 				Phase:     s.Phase,
 				Detail:    "Task metadata updated",
 			})
