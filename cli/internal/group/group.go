@@ -176,6 +176,17 @@ func LoadDetail(conn *sqlite.Conn, name string) (*Detail, error) {
 		st, err := state.Load(conn, qName)
 		if err != nil {
 			d.Quests = append(d.Quests, QuestSummary{Name: qName, Unavailable: true})
+			// The quest_state row can be gone even though the quest finished
+			// (e.g. a history-only completed/cancelled entry) — still count
+			// it toward progress using the terminal phase, same as
+			// fellowship.DiscoverQuests did.
+			if es := entryStatus[qName]; es == "completed" || es == "cancelled" {
+				questStatuses = append(questStatuses, fellowship.QuestStatus{
+					Name:   qName,
+					Phase:  state.TerminalPhase,
+					Status: es,
+				})
+			}
 			continue
 		}
 		d.Quests = append(d.Quests, QuestSummary{Name: qName, Phase: st.Phase, GatePending: st.GatePending})

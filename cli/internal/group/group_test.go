@@ -540,7 +540,7 @@ func TestApprove_WithPendingGates(t *testing.T) {
 }
 
 // `group show --json` (LoadDetail) wires in CalculateProgress via
-// fellowship.DiscoverQuests, so its Progress field must reflect the same
+// questEntryStatuses, so its Progress field must reflect the same
 // completed/in-progress counts CalculateProgress computes directly.
 func TestLoadDetail_Progress(t *testing.T) {
 	d := db.OpenTest(t)
@@ -586,6 +586,44 @@ func TestLoadDetail_Progress(t *testing.T) {
 		}
 		if progress.InProgress != 2 { // Implement and Review both rank >= Implement
 			t.Errorf("InProgress = %d, want 2", progress.InProgress)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A quest can be marked completed/cancelled in the fellowship entry without
+// ever having a quest_state row (e.g. imported history, or completed before
+// the phase machinery ever ran) — see
+// fellowship.TestDiscoverQuests_CompletedNoQuestState. LoadDetail's progress
+// must still count it, the same way fellowship.DiscoverQuests always did.
+func TestLoadDetail_Progress_CompletedNoQuestState(t *testing.T) {
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+			return err
+		}
+		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{
+			Name: "q1", Worktree: "/tmp/wt1", Status: "completed",
+		}); err != nil {
+			return err
+		}
+		if err := fellowship.AddGroup(conn, "team-alpha", []string{"q1"}, nil); err != nil {
+			return err
+		}
+		// No state.Upsert for q1 — no quest_state row.
+
+		detail, err := LoadDetail(conn, "team-alpha")
+		if err != nil {
+			t.Fatalf("LoadDetail() error: %v", err)
+		}
+
+		if !detail.Quests[0].Unavailable {
+			t.Errorf("Quests[0].Unavailable = false, want true (no quest_state row)")
+		}
+		if detail.Progress.Completed != 1 {
+			t.Errorf("Completed = %d, want 1", detail.Progress.Completed)
 		}
 		return nil
 	}); err != nil {
