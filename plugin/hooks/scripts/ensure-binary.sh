@@ -245,12 +245,24 @@ acquire_lock() {
 
 TMP_DIR=""
 cleanup() {
-  local ec=$?
+  local ec=$? owner_pid
   if [ -n "$TMP_DIR" ]; then
     rm -rf "$TMP_DIR"
   fi
   if [ "$LOCK_ACQUIRED" = "1" ]; then
-    rm -rf "$LOCK_DIR" 2>/dev/null || true
+    # Only remove the lock if we still own it. A slow-but-alive install can
+    # run past STALE_LOCK_SECONDS, in which case another session's
+    # acquire_lock may have already reclaimed and rewritten $LOCK_DIR_OWNER
+    # with its own PID before we get here — an unconditional rm -rf would
+    # then delete that other session's live lock (and its in-flight
+    # install) out from under it, defeating the very mutual exclusion this
+    # lock exists for. Comparing the owner file's PID to our own $$ before
+    # removing keeps that from happening; if the owner file is missing or
+    # names someone else, leave the lock alone.
+    owner_pid=$(cut -d' ' -f1 "$LOCK_DIR_OWNER" 2>/dev/null) || owner_pid=""
+    if [ "$owner_pid" = "$$" ]; then
+      rm -rf "$LOCK_DIR" 2>/dev/null || true
+    fi
   fi
   exit "$ec"
 }
