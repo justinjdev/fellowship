@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 
+	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
@@ -209,9 +210,48 @@ var schema = []string{
 	END`,
 }
 
+// applySchemaCalls counts how many times applySchema has actually run DDL.
+// Tests use it to assert that opening an already-current store takes the
+// read-only path; nothing in production reads it.
+var applySchemaCalls int
+
+// ensureSchema brings the store up to schemaVersion, doing nothing at all when
+// it is already there. The check matters for enforcement: every hook opens the
+// store, and re-running the DDL on each open would append to the WAL and take
+// a write lock on what should be a read-only decision.
+func ensureSchema(conn *Conn) error {
+	v, err := userVersion(conn)
+	if err != nil {
+		return err
+	}
+	if v == schemaVersion {
+		return nil
+	}
+	if err := sqlitex.ExecuteTransient(conn, "PRAGMA journal_mode = WAL", nil); err != nil {
+		return err
+	}
+	return applySchema(conn)
+}
+
+// userVersion reads PRAGMA user_version, the stamp applySchema leaves behind.
+func userVersion(conn *Conn) (int, error) {
+	v := -1
+	err := sqlitex.ExecuteTransient(conn, "PRAGMA user_version", &sqlitex.ExecOptions{
+		ResultFunc: func(stmt *sqlite.Stmt) error {
+			v = stmt.ColumnInt(0)
+			return nil
+		},
+	})
+	if err != nil {
+		return 0, fmt.Errorf("db: read user_version: %w", err)
+	}
+	return v, nil
+}
+
 // applySchema creates all tables, indexes, and triggers.
 // Uses IF NOT EXISTS so it is idempotent.
 func applySchema(conn *Conn) error {
+	applySchemaCalls++
 	for _, stmt := range schema {
 		if err := sqlitex.ExecuteTransient(conn, stmt, nil); err != nil {
 			return fmt.Errorf("db: schema: %w\nStatement: %.80s", err, stmt)

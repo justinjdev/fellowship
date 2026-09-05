@@ -108,7 +108,7 @@ When running as a fellowship teammate, a state file at `.fellowship/quest-state.
 If the spawn prompt contains a `RESUME CONTEXT:` block, this is a recovered quest:
 
 1. **Skip worktree creation** — your worktree already exists and you're already in it
-2. **Reset state file:** Run `fellowship init --dir $(pwd)` (you're already in the worktree) to clear `gate_pending` while preserving the current phase
+2. **Reset state file:** Run `fellowship init --dir $(pwd)` (you're already in the worktree) to clear `gate_pending` while preserving the current phase. If a gate was still pending when the previous session died, the hooks block this command — message the lead to clear it, since only the lead may clear a pending gate.
 3. **Update task metadata:** `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})` with the new task ID from the recovery spawn
 4. **Load checkpoint:** If `.fellowship/checkpoint.md` exists, read it as your initial context — this replaces `/council` orientation
 5. **Skip `/council`** — the checkpoint provides equivalent context from the previous session
