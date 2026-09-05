@@ -16,10 +16,71 @@ jobs:
         with:
           go-version-file: cli/go.mod
 
+      - name: gofmt
+        run: |
+          fmt_out="$(gofmt -l .)"
+          if [ -n "$fmt_out" ]; then
+            echo "The following files are not gofmt-formatted:"
+            echo "$fmt_out"
+            exit 1
+          fi
+        working-directory: cli
+
+      - name: go vet
+        run: go vet ./...
+        working-directory: cli
+
       - name: Build
         run: go build ./...
         working-directory: cli
 
       - name: Test
-        run: go test ./...
+        run: go test -race ./...
         working-directory: cli
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck
+        run: shellcheck plugin/hooks/scripts/*.sh
+
+  plugin-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify plugin.json paths exist
+        run: |
+          set -euo pipefail
+          manifest=".claude-plugin/plugin.json"
+          # Every path value in the manifest (skills/agents/commands entries
+          # and the hooks file) starts with "./". "skills" points at a
+          # directory glob ("./plugin/skills/"), so an existence check on
+          # the directory itself is enough there; everything else is a file.
+          paths="$(grep -o '"\./[^"]*"' "$manifest" | tr -d '"')"
+          status=0
+          while IFS= read -r p; do
+            [ -z "$p" ] && continue
+            if [ ! -e "$p" ]; then
+              echo "missing path referenced by $manifest: $p"
+              status=1
+            fi
+          done <<< "$paths"
+          exit $status
+
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install and build site
+        run: |
+          npm ci
+          npm run build
+        working-directory: site

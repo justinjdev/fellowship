@@ -26,11 +26,12 @@ You need a recent Go toolchain (see the `go` directive in `cli/go.mod`).
 
 ## How Hooks Work
 
-Hooks are subcommands of the CLI, not standalone scripts. `plugin/hooks/hooks.json` maps Claude Code hook events to `fellowship hook <name>` invocations; each handler lives in `cli/internal/hooks/` and is dispatched from `runHook` in `cli/cmd/fellowship/main.go`.
+Hooks are subcommands of the CLI, not standalone scripts. `plugin/hooks/hooks.json` maps Claude Code hook events to invocations of `plugin/hooks/scripts/fellowship.sh hook <name>`; each handler lives in `cli/internal/hooks/` and is dispatched from `runHook` in `cli/cmd/fellowship/main.go`.
 
 - Input: the hook payload is JSON on stdin, parsed by `hooks.ParseInput`.
 - Output: **exit 0 allows** the tool call; **exit 2 blocks** it (the message on stderr is surfaced to Claude). Some hooks emit a JSON decision on stdout instead (e.g. gate-submit).
 - Posture: gate hooks fail *closed* (block on internal error) so enforcement can't be silently skipped. The `worktree-guard` backstop is the exception — it is defense-in-depth behind lead-provisioned isolation, so it fails *open* (allow) on any resolution failure and blocks only on a positive main-tree mis-placement detection.
+- The wrapper (`fellowship.sh`) applies that same posture to distribution itself: it never execs the `fellowship` binary directly from `hooks.json`. If the binary is missing or not executable, it runs `ensure-binary.sh` once to try to install it. If the binary is still unavailable afterwards, every gate hook (`gate-guard`, `gate-submit`, `gate-prereq`, `completion-guard`, `metadata-track`, `file-track`) blocks (exit 2, with a message on stderr) rather than silently letting the tool call through; `worktree-guard` alone exits 0 in that case, consistent with its fail-open backstop posture.
 
 Current hooks: `gate-guard`, `gate-submit`, `gate-prereq`, `completion-guard`, `metadata-track`, `file-track`, `worktree-guard`. Run `fellowship` with no args for the full command reference.
 

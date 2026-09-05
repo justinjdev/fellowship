@@ -2,7 +2,7 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|resume",
+        "matcher": "startup|resume|clear|compact",
         "hooks": [
           {
             "type": "command",
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/fellowship/bin/fellowship hook worktree-guard",
+            "command": "${CLAUDE_PLUGIN_ROOT}/plugin/hooks/scripts/fellowship.sh hook worktree-guard",
             "timeout": 5
           }
         ]
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/fellowship/bin/fellowship hook gate-guard",
+            "command": "${CLAUDE_PLUGIN_ROOT}/plugin/hooks/scripts/fellowship.sh hook gate-guard",
             "timeout": 5
           }
         ]
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/fellowship/bin/fellowship hook gate-submit",
+            "command": "${CLAUDE_PLUGIN_ROOT}/plugin/hooks/scripts/fellowship.sh hook gate-submit",
             "timeout": 10
           }
         ]
@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/fellowship/bin/fellowship hook completion-guard",
+            "command": "${CLAUDE_PLUGIN_ROOT}/plugin/hooks/scripts/fellowship.sh hook completion-guard",
             "timeout": 5
           }
         ]
@@ -60,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/fellowship/bin/fellowship hook gate-prereq",
+            "command": "${CLAUDE_PLUGIN_ROOT}/plugin/hooks/scripts/fellowship.sh hook gate-prereq",
             "timeout": 5
           }
         ]
@@ -70,7 +70,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/fellowship/bin/fellowship hook metadata-track",
+            "command": "${CLAUDE_PLUGIN_ROOT}/plugin/hooks/scripts/fellowship.sh hook metadata-track",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/plugin/hooks/scripts/fellowship.sh hook file-track",
             "timeout": 5
           }
         ]

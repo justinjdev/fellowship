@@ -10,6 +10,24 @@
 <div class="container page">
 	<h1>Changelog</h1>
 
+	<!-- Unreleased -->
+	<section class="version" id="unreleased">
+		<h2 class="version-heading"><a href="{base}/changelog#unreleased">Unreleased</a></h2>
+		<ul class="changes">
+			<li>
+				<strong>Fail-closed hook dispatch</strong> — Gate hooks (<code>gate-guard</code>, <code>gate-submit</code>, <code>gate-prereq</code>, <code>completion-guard</code>, <code>metadata-track</code>, <code>file-track</code>) now run through <code>plugin/hooks/scripts/fellowship.sh</code> instead of exec'ing the binary directly; if the binary is missing and can't be installed, they block (exit 2) instead of silently allowing the tool call through. <code>worktree-guard</code> keeps its fail-open backstop posture. The <code>file-track</code> hook is now wired into <code>hooks.json</code>, and <code>SessionStart</code> installs the binary on <code>clear</code> and <code>compact</code> in addition to <code>startup</code>/<code>resume</code>.
+			</li>
+			<li>
+				<strong>Verified downloads</strong> — <code>ensure-binary.sh</code> verifies the downloaded tarball against the release's <code>checksums.txt</code> before installing, assembles the binary atomically, and holds a simple lock so concurrent sessions don't race the same install.
+			</li>
+			<li>
+				<strong>CI</strong> — added <code>gofmt</code>, <code>go vet</code>, race-enabled tests, <code>shellcheck</code> on the hook scripts, a plugin manifest path check, and a site build job.
+			</li>
+		</ul>
+	</section>
+
+	<div class="divider"><span class="divider-ring"></span></div>
+
 	<!-- v2.2.0 -->
 	<section class="version" id="v2-2-0">
 		<h2 class="version-heading"><a href="{base}/changelog#v2-2-0">v2.2.0</a></h2>

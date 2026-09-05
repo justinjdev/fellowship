@@ -40,7 +40,7 @@ These are referenced by name in skill prompts. If a dependency isn't installed, 
 
 #### System Dependencies
 
-- **Go CLI binary** — gate enforcement hooks use a Go binary that is automatically downloaded from GitHub releases on first use. No manual installation required.
+- **Go CLI binary** — gate enforcement hooks use a Go binary that is automatically downloaded from GitHub releases on first use, with its checksum verified against the release's `checksums.txt` before it's installed. No manual installation required.
 
 ### Project Setup (Optional)
 
@@ -214,6 +214,12 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 - **Local scope only.** Teammates are restricted to code, tests, git, and the filesystem. MCP tools and external services (Notion, Slack, Jira, etc.) require explicit approval.
 
 ## Changelog
+
+### Unreleased
+
+- **Fail-closed hook dispatch** — Gate hooks (`gate-guard`, `gate-submit`, `gate-prereq`, `completion-guard`, `metadata-track`, `file-track`) now run through `plugin/hooks/scripts/fellowship.sh` instead of exec'ing the binary directly; if the binary is missing and can't be installed, they block (exit 2) instead of silently allowing the tool call through a shell "command not found". `worktree-guard` keeps its fail-open backstop posture. The `file-track` hook is now wired into `hooks.json` (it existed in the CLI but wasn't invoked), and `SessionStart` now installs the binary on `clear` and `compact` in addition to `startup`/`resume`.
+- **Verified downloads** — `ensure-binary.sh` verifies the downloaded tarball against the release's `checksums.txt` (`sha256sum`/`shasum`) before installing, assembles the binary in a scratch directory and moves it into place atomically, and holds a simple lock so concurrent sessions don't race the same install.
+- **CI** — added `gofmt -l .`, `go vet ./...`, `go test -race ./...`, `shellcheck` on the hook scripts, a check that every path in `.claude-plugin/plugin.json` exists, and a `site/` build job.
 
 ### v2.2.0
 
