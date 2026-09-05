@@ -264,8 +264,9 @@ func runUnhold(d *db.DB, args []string) int {
 // found" naming a directory) or, worse, a same-named quest registered
 // elsewhere. An unregistered directory is a user error and now says so.
 func resolveHoldQuest(d *db.DB, dir string) (string, error) {
+	ctx := context.Background()
 	var questName string
-	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		var err error
 		questName, err = state.FindQuest(conn, dir)
 		if err != nil || questName != "" {
@@ -273,7 +274,7 @@ func resolveHoldQuest(d *db.DB, dir string) (string, error) {
 		}
 		// Accept a subdirectory or a differently-spelled path by resolving the
 		// worktree root, exactly as the hooks do.
-		questName, err = state.FindQuest(conn, gitRootFrom(dir))
+		questName, err = state.FindQuest(conn, gitRootFrom(ctx, dir))
 		return err
 	}); err != nil {
 		return "", fmt.Errorf("looking up the quest for %q: %w", dir, err)

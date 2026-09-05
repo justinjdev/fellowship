@@ -55,12 +55,12 @@ func runHook(d *db.DB, name string) int {
 func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 	ctx, cancel := context.WithTimeout(context.Background(), hookDBTimeout)
 	defer cancel()
-	gitRoot := gitRootFrom(cwd)
+	gitRoot := gitRootFrom(ctx, cwd)
 	// Every path decision keys off the MAIN repo root, the same way the store
 	// path does: the project config and the data directory live there, not in
 	// whichever worktree this session happens to be. mainRoot is "" when git
 	// cannot answer, and datadir.Resolve falls back to the user config.
-	mainRoot := mainRootOrEmpty(cwd)
+	mainRoot := mainRootOrEmpty(ctx, cwd)
 	dataDirName := datadir.Resolve(mainRoot)
 
 	// Worktree isolation guard: self-contained, independent of quest state.
@@ -111,7 +111,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			// so the extra git call is off the common hot path.
 			var worktrees []string
 			if c := strings.TrimSpace(input.ToolInput.Command); strings.HasPrefix(c, "cd ") || strings.HasPrefix(c, "pushd ") {
-				worktrees = listQuestWorktrees(cwd)
+				worktrees = listQuestWorktrees(ctx, cwd)
 			}
 			if result := hooks.WorktreeGuard(input, hooks.CanonicalPath(cwd), worktrees); result.Block {
 				fmt.Fprintln(os.Stderr, result.Message)
@@ -296,7 +296,11 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			if err != nil {
 				return err
 			}
-			if !hooks.MetadataTrack(s, input) {
+			recorded, notice := hooks.MetadataTrack(s, input)
+			if notice != "" {
+				fmt.Fprintln(os.Stderr, notice)
+			}
+			if !recorded {
 				return nil
 			}
 			if err := state.Upsert(conn, s); err != nil {
@@ -371,8 +375,8 @@ func hookDBExit(err error) int {
 // mainRootOrEmpty resolves the main repository root for a directory, or "" when
 // git cannot answer. Callers read "" as "unknown", never as a path: the lead is
 // then unidentifiable and datadir.Resolve falls back to the user config.
-func mainRootOrEmpty(dir string) string {
-	root, err := gitutil.MainRepoRoot(dir)
+func mainRootOrEmpty(ctx context.Context, dir string) string {
+	root, err := gitutil.MainRepoRootContext(ctx, dir)
 	if err != nil {
 		return ""
 	}
@@ -393,7 +397,7 @@ func mainRootOrEmpty(dir string) string {
 // of the repo unusable forever after one `state init`, long after the last
 // quest had merged.
 func unregisteredQuestWorktree(ctx context.Context, d *db.DB, cwd, gitRoot string) bool {
-	mainRoot, err := gitutil.MainRepoRoot(cwd)
+	mainRoot, err := gitutil.MainRepoRootContext(ctx, cwd)
 	if err != nil {
 		return false
 	}
@@ -426,12 +430,12 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 		return 0 // malformed input — allow (defense-in-depth, not primary gate)
 	}
 
-	mainRoot, err := gitutil.MainRepoRoot(cwd)
+	mainRoot, err := gitutil.MainRepoRootContext(ctx, cwd)
 	if err != nil {
 		return 0
 	}
 
-	sessionTop := hooks.CanonicalPath(gitRootFrom(cwd))
+	sessionTop := hooks.CanonicalPath(gitRootFrom(ctx, cwd))
 
 	// Inert unless a fellowship is actually running in the main repo's store.
 	// The same read answers whether this session's top-level is registered as
@@ -476,7 +480,7 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 		FellowshipActive:         active,
 		MainRoot:                 hooks.CanonicalPath(mainRoot),
 		SessionTopLevel:          sessionTop,
-		TargetTopLevel:           targetTopLevel(filePath),
+		TargetTopLevel:           targetTopLevel(ctx, filePath),
 		ToolName:                 input.ToolName,
 		FilePath:                 filePath,
 		DataDirName:              dataDirName,
@@ -499,7 +503,7 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 //
 // The target may not exist yet (a Write creating a file, in a directory that
 // does not exist either), so the lookup runs in its nearest existing ancestor.
-func targetTopLevel(path string) string {
+func targetTopLevel(ctx context.Context, path string) string {
 	if path == "" {
 		return ""
 	}
@@ -507,7 +511,7 @@ func targetTopLevel(path string) string {
 	if dir == "" {
 		return ""
 	}
-	root, err := gitutil.TopLevel(dir)
+	root, err := gitutil.TopLevelContext(ctx, dir)
 	if err != nil {
 		return ""
 	}

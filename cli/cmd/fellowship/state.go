@@ -166,15 +166,16 @@ func noticeLeadMismatch(d *db.DB, cwd string, args []string) {
 	if session == "" {
 		return
 	}
+	ctx := context.Background()
 	mainRoot, err := gitutil.MainRepoRoot(cwd)
 	if err != nil {
 		return
 	}
-	if hooks.CanonicalPath(gitRootFrom(cwd)) != hooks.CanonicalPath(mainRoot) {
+	if hooks.CanonicalPath(gitRootFrom(ctx, cwd)) != hooks.CanonicalPath(mainRoot) {
 		return // not in the main tree; this is a teammate's worktree
 	}
 	lead := ""
-	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		lead = state.LeadSessionID(conn, mainRoot, datadir.Resolve(mainRoot))
 		return nil
 	}); err != nil {

@@ -161,9 +161,28 @@ func storeCreatingCommand(args []string) bool {
 	return false
 }
 
+// readOnlyHooks are the hooks that only decide — they read the store and write
+// nothing back. They get a read-only connection, so a bug or a future edit
+// cannot quietly turn a decision into a write. The recording hooks
+// (gate-submit, gate-prereq, metadata-track, file-track, completion-guard)
+// need the write side.
+var readOnlyHooks = map[string]bool{
+	"gate-guard":     true,
+	"worktree-guard": true,
+}
+
 func openStore(cwd string, args []string) (*db.DB, error) {
 	if storeCreatingCommand(args) {
 		return db.Open(cwd)
+	}
+	// Hooks never migrate: the schema ladder belongs to `init`, not to a
+	// decision that fires on every tool call.
+	if args[0] == "hook" {
+		hookName := ""
+		if len(args) > 1 {
+			hookName = args[1]
+		}
+		return db.OpenForHook(cwd, readOnlyHooks[hookName])
 	}
 	return db.OpenExisting(cwd)
 }
@@ -208,6 +227,20 @@ func storeOpenExit(cwd string, args []string, err error) int {
 			return 1
 		}
 		fmt.Fprintln(os.Stderr, `fellowship: no fellowship state in this repo — run "fellowship init" first.`)
+		return 1
+	}
+
+	if errors.Is(err, db.ErrSchemaOutOfDate) {
+		// A hook found a store written by an older binary. Upgrading it is
+		// `init`'s job, not a decision hook's, so say what to run.
+		if isGateHook(hookName) {
+			fmt.Fprintln(os.Stderr, `fellowship: the store is out of date — run "fellowship init" to upgrade. Blocking for safety.`)
+			return 2
+		}
+		if isHook {
+			return 0 // worktree-guard fails open
+		}
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
 

@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 
 	"zombiezen.com/go/sqlite"
@@ -291,6 +292,31 @@ func ensureSchema(conn *Conn) error {
 		return applySchema(conn)
 	}
 	return applyMigrations(conn, v, latest)
+}
+
+// ErrSchemaOutOfDate reports a store written by an older fellowship binary,
+// opened by something that is not allowed to upgrade it — a hook. Migrating
+// from inside a hook would mean every tool call racing to rewrite the store it
+// is reading; the upgrade belongs to `fellowship init`.
+var ErrSchemaOutOfDate = errors.New("db: fellowship store is out of date")
+
+// checkSchemaCurrent verifies the store is at the version this binary expects,
+// writing nothing whatsoever. It is what ensureSchema would have decided, minus
+// the permission to act on it.
+func checkSchemaCurrent(conn *Conn) error {
+	v, err := userVersion(conn)
+	if err != nil {
+		return err
+	}
+	latest := latestSchemaVersion()
+	switch {
+	case v == latest:
+		return nil
+	case v > latest:
+		return fmt.Errorf("db: database is from a newer fellowship (schema version %d, this binary supports up to %d); upgrade the binary", v, latest)
+	default:
+		return fmt.Errorf("%w (schema version %d, this binary expects %d) — run \"fellowship init\" to upgrade", ErrSchemaOutOfDate, v, latest)
+	}
 }
 
 // userVersion reads PRAGMA user_version, the stamp applySchema leaves behind.

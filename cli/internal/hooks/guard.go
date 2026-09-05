@@ -48,7 +48,14 @@ func IsLeadSession(sessionID, leadSessionID string) bool {
 }
 
 func GateGuard(s *state.State, input *HookInput, p GuardParams) HookResult {
-	if s.Held {
+	// The escape allowlist is read-only reporting and side-channel bookkeeping:
+	// nothing on it can clear a hold or a gate. A held teammate that cannot even
+	// run `fellowship status` or record a failure has no way to see why it is
+	// stopped or to leave a note about it, so the hold check reads the allowlist
+	// too — it is checked before both blocks rather than only before the gate.
+	escape := isFellowshipEscapeCommand(input.ToolInput.Command)
+
+	if s.Held && !escape {
 		msg := "Quest is held — paused by the lead."
 		if s.HeldReason != nil {
 			msg += " Reason: " + *s.HeldReason
@@ -60,7 +67,7 @@ func GateGuard(s *state.State, input *HookInput, p GuardParams) HookResult {
 		}
 	}
 
-	if s.GatePending && !isFellowshipEscapeCommand(input.ToolInput.Command) {
+	if s.GatePending && !escape {
 		return HookResult{
 			Block:   true,
 			Message: "Gate pending — waiting for lead approval. Do not take any action until the lead approves your gate.",

@@ -157,7 +157,7 @@ func extractJSONFlag(args []string) (found bool, rest []string) {
 // working directory outside a repo.
 func gitRootOrCwd() string {
 	cwd, _ := os.Getwd()
-	return gitRootFrom(cwd)
+	return gitRootFrom(context.Background(), cwd)
 }
 
 // mainRepoRootOrCwd returns the MAIN repository root — the worktree that holds
@@ -169,20 +169,20 @@ func mainRepoRootOrCwd() string {
 	if root, err := gitutil.MainRepoRoot(cwd); err == nil {
 		return root
 	}
-	return gitRootFrom(cwd)
+	return gitRootFrom(context.Background(), cwd)
 }
 
 // listQuestWorktrees returns the canonicalized roots of all git worktrees for
 // the repo containing dir, excluding the main worktree. Used by the lead's
 // cd-guard to recognize quest worktrees created OUTSIDE the main tree (not just
 // the legacy .claude/worktrees location). Returns nil if git is unavailable.
-func listQuestWorktrees(dir string) []string {
-	worktrees, err := gitutil.ListWorktrees(dir)
+func listQuestWorktrees(ctx context.Context, dir string) []string {
+	worktrees, err := gitutil.ListWorktreesContext(ctx, dir)
 	if err != nil {
 		return nil
 	}
 	mainRoot := ""
-	if mr, err := gitutil.MainRepoRoot(dir); err == nil {
+	if mr, err := gitutil.MainRepoRootContext(ctx, dir); err == nil {
 		mainRoot = hooks.CanonicalPath(mr)
 	}
 	var paths []string
@@ -197,9 +197,11 @@ func listQuestWorktrees(dir string) []string {
 }
 
 // gitRootFrom returns the git root for a given directory, or dir itself when
-// git cannot answer (dir is not in a repo, or git is unavailable).
-func gitRootFrom(dir string) string {
-	root, err := gitutil.TopLevel(dir)
+// git cannot answer (dir is not in a repo, git is unavailable, or ctx expired).
+// Hooks pass their own bounded context so a wedged git call is cancelled with
+// the hook rather than outliving it.
+func gitRootFrom(ctx context.Context, dir string) string {
+	root, err := gitutil.TopLevelContext(ctx, dir)
 	if err != nil {
 		return dir
 	}
@@ -215,9 +217,10 @@ func resolveDirQuest(d *db.DB, dir string) string {
 	if dir == "" {
 		dir, _ = os.Getwd()
 	}
+	ctx := context.Background()
 	var questName string
-	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		n, err := state.FindQuest(conn, gitRootFrom(dir))
+	if err := d.WithConn(ctx, func(conn *db.Conn) error {
+		n, err := state.FindQuest(conn, gitRootFrom(ctx, dir))
 		if err != nil {
 			return err
 		}
