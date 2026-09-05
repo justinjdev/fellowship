@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/justinjdev/fellowship/cli/internal/bulletin"
 	"github.com/justinjdev/fellowship/cli/internal/company"
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/fellowship"
 	"github.com/justinjdev/fellowship/cli/internal/health"
+	"github.com/justinjdev/fellowship/cli/internal/notes"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/todo"
 )
@@ -418,10 +418,10 @@ func (s *Server) handleProblems(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleBulletin(w http.ResponseWriter, r *http.Request) {
-	var entries []bulletin.Entry
+	var entries []notes.Entry
 	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
-		entries, err = bulletin.Load(conn)
+		entries, err = notes.Load(conn)
 		return err
 	})
 	if err != nil {
@@ -429,7 +429,7 @@ func (s *Server) handleBulletin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if entries == nil {
-		entries = []bulletin.Entry{}
+		entries = []notes.Entry{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(entries)

@@ -1,4 +1,4 @@
-package bulletin
+package notes
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/db"
 )
 
-// Entry represents a single bulletin board discovery.
+// Entry represents a single notes board discovery.
 type Entry struct {
 	Timestamp string   `json:"ts"`
 	Quest     string   `json:"quest"`
@@ -20,7 +20,7 @@ type Entry struct {
 	Discovery string   `json:"discovery"`
 }
 
-// Post inserts an entry into the bulletin table and its files into bulletin_files.
+// Post inserts an entry into the store.
 func Post(conn *db.Conn, entry Entry) error {
 	if entry.Timestamp == "" {
 		entry.Timestamp = time.Now().UTC().Format(time.RFC3339)
@@ -32,7 +32,7 @@ func Post(conn *db.Conn, entry Entry) error {
 			Args: []any{entry.Timestamp, entry.Quest, entry.Topic, entry.Discovery},
 		},
 	); err != nil {
-		return fmt.Errorf("bulletin: post: %w", err)
+		return fmt.Errorf("notes: post: %w", err)
 	}
 
 	id := conn.LastInsertRowID()
@@ -44,14 +44,14 @@ func Post(conn *db.Conn, entry Entry) error {
 				Args: []any{id, f},
 			},
 		); err != nil {
-			return fmt.Errorf("bulletin: post file %s: %w", f, err)
+			return fmt.Errorf("notes: post file %s: %w", f, err)
 		}
 	}
 	return nil
 }
 
-// Load reads all bulletin entries from the database, assembling the Files slice
-// from the bulletin_files join table.
+// Load reads all notes entries from the database, assembling the Files slice
+// from the join table.
 func Load(conn *db.Conn) ([]Entry, error) {
 	// First load all entries.
 	type row struct {
@@ -78,7 +78,7 @@ func Load(conn *db.Conn) ([]Entry, error) {
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("bulletin: load: %w", err)
+		return nil, fmt.Errorf("notes: load: %w", err)
 	}
 
 	if len(rows) == 0 {
@@ -91,7 +91,7 @@ func Load(conn *db.Conn) ([]Entry, error) {
 		idToIdx[r.id] = i
 	}
 
-	// Load all files for these bulletin entries.
+	// Load all files for these notes entries.
 	err = sqlitex.Execute(conn,
 		`SELECT bulletin_id, file_path FROM bulletin_files ORDER BY bulletin_id, file_path`,
 		&sqlitex.ExecOptions{
@@ -105,7 +105,7 @@ func Load(conn *db.Conn) ([]Entry, error) {
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("bulletin: load files: %w", err)
+		return nil, fmt.Errorf("notes: load files: %w", err)
 	}
 
 	entries := make([]Entry, len(rows))
@@ -115,7 +115,7 @@ func Load(conn *db.Conn) ([]Entry, error) {
 	return entries, nil
 }
 
-// Scan reads all bulletin entries and returns those matching the given files or topics.
+// Scan reads all notes entries and returns those matching the given files or topics.
 // An entry matches if any of its files have a bidirectional path containment with the
 // files list, or if its topic matches any of the given topics. Both filters are
 // case-insensitive. If both files and topics are empty, all entries are returned.
@@ -143,13 +143,13 @@ func Scan(conn *db.Conn, files []string, topics []string) ([]Entry, error) {
 	return result, nil
 }
 
-// Clear deletes all bulletin entries and their associated files.
+// Clear deletes all notes entries and their associated files.
 func Clear(conn *db.Conn) error {
 	if err := sqlitex.Execute(conn, `DELETE FROM bulletin_files`, nil); err != nil {
-		return fmt.Errorf("bulletin: clear files: %w", err)
+		return fmt.Errorf("notes: clear files: %w", err)
 	}
 	if err := sqlitex.Execute(conn, `DELETE FROM bulletin`, nil); err != nil {
-		return fmt.Errorf("bulletin: clear: %w", err)
+		return fmt.Errorf("notes: clear: %w", err)
 	}
 	return nil
 }

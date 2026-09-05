@@ -149,6 +149,7 @@ var baseSchema = []string{
 	)`,
 
 	// Bulletin (replaces bulletin.jsonl)
+	// table: bulletin, bulletin_files -> package notes (cli/internal/notes)
 	`CREATE TABLE IF NOT EXISTS bulletin (
 		id        INTEGER PRIMARY KEY AUTOINCREMENT,
 		timestamp TEXT NOT NULL,

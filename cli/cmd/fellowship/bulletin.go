@@ -10,8 +10,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/justinjdev/fellowship/cli/internal/bulletin"
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/notes"
 )
 
 func runBulletin(d *db.DB, args []string) int {
@@ -50,14 +50,14 @@ func runBulletinPost(d *db.DB, args []string) int {
 
 	fileList := splitCSV(*files)
 
-	entry := bulletin.Entry{
+	entry := notes.Entry{
 		Quest:     *quest,
 		Topic:     *topic,
 		Files:     fileList,
 		Discovery: *discovery,
 	}
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
-		return bulletin.Post(conn, entry)
+		return notes.Post(conn, entry)
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
@@ -77,10 +77,10 @@ func runBulletinScan(d *db.DB, args []string) int {
 	fileList := splitCSV(*files)
 	topicList := splitCSV(*topics)
 
-	var entries []bulletin.Entry
+	var entries []notes.Entry
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		var err error
-		entries, err = bulletin.Scan(conn, fileList, topicList)
+		entries, err = notes.Scan(conn, fileList, topicList)
 		return err
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -111,10 +111,10 @@ func runBulletinList(d *db.DB, args []string) int {
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Parse(args)
 
-	var entries []bulletin.Entry
+	var entries []notes.Entry
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		var err error
-		entries, err = bulletin.Load(conn)
+		entries, err = notes.Load(conn)
 		return err
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -123,7 +123,7 @@ func runBulletinList(d *db.DB, args []string) int {
 
 	if *jsonOut {
 		if entries == nil {
-			entries = []bulletin.Entry{}
+			entries = []notes.Entry{}
 		}
 		data, _ := json.MarshalIndent(entries, "", "  ")
 		fmt.Println(string(data))
@@ -163,7 +163,7 @@ func runBulletinClear(d *db.DB, args []string) int {
 	}
 
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
-		return bulletin.Clear(conn)
+		return notes.Clear(conn)
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1

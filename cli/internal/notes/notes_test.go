@@ -1,4 +1,4 @@
-package bulletin
+package notes
 
 import (
 	"context"
