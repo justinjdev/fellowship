@@ -93,6 +93,14 @@ func Sweep(conn *db.Conn, opts Options) (*HealthReport, error) {
 		return nil, fmt.Errorf("health: list finished quests: %w", err)
 	}
 
+	// quest_state carries no worktree column — join fellowship_quests by name
+	// so each report entry names the worktree it is about, the way the
+	// dashboard and `health` table output need to.
+	worktrees, err := questWorktrees(conn)
+	if err != nil {
+		return nil, fmt.Errorf("health: list quest worktrees: %w", err)
+	}
+
 	report := &HealthReport{
 		Timestamp: opts.Now.UTC().Format(time.RFC3339),
 		Quests:    []QuestHealth{},
@@ -100,6 +108,7 @@ func Sweep(conn *db.Conn, opts Options) (*HealthReport, error) {
 
 	for _, s := range states {
 		qh := classifyQuest(conn, s, finished[s.QuestName], opts)
+		qh.Worktree = worktrees[s.QuestName]
 		if (qh.Health != Working && qh.Health != Complete) || qh.Struggling {
 			report.Problems++
 		}
@@ -107,6 +116,24 @@ func Sweep(conn *db.Conn, opts Options) (*HealthReport, error) {
 	}
 
 	return report, nil
+}
+
+// questWorktrees maps quest name to its registered worktree path, from
+// fellowship_quests.
+func questWorktrees(conn *db.Conn) (map[string]string, error) {
+	worktrees := map[string]string{}
+	err := sqlitex.Execute(conn,
+		`SELECT name, worktree FROM fellowship_quests`,
+		&sqlitex.ExecOptions{
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				worktrees[stmt.ColumnText(0)] = stmt.ColumnText(1)
+				return nil
+			},
+		})
+	if err != nil {
+		return nil, err
+	}
+	return worktrees, nil
 }
 
 // listAllQuests returns all quest states from the database.
