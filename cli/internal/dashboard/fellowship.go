@@ -267,6 +267,9 @@ func upsertQuest(conn *sqlite.Conn, q QuestEntry) error {
 	if status == "" {
 		status = "active"
 	}
+	// Store the resolved path: hooks look quests up by the git top-level, which
+	// is always absolute and symlink-free.
+	q.Worktree = state.CanonicalWorktree(q.Worktree)
 	return sqlitex.Execute(conn,
 		`INSERT INTO fellowship_quests (name, task_description, worktree, branch, task_id, status)
 		 VALUES (:name, :desc, :wt, :branch, :task_id, :status)
@@ -306,6 +309,11 @@ func UpdateQuest(conn *sqlite.Conn, name string, updates map[string]any) error {
 		}
 		param := ":" + k
 		setClauses += col + "=" + param
+		if k == "worktree" {
+			if wt, isStr := v.(string); isStr {
+				v = state.CanonicalWorktree(wt)
+			}
+		}
 		named[param] = v
 	}
 	if setClauses == "" {

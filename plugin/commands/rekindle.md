@@ -91,7 +91,9 @@ INSTRUCTIONS:
 1. Run /quest to resume this task
 2. In Phase 0 (Onboard), detect the RESUME CONTEXT block above and:
    - Skip worktree creation — you are already in your worktree
-   - Run `~/.claude/fellowship/bin/fellowship init` to reset gate state (clears gate_pending, preserves phase)
+   - Run `~/.claude/fellowship/bin/fellowship init` to reset gate state (clears gate_pending, preserves phase).
+     If a gate was still pending when the session crashed, the hooks block this —
+     message the lead to clear it; only the lead may clear a pending gate.
    - Store your worktree path in task metadata: TaskUpdate(taskId: "{task_id}", metadata: {"worktree_path": "{worktree_path}"})
    - If checkpoint exists, load .fellowship/checkpoint.md as your initial context
    - Skip /council — checkpoint replaces orientation
