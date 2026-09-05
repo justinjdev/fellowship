@@ -26,6 +26,9 @@
   "issues": {
     "autoClose": true
   },
+  "autopsy": {
+    "expiryDays": 90
+  },
   "models": {
     "quest": null,
     "scout": null,
@@ -61,7 +64,7 @@
     "enabled": false
   },
   "gates": {
-    "autoApprove": ["Research", "Plan", "Implement", "Review"]
+    "autoApprove": ["Onboard", "Research", "Plan", "Implement", "Adversarial", "Review"]
   },
   "palantir": {
     "enabled": false
@@ -142,6 +145,11 @@
 			desc: 'When true, /missive includes "Closes #N" in PR keywords so issues close on merge.'
 		},
 		{
+			key: 'autopsy.expiryDays',
+			default_val: '90',
+			desc: 'Days before a quest autopsy (failure record) expires and is eligible for cleanup.'
+		},
+		{
 			key: 'models.quest',
 			default_val: 'null',
 			desc: 'Model for quest teammates. Valid values: "haiku", "sonnet", "opus" (aliases only — spawn parameters accept neither "inherit" nor full model IDs; leave null to inherit). null = built-in default: inherit the session model.'
@@ -182,12 +190,12 @@
 		{
 			title: 'Team workflow with draft PRs',
 			code: example2,
-			explanation: 'Creates draft PRs with a custom template. Auto-approves Research and Plan gates for faster iteration \u2014 you still review at Implement, Review, and Complete.'
+			explanation: 'Creates draft PRs with a custom template. Auto-approves Research and Plan gates for faster iteration \u2014 you still review at Implement, Adversarial, and Review.'
 		},
 		{
 			title: 'No worktrees, minimal oversight',
 			code: example3,
-			explanation: 'Works on the current branch without worktree isolation. Auto-approves everything except Complete (PR creation). No palantir monitoring. Use for trusted, low-risk tasks.'
+			explanation: 'Works on the current branch without worktree isolation. Auto-approves every gate (Complete has no gate; PR creation still happens in that phase). No palantir monitoring. Use for trusted, low-risk tasks.'
 		}
 	];
 </script>

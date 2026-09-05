@@ -2,7 +2,7 @@
 description: View or edit fellowship configuration (~/.claude/fellowship.json). Run /settings to see current settings, change values, or reset to defaults.
 ---
 
-# Config — Fellowship Settings Manager
+# Settings — Fellowship Settings Manager
 
 ## Steps
 
@@ -25,6 +25,7 @@ Fellowship Config
 
   Setting                Value                    Source
   ─────────────────────────────────────────────────────────
+  dataDir                .fellowship              [default]
   branch.pattern         null                     [default]
   branch.author          null                     [default]
   branch.ticketPattern   [A-Z]+-\d+               [default]
@@ -36,6 +37,7 @@ Fellowship Config
   palantir.enabled       true                     [default]
   palantir.minQuests     2                        [default]
   issues.autoClose       true                     [default]
+  autopsy.expiryDays     90                       [default]
   models.quest           null (inherit)           [default]
   models.scout           null (sonnet)            [default]
   models.palantir        null (haiku)             [default]
@@ -78,6 +80,7 @@ This is the canonical schema for fellowship config files. Both `~/.claude/fellow
 
 | Key | Type | Default | Valid values |
 |-----|------|---------|--------------|
+| `dataDir` | string | `".fellowship"` | Directory name for fellowship working files (state, checkpoints, errands, tome). Created inside each worktree and the main repo root. |
 | `branch.pattern` | string \| null | `null` | Template with `{slug}`, `{ticket}`, `{author}` placeholders. Default effective pattern: `"fellowship/{slug}"`. |
 | `branch.author` | string \| null | `null` | String with no spaces or git-invalid characters |
 | `branch.ticketPattern` | string | `"[A-Z]+-\\d+"` | Any valid regex |
@@ -89,6 +92,7 @@ This is the canonical schema for fellowship config files. Both `~/.claude/fellow
 | `palantir.enabled` | boolean | `true` | `true`, `false` |
 | `palantir.minQuests` | number | `2` | Any positive integer |
 | `issues.autoClose` | boolean | `true` | `true`, `false`. When true, `/missive` includes `Closes #N` in PR keywords. |
+| `autopsy.expiryDays` | number | `90` | Any positive integer. Days before a quest autopsy (failure record) expires and is eligible for cleanup. |
 | `models.quest` | string \| null | `null` | Model for quest teammates. Valid values: the aliases `"haiku"`, `"sonnet"`, `"opus"` — these are passed verbatim as the Agent tool's `model` parameter, which does not accept `"inherit"` or full model IDs. To inherit the session model, leave the key `null` (the parameter is then omitted). `null` = built-in default: inherit the session model. |
 | `models.scout` | string \| null | `null` | Model for scout teammates. Same valid values. `null` = built-in default: `sonnet` (from the scout agent definition). |
 | `models.palantir` | string \| null | `null` | Model for the palantir monitor. Same valid values. `null` = built-in default: `haiku` (from the palantir agent definition). |

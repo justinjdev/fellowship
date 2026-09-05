@@ -59,35 +59,8 @@
 				</div>
 			</div>
 
-			<!-- Quest Runner -->
-			<div class="agent-card animate-in" style="animation-delay: 100ms">
-				<div class="agent-header">
-					<div class="agent-icon runner-icon">
-						<svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
-							<path d="M24 6 L28 20 L24 18 L20 20 Z" fill="currentColor" opacity="0.8" />
-							<path d="M20 20 L16 38 L24 34 L32 38 L28 20 L24 18 Z" stroke="currentColor" stroke-width="1.5" fill="currentColor" opacity="0.3" />
-							<line x1="24" y1="6" x2="24" y2="34" stroke="currentColor" stroke-width="1.5" opacity="0.5" />
-							<circle cx="24" cy="42" r="3" stroke="currentColor" stroke-width="1.5" opacity="0.4" />
-						</svg>
-					</div>
-					<div>
-						<h3 class="agent-name">Quest Runner</h3>
-						<span class="agent-role">Quest Executor</span>
-					</div>
-				</div>
-				<p class="agent-desc">
-					The workhorse agent that executes the quest lifecycle. Uses the fellowship CLI
-					binary for gate management, status checks, and phase transitions. Each quest
-					runner operates in its own isolated git worktree, ensuring parallel quests never
-					interfere with each other.
-				</p>
-				<div class="agent-note">
-					Spawned by Gandalf during fellowships. Uses <code>/quest</code> skill internally.
-				</div>
-			</div>
-
 			<!-- Balrog -->
-			<div class="agent-card animate-in" style="animation-delay: 200ms">
+			<div class="agent-card animate-in" style="animation-delay: 100ms">
 				<div class="agent-header">
 					<div class="agent-icon balrog-icon">
 						<svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -118,7 +91,7 @@
 			</div>
 
 			<!-- Scout -->
-			<div class="agent-card animate-in" style="animation-delay: 300ms">
+			<div class="agent-card animate-in" style="animation-delay: 200ms">
 				<div class="agent-header">
 					<div class="agent-icon scout-icon">
 						<svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -153,7 +126,7 @@
 			</div>
 
 			<!-- Validator -->
-			<div class="agent-card animate-in" style="animation-delay: 400ms">
+			<div class="agent-card animate-in" style="animation-delay: 300ms">
 				<div class="agent-header">
 					<div class="agent-icon">
 						<svg viewBox="0 0 48 48" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -231,11 +204,11 @@
 				</div>
 			</div>
 
-			<!-- Bottom row: Quest Runners + Scouts -->
+			<!-- Bottom row: Quests + Scouts -->
 			<div class="diagram-row bottom-row">
 				<div class="agent-column">
 					<div class="diagram-node node-runner">
-						<span class="node-label">Quest Runners</span>
+						<span class="node-label">Quests</span>
 					</div>
 					<span class="connector-label">spawn with task</span>
 					<span class="connector-label return-label">gate submissions, status updates</span>

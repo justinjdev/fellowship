@@ -6,7 +6,7 @@ description: Use after receiving PR review feedback. Extracts conventions from r
 
 ## Overview
 
-Extracts conventions from PR review feedback and adds them to CLAUDE.md. This is the missing piece of the convention learning loop: chronicle bootstraps conventions, gather-lore studies them, warden enforces them, and this skill captures new ones from real reviewer feedback.
+Extracts conventions from PR review feedback and adds them to CLAUDE.md. This is the missing piece of the convention learning loop: chronicle bootstraps conventions, gather-lore studies them, warden enforces them, and this command captures new ones from real reviewer feedback.
 
 ## When to Use
 

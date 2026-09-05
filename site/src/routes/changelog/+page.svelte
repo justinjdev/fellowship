@@ -15,6 +15,23 @@
 		<h2 class="version-heading"><a href="{base}/changelog#unreleased">Unreleased</a></h2>
 		<ul class="changes">
 			<li>
+				<strong>Fail-closed hook dispatch</strong> — Gate hooks (<code>gate-guard</code>, <code>gate-submit</code>, <code>gate-prereq</code>, <code>completion-guard</code>, <code>metadata-track</code>, <code>file-track</code>) now run through <code>plugin/hooks/scripts/fellowship.sh</code> instead of exec'ing the binary directly; if the binary is missing and can't be installed, they block (exit 2) instead of silently allowing the tool call through. <code>worktree-guard</code> keeps its fail-open backstop posture. The <code>file-track</code> hook is now wired into <code>hooks.json</code>, and <code>SessionStart</code> installs the binary on <code>clear</code> and <code>compact</code> in addition to <code>startup</code>/<code>resume</code>.
+			</li>
+			<li>
+				<strong>Verified downloads</strong> — <code>ensure-binary.sh</code> verifies the downloaded tarball against the release's <code>checksums.txt</code> before installing, assembles the binary atomically, and holds a simple lock so concurrent sessions don't race the same install.
+			</li>
+			<li>
+				<strong>CI</strong> — added <code>gofmt</code>, <code>go vet</code>, race-enabled tests, <code>shellcheck</code> on the hook scripts, a plugin manifest path check, and a site build job.
+				<strong>Tightened skill triggers</strong> — <code>quest</code>, <code>council</code>, <code>gather-lore</code>, and <code>warden</code> descriptions now name their actual invocation scope instead of "any non-trivial task", reducing over-triggering.
+			</li>
+			<li>
+				<strong>Removed orphaned <code>quest-runner</code> agent</strong> — never spawned (quest teammates use <code>general-purpose</code>); removed from the plugin manifest, README, and the site's Agents and How It Works pages.
+			</li>
+			<li>
+				<strong>Documentation drift fixes</strong> — corrected <code>gates.autoApprove</code> valid values on the site config page, replaced the removed <code>using-git-worktrees</code> dependency with <code>writing-plans</code> (Plan phase), added the missing v1.6.1 changelog entry, fixed the quest phase/gate count, documented <code>autopsy.expiryDays</code> and added the missing <code>dataDir</code> row to <code>/settings</code>' schema table, corrected the <code>.fellowship/</code> gitignore wording in lembas, corrected palantir's Bash tool description, and fixed several command titles and skill/command wording.
+			</li>
+			<li>
+				<strong>Archived the <code>gate-state-machine</code> OpenSpec change</strong> — superseded by the Go CLI + SQLite gate enforcement design (v1.5.1&ndash;v2.2.0); moved to <code>openspec/changes/archive/</code> with a SUPERSEDED note.
 				<strong>Documented CLI invocations now work</strong> &mdash; <code>--dir &lt;path&gt;</code> is accepted by <code>gate status|approve|reject</code>, <code>state add-quest|add-scout|add-company|update-quest|show</code>, <code>errand init|list|add|update|show</code>, <code>autopsy create|scan|infer</code>, and <code>tome show</code>, resolving the quest exactly as if the process were running in that directory. <code>gate</code> previously had no flag parsing at all, so every documented <code>--dir</code> call failed.
 			</li>
 			<li>
