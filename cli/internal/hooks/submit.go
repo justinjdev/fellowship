@@ -34,7 +34,7 @@ func GateSubmit(s *state.State, input *HookInput) SubmitResult {
 		return SubmitResult{}
 	}
 
-	if strings.Count(content, "[GATE]") > 1 {
+	if countGateMarkers(content) > 1 {
 		return SubmitResult{Block: true, Message: "Multiple [GATE] markers detected — send one gate per message."}
 	}
 
@@ -131,11 +131,21 @@ func NewDenyOutput(reason string) HookSpecificOutput {
 	}
 }
 
-func hasGateMarker(content string) bool {
+// countGateMarkers counts the lines that begin with the gate marker. Detection
+// and the duplicate check must agree on what a marker is: counting bare
+// occurrences of "[GATE]" anywhere in the message rejected a gate that merely
+// quoted the token in prose, while the message that opened the gate had to
+// carry it at the start of a line.
+func countGateMarkers(content string) int {
+	n := 0
 	for line := range strings.SplitSeq(content, "\n") {
 		if strings.HasPrefix(line, "[GATE]") {
-			return true
+			n++
 		}
 	}
-	return false
+	return n
+}
+
+func hasGateMarker(content string) bool {
+	return countGateMarkers(content) > 0
 }

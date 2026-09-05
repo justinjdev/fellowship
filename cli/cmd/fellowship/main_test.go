@@ -295,3 +295,50 @@ func TestCheckDir(t *testing.T) {
 		})
 	}
 }
+
+// hold/unhold used to fall back to the directory's basename when no quest was
+// registered for --dir, which held whatever quest happened to share that name
+// (or failed later with a "quest not found" naming a directory).
+func TestResolveHoldQuest(t *testing.T) {
+	root := initGitRepo(t)
+	sub := filepath.Join(root, "pkg")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	unregistered := initGitRepo(t)
+
+	d := db.OpenTest(t)
+	registerQuest(t, d, "quest-1", root)
+
+	tests := []struct {
+		name    string
+		dir     string
+		want    string
+		wantErr string
+	}{
+		{name: "registered worktree", dir: root, want: "quest-1"},
+		{name: "subdirectory resolves via the git root", dir: sub, want: "quest-1"},
+		{name: "unregistered directory is an error", dir: unregistered, wantErr: "no quest is registered"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveHoldQuest(d, tt.dir)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("resolveHoldQuest(%q) = (%q, %v), want an error containing %q", tt.dir, got, err, tt.wantErr)
+				}
+				if got != "" {
+					t.Errorf("quest name = %q, want empty on error", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolveHoldQuest(%q): %v", tt.dir, err)
+			}
+			if got != tt.want {
+				t.Errorf("resolveHoldQuest(%q) = %q, want %q", tt.dir, got, tt.want)
+			}
+		})
+	}
+}

@@ -146,13 +146,6 @@ func Upsert(conn *sqlite.Conn, s *State) error {
 		})
 }
 
-// Delete removes quest state by name.
-func Delete(conn *sqlite.Conn, questName string) error {
-	return sqlitex.Execute(conn,
-		`DELETE FROM quest_state WHERE quest_name = :name`,
-		&sqlitex.ExecOptions{Named: map[string]any{":name": questName}})
-}
-
 // FindQuest returns the quest name registered for a given worktree root path.
 //
 // Matching is done on canonicalized paths. Quest rows are canonicalized on
@@ -162,6 +155,14 @@ func Delete(conn *sqlite.Conn, questName string) error {
 // reads as "no quest here", which is exactly the state that used to be
 // mistaken for a lead session. The raw stored value is still accepted as a
 // fallback so a path that cannot be resolved at all still matches itself.
+//
+// Rows are scanned newest first so the answer is deterministic when two quests
+// claim the same worktree — the most recently registered one wins, which is
+// what re-registering a path means.
+//
+// TODO: fellowship_quests.worktree should carry a UNIQUE index so duplicates
+// cannot be recorded in the first place. That needs a schema migration; until
+// then the ordering below is what keeps lookups stable.
 func FindQuest(conn *sqlite.Conn, worktreeRoot string) (string, error) {
 	if worktreeRoot == "" {
 		return "", nil
@@ -170,7 +171,8 @@ func FindQuest(conn *sqlite.Conn, worktreeRoot string) (string, error) {
 	var name string
 	err := sqlitex.Execute(conn,
 		`SELECT name, worktree FROM fellowship_quests
-		 WHERE worktree IS NOT NULL AND worktree != ''`,
+		 WHERE worktree IS NOT NULL AND worktree != ''
+		 ORDER BY rowid DESC`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				if name != "" {

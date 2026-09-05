@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -79,4 +80,33 @@ func GateAge(gateID string, now time.Time) int {
 		return 0
 	}
 	return int(age.Seconds())
+}
+
+// TopLevel returns the working-tree root for dir — `git rev-parse
+// --show-toplevel`. In a linked worktree that is the worktree's own root, not
+// the main repo's; use MainRepoRoot for that.
+func TopLevel(dir string) (string, error) {
+	out, err := RunGit(dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse --show-toplevel: %w", err)
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// MainRepoRoot returns the main repository root for dir, resolving through
+// `git rev-parse --git-common-dir` so that any linked worktree maps back to the
+// main worktree. The fellowship store, its data directory and the guards all
+// key off this path, so every caller must compute it the same way.
+func MainRepoRoot(dir string) (string, error) {
+	out, err := RunGit(dir, "rev-parse", "--git-common-dir")
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse --git-common-dir: %w", err)
+	}
+	gitCommon := strings.TrimSpace(out)
+	// --git-common-dir may answer with a path relative to dir.
+	if !filepath.IsAbs(gitCommon) {
+		gitCommon = filepath.Join(dir, gitCommon)
+	}
+	// The main repo root is the parent of the shared .git directory.
+	return filepath.Dir(filepath.Clean(gitCommon)), nil
 }

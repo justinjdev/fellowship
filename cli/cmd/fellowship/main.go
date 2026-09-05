@@ -26,6 +26,7 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/eagles"
 	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/gate"
+	"github.com/justinjdev/fellowship/cli/internal/gitutil"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
@@ -486,32 +487,27 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 		return 0
 
 	case "gate-prereq":
-		var result hooks.HookResult
+		// Recording-only: GatePrereq never blocks, it just marks lembas done.
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
 			s, err := state.Load(conn, questName)
 			if err != nil {
 				return err
 			}
-			changed := hooks.GatePrereq(s, input)
-			if changed {
-				if err := state.Upsert(conn, s); err != nil {
-					return err
-				}
-				herald.Announce(conn, herald.Tiding{
-					Timestamp: time.Now().UTC().Format(time.RFC3339),
-					Quest:     questName,
-					Type:      herald.LembasCompleted,
-					Phase:     s.Phase,
-					Detail:    "Lembas skill completed",
-				})
+			if !hooks.GatePrereq(s, input) {
+				return nil
 			}
-			return nil
+			if err := state.Upsert(conn, s); err != nil {
+				return err
+			}
+			return herald.Announce(conn, herald.Tiding{
+				Timestamp: time.Now().UTC().Format(time.RFC3339),
+				Quest:     questName,
+				Type:      herald.LembasCompleted,
+				Phase:     s.Phase,
+				Detail:    "Lembas skill completed",
+			})
 		}); err != nil {
 			return hookDBExit(err)
-		}
-		if result.Block {
-			fmt.Fprintln(os.Stderr, result.Message)
-			return 2
 		}
 		return 0
 
@@ -594,20 +590,30 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			return hookDBExit(err)
 		}
 		if result.Block {
-			out := hooks.NewDenyOutput(result.Message)
-			json.NewEncoder(os.Stdout).Encode(out)
+			// The deny travels in the JSON, so a failed encode would let the
+			// gate through silently. Fall back to the plain block channel.
+			if err := json.NewEncoder(os.Stdout).Encode(hooks.NewDenyOutput(result.Message)); err != nil {
+				fmt.Fprintf(os.Stderr, "fellowship: could not emit the gate denial (%v) — blocking\n%s\n", err, result.Message)
+				return 2
+			}
 			return 0 // exit 0 with JSON deny — Claude Code reads the JSON
 		}
 		if gateSubmitEnrich {
+			// Enrichment is a nicety on an allowed gate: report failures, but
+			// never turn one into a block.
 			var enrichment string
-			d.WithConn(ctx, func(conn *db.Conn) error {
+			if err := d.WithConn(ctx, func(conn *db.Conn) error {
 				enrichment = hooks.GatherEnrichment(conn, questName, gitRoot)
 				return nil
-			})
+			}); err != nil {
+				fmt.Fprintf(os.Stderr, "fellowship: gate enrichment unavailable: %v\n", err)
+			}
 			if enrichment != "" {
 				enrichedContent := input.ToolInput.Content + enrichment
 				out := hooks.NewAllowOutput(map[string]string{"content": enrichedContent})
-				json.NewEncoder(os.Stdout).Encode(out)
+				if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+					fmt.Fprintf(os.Stderr, "fellowship: could not emit gate enrichment: %v\n", err)
+				}
 			}
 		}
 		return 0
@@ -618,20 +624,19 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			if err != nil {
 				return err
 			}
-			changed := hooks.MetadataTrack(s, input)
-			if changed {
-				if err := state.Upsert(conn, s); err != nil {
-					return err
-				}
-				herald.Announce(conn, herald.Tiding{
-					Timestamp: time.Now().UTC().Format(time.RFC3339),
-					Quest:     questName,
-					Type:      herald.MetadataUpdated,
-					Phase:     s.Phase,
-					Detail:    "Task metadata updated",
-				})
+			if !hooks.MetadataTrack(s, input) {
+				return nil
 			}
-			return nil
+			if err := state.Upsert(conn, s); err != nil {
+				return err
+			}
+			return herald.Announce(conn, herald.Tiding{
+				Timestamp: time.Now().UTC().Format(time.RFC3339),
+				Quest:     questName,
+				Type:      herald.MetadataUpdated,
+				Phase:     s.Phase,
+				Detail:    "Task metadata updated",
+			})
 		}); err != nil {
 			return hookDBExit(err)
 		}
@@ -674,7 +679,7 @@ func hookDBExit(err error) int {
 // cannot determine reads as false: the lead session in the main tree must
 // never be blocked by this.
 func unregisteredQuestWorktree(ctx context.Context, d *db.DB, cwd, gitRoot string) bool {
-	mainRoot, err := resolveMainRepoFromCwd(cwd)
+	mainRoot, err := gitutil.MainRepoRoot(cwd)
 	if err != nil {
 		return false
 	}
@@ -682,12 +687,15 @@ func unregisteredQuestWorktree(ctx context.Context, d *db.DB, cwd, gitRoot strin
 		return false // the main tree — this really is the lead session
 	}
 	initialized := false
-	d.WithConn(ctx, func(conn *db.Conn) error {
+	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		if _, err := dashboard.LoadFellowship(conn); err == nil {
 			initialized = true
 		}
 		return nil
-	})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: could not check for a running fellowship: %v\n", err)
+		return false
+	}
 	return initialized
 }
 
@@ -702,7 +710,7 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 		return 0 // malformed input — allow (defense-in-depth, not primary gate)
 	}
 
-	mainRoot, err := resolveMainRepoFromCwd(cwd)
+	mainRoot, err := gitutil.MainRepoRoot(cwd)
 	if err != nil {
 		return 0
 	}
@@ -926,14 +934,10 @@ func runHold(d *db.DB, args []string) int {
 		return 1
 	}
 
-	// Find quest for the given worktree dir.
-	var questName string
-	d.WithConn(ctx, func(conn *db.Conn) error {
-		questName, _ = state.FindQuest(conn, *dir)
-		return nil
-	})
-	if questName == "" {
-		questName = filepath.Base(*dir)
+	questName, err := resolveHoldQuest(d, *dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
 	}
 
 	var phase string
@@ -958,14 +962,13 @@ func runHold(d *db.DB, args []string) int {
 		if *reason != "" {
 			detail += ": " + *reason
 		}
-		herald.Announce(conn, herald.Tiding{
+		return herald.Announce(conn, herald.Tiding{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 			Quest:     questName,
 			Type:      herald.QuestHeld,
 			Phase:     phase,
 			Detail:    detail,
 		})
-		return nil
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
@@ -991,13 +994,10 @@ func runUnhold(d *db.DB, args []string) int {
 		return 1
 	}
 
-	var questName string
-	d.WithConn(ctx, func(conn *db.Conn) error {
-		questName, _ = state.FindQuest(conn, *dir)
-		return nil
-	})
-	if questName == "" {
-		questName = filepath.Base(*dir)
+	questName, err := resolveHoldQuest(d, *dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
 	}
 
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
@@ -1014,14 +1014,13 @@ func runUnhold(d *db.DB, args []string) int {
 			return err
 		}
 
-		herald.Announce(conn, herald.Tiding{
+		return herald.Announce(conn, herald.Tiding{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 			Quest:     questName,
 			Type:      herald.QuestUnheld,
 			Phase:     s.Phase,
 			Detail:    "Quest unheld — resumed",
 		})
-		return nil
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
@@ -1029,6 +1028,33 @@ func runUnhold(d *db.DB, args []string) int {
 
 	fmt.Println("Quest unheld.")
 	return 0
+}
+
+// resolveHoldQuest finds the quest registered for the --dir of hold/unhold.
+// It used to fall back to the directory's basename, which quietly held a quest
+// that does not exist (state.Load then failed with a confusing "quest not
+// found" naming a directory) or, worse, a same-named quest registered
+// elsewhere. An unregistered directory is a user error and now says so.
+func resolveHoldQuest(d *db.DB, dir string) (string, error) {
+	var questName string
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		questName, err = state.FindQuest(conn, dir)
+		if err != nil || questName != "" {
+			return err
+		}
+		// Accept a subdirectory or a differently-spelled path by resolving the
+		// worktree root, exactly as the hooks do.
+		questName, err = state.FindQuest(conn, gitRootFrom(dir))
+		return err
+	}); err != nil {
+		return "", fmt.Errorf("looking up the quest for %q: %w", dir, err)
+	}
+	if questName == "" {
+		return "", fmt.Errorf("no quest is registered for %q — register it with %q first",
+			dir, "fellowship state add-quest --name <quest> --worktree "+dir)
+	}
+	return questName, nil
 }
 
 func runInit(d *db.DB) int {
@@ -1080,7 +1106,7 @@ func runInit(d *db.DB) int {
 	// Auto-approved gates come from the merged fellowship config: the main
 	// repo's .fellowship/config.json, overridden by ~/.claude/fellowship.json.
 	configRoot := root
-	if mainRepo, err := resolveMainRepoFromCwd(root); err == nil {
+	if mainRepo, err := gitutil.MainRepoRoot(root); err == nil {
 		configRoot = mainRepo
 	}
 	autoApprove := datadir.AutoApproveGates(configRoot)
@@ -1256,12 +1282,18 @@ func runDashboard(d *db.DB, args []string) int {
 	url := fmt.Sprintf("http://%s", addr)
 	fmt.Printf("Fellowship dashboard: %s\n", url)
 
-	// Open browser.
+	// Open browser — a nicety; the URL is printed above either way.
+	var opener *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		exec.Command("open", url).Start()
+		opener = exec.Command("open", url)
 	case "linux":
-		exec.Command("xdg-open", url).Start()
+		opener = exec.Command("xdg-open", url)
+	}
+	if opener != nil {
+		if err := opener.Start(); err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: could not open a browser (%v) — visit %s\n", err, url)
+		}
 	}
 
 	if err := http.ListenAndServe(addr, srv); err != nil {
@@ -1930,13 +1962,15 @@ func runStateInit(d *db.DB, args []string) int {
 	root := gitRootOrCwd()
 
 	// Check for existing fellowship to warn about overwrite.
-	d.WithConn(ctx, func(conn *db.Conn) error {
+	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		if existing, err := dashboard.LoadFellowship(conn); err == nil {
 			fmt.Fprintf(os.Stderr, "fellowship: warning: overwriting existing fellowship (name=%q, quests=%d)\n",
 				existing.Name, len(existing.Quests))
 		}
 		return nil
-	})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: warning: could not check for an existing fellowship: %v\n", err)
+	}
 
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
 		return dashboard.InitFellowship(conn, *name, root, *baseBranch)
@@ -2428,14 +2462,11 @@ func splitCSV(raw string) []string {
 	return out
 }
 
+// gitRootOrCwd returns the working tree root, falling back to the process
+// working directory outside a repo.
 func gitRootOrCwd() string {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	out, err := cmd.Output()
-	if err != nil {
-		cwd, _ := os.Getwd()
-		return cwd
-	}
-	return strings.TrimSpace(string(out))
+	cwd, _ := os.Getwd()
+	return gitRootFrom(cwd)
 }
 
 // listQuestWorktrees returns the canonicalized roots of all git worktrees for
@@ -2443,22 +2474,17 @@ func gitRootOrCwd() string {
 // cd-guard to recognize quest worktrees created OUTSIDE the main tree (not just
 // the legacy .claude/worktrees location). Returns nil if git is unavailable.
 func listQuestWorktrees(dir string) []string {
-	cmd := exec.Command("git", "worktree", "list", "--porcelain")
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	worktrees, err := gitutil.ListWorktrees(dir)
 	if err != nil {
 		return nil
 	}
 	mainRoot := ""
-	if mr, err := resolveMainRepoFromCwd(dir); err == nil {
+	if mr, err := gitutil.MainRepoRoot(dir); err == nil {
 		mainRoot = hooks.CanonicalPath(mr)
 	}
 	var paths []string
-	for _, line := range strings.Split(string(out), "\n") {
-		if !strings.HasPrefix(line, "worktree ") {
-			continue
-		}
-		p := hooks.CanonicalPath(strings.TrimSpace(strings.TrimPrefix(line, "worktree ")))
+	for _, wt := range worktrees {
+		p := hooks.CanonicalPath(strings.TrimSpace(wt))
 		if p == "" || p == mainRoot {
 			continue
 		}
@@ -2467,15 +2493,14 @@ func listQuestWorktrees(dir string) []string {
 	return paths
 }
 
-// gitRootFrom returns the git root for a given directory.
+// gitRootFrom returns the git root for a given directory, or dir itself when
+// git cannot answer (dir is not in a repo, or git is unavailable).
 func gitRootFrom(dir string) string {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	root, err := gitutil.TopLevel(dir)
 	if err != nil {
 		return dir
 	}
-	return strings.TrimSpace(string(out))
+	return root
 }
 
 // resolveDirQuest returns the quest name registered for dir, or for the
@@ -2488,14 +2513,21 @@ func resolveDirQuest(d *db.DB, dir string) string {
 		dir, _ = os.Getwd()
 	}
 	var questName string
-	d.WithConn(context.Background(), func(conn *db.Conn) error {
-		if n, err := state.FindQuest(conn, gitRootFrom(dir)); err == nil && n != "" {
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		n, err := state.FindQuest(conn, gitRootFrom(dir))
+		if err != nil {
+			return err
+		}
+		if n != "" {
 			questName = n
 			return nil
 		}
-		questName, _ = state.FindQuest(conn, dir)
-		return nil
-	})
+		questName, err = state.FindQuest(conn, dir)
+		return err
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: could not resolve the quest for %q: %v\n", dir, err)
+		return ""
+	}
 	return questName
 }
 
@@ -2513,8 +2545,8 @@ func checkDir(dir string) error {
 		return fmt.Errorf("--dir %q is not a directory", dir)
 	}
 	cwd, _ := os.Getwd()
-	want, wantErr := resolveMainRepoFromCwd(cwd)
-	got, gotErr := resolveMainRepoFromCwd(dir)
+	want, wantErr := gitutil.MainRepoRoot(cwd)
+	got, gotErr := gitutil.MainRepoRoot(dir)
 	if wantErr != nil || gotErr != nil {
 		return nil
 	}
@@ -2573,24 +2605,12 @@ func validateAutoApproveGates(gates []string) error {
 // jsonFilesExist checks whether legacy JSON state files exist in the .fellowship
 // directory, indicating a migration is needed.
 func jsonFilesExist(fromDir string) bool {
-	cmd := exec.Command("git", "rev-parse", "--git-common-dir")
-	cmd.Dir = fromDir
-	out, err := cmd.Output()
+	mainRepo, err := gitutil.MainRepoRoot(fromDir)
 	if err != nil {
 		return false
 	}
-	gitCommon := strings.TrimSpace(string(out))
-	if !filepath.IsAbs(gitCommon) {
-		gitCommon = filepath.Join(fromDir, gitCommon)
-	}
-	gitCommon = filepath.Clean(gitCommon)
-
-	var mainRepo string
-	if filepath.Base(gitCommon) == ".git" {
-		mainRepo = filepath.Dir(gitCommon)
-	} else {
-		mainRepo = filepath.Dir(gitCommon)
-	}
+	// The legacy files only ever lived in ".fellowship", before dataDir was
+	// configurable, so this one is deliberately not datadir.Resolve.
 	dataDir := filepath.Join(mainRepo, ".fellowship")
 	for _, name := range []string{"fellowship-state.json", "quest-state.json"} {
 		if _, err := os.Stat(filepath.Join(dataDir, name)); err == nil {
@@ -2606,7 +2626,7 @@ func runMigrate() error {
 	if err != nil {
 		return fmt.Errorf("getwd: %w", err)
 	}
-	mainRepo, err := resolveMainRepoFromCwd(cwd)
+	mainRepo, err := gitutil.MainRepoRoot(cwd)
 	if err != nil {
 		return err
 	}
@@ -2616,23 +2636,4 @@ func runMigrate() error {
 	}
 	defer d.Close()
 	return db.MigrateJSON(d, mainRepo)
-}
-
-// resolveMainRepoFromCwd finds the main repo root from cwd using git.
-func resolveMainRepoFromCwd(cwd string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--git-common-dir")
-	cmd.Dir = cwd
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("git rev-parse: %w", err)
-	}
-	gitCommon := strings.TrimSpace(string(out))
-	if !filepath.IsAbs(gitCommon) {
-		gitCommon = filepath.Join(cwd, gitCommon)
-	}
-	gitCommon = filepath.Clean(gitCommon)
-	if filepath.Base(gitCommon) == ".git" {
-		return filepath.Dir(gitCommon), nil
-	}
-	return filepath.Dir(gitCommon), nil
 }

@@ -3,10 +3,11 @@ package datadir
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/justinjdev/fellowship/cli/internal/gitutil"
 )
 
 // DefaultName is the default directory name for fellowship working files.
@@ -102,11 +103,7 @@ func readConfigFile(path string) cfg {
 // gitRootFunc is the function used to find the git repository root.
 // It is a variable so tests can override it without spawning a subprocess.
 var gitRootFunc = func() (string, error) {
-	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
+	return gitutil.TopLevel("")
 }
 
 func gitRoot() (string, error) {
