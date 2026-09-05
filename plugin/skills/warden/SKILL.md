@@ -1,6 +1,6 @@
 ---
 name: warden
-description: Use AFTER writing code and BEFORE submitting a PR. Simulates a strict code reviewer by comparing changes against reference files and documented conventions. Catches "we don't do it that way" feedback before your human reviewer does.
+description: Use before opening a PR from a quest, once the code is written. Simulates a strict code reviewer by comparing changes against reference files and documented conventions, catching convention feedback before your human reviewer does.
 ---
 
 # Warden — Catch Convention Violations Before Your Reviewer Does
@@ -42,7 +42,6 @@ For every rule in `## Review Conventions`, check compliance:
 ```
 
 ### Step 3: Reference Comparison
-
 
 Compare your code against reference files across every dimension:
 

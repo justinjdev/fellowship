@@ -1,6 +1,6 @@
 ---
 name: council
-description: Use at the start of any non-trivial task. Loads focused, task-relevant context by reading CLAUDE.md, scanning for related files, and producing a structured Session Context block. Invoked automatically by quest or standalone via /council.
+description: Invoked automatically by quest's Phase 0 onboarding, or directly by the user via /council — not auto-triggered on every task. Loads focused, task-relevant context by reading CLAUDE.md, scanning for related files, and producing a structured Session Context block.
 ---
 
 # Council — Context-Aware Task Onboarding

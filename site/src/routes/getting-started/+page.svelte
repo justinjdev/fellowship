@@ -72,7 +72,7 @@
 					<tr>
 						<td><strong>superpowers</strong></td>
 						<td>
-							<code>using-git-worktrees</code>,
+							<code>writing-plans</code>,
 							<code>test-driven-development</code>,
 							<code>verification-before-completion</code>,
 							<code>finishing-a-development-branch</code>

@@ -267,7 +267,7 @@ When the user says "wrap up" or "disband":
 
 ## Gate Handling
 
-Each quest runs the full `/quest` lifecycle (6 phases with gates). Gates are enforced by a state machine — project-level hooks block teammate tools based on phase and gate state. Only Gandalf can unblock a pending gate.
+Each quest runs the full `/quest` lifecycle (7 phases, 6 gates). Gates are enforced by a state machine — project-level hooks block teammate tools based on phase and gate state. Only Gandalf can unblock a pending gate.
 
 **DEFAULT: ALL gates surface to the user.** No gates are ever auto-approved unless `config.gates.autoApprove` explicitly lists them. Gandalf must NEVER auto-approve a gate that is not listed in `config.gates.autoApprove`.
 

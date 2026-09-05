@@ -2,7 +2,7 @@
 description: Create a reusable quest template for a specific type of task (e.g., "API endpoint", "migration"). Encodes project-specific rules and conventions into phase guidance that loads automatically during quests.
 ---
 
-# Forge Template — Create Quest Templates
+# Scribe Template — Create Quest Templates
 
 ## Overview
 

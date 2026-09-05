@@ -27,7 +27,7 @@ Fellowship's `/quest` skill orchestrates skills from these plugins. Install them
 
 | Plugin | Skills used | Phase |
 |--------|------------|-------|
-| **superpowers** | `using-git-worktrees`, `test-driven-development`, `verification-before-completion`, `finishing-a-development-branch` | Onboard, Implement, Review, Complete |
+| **superpowers** | `writing-plans`, `test-driven-development`, `verification-before-completion`, `finishing-a-development-branch` | Plan, Implement, Review, Complete |
 | **pr-review-toolkit** | `review-pr` | Review |
 
 These are referenced by name in skill prompts. If a dependency isn't installed, Claude performs the step's goal manually and notes the substitution in its output — but you lose the structured discipline the dedicated skill provides.
@@ -40,7 +40,7 @@ These are referenced by name in skill prompts. If a dependency isn't installed, 
 
 #### System Dependencies
 
-- **Go CLI binary** — gate enforcement hooks use a Go binary that is automatically downloaded from GitHub releases on first use. No manual installation required.
+- **Go CLI binary** — gate enforcement hooks use a Go binary that is automatically downloaded from GitHub releases on first use, with its checksum verified against the release's `checksums.txt` before it's installed. No manual installation required.
 
 ### Project Setup (Optional)
 
@@ -102,6 +102,9 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
   "issues": {
     "autoClose": true
   },
+  "autopsy": {
+    "expiryDays": 90
+  },
   "models": {
     "quest": null,
     "scout": null,
@@ -127,6 +130,7 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 | `palantir.enabled` | `true` | Whether to spawn a palantir monitoring agent during fellowships. |
 | `palantir.minQuests` | `2` | Minimum active quests before palantir is spawned. |
 | `issues.autoClose` | `true` | When true, `/missive` includes `Closes #N` in PR keywords so issues close on merge. |
+| `autopsy.expiryDays` | `90` | Days before a quest autopsy (failure record) expires and is eligible for cleanup. |
 | `models.quest` | `null` | Model for quest teammates. Valid values: `"haiku"`, `"sonnet"`, `"opus"` (aliases only — spawn parameters accept neither `"inherit"` nor full model IDs; leave `null` to inherit). `null` = built-in default: inherit the session model. |
 | `models.scout` | `null` | Model for scout teammates. Same valid values. `null` = built-in default: `sonnet`. |
 | `models.palantir` | `null` | Model for the palantir monitor. Same valid values. `null` = built-in default: `haiku`. |
@@ -171,7 +175,6 @@ Commands are user-invoked only — Claude never calls them automatically, so the
 | Agent | Role |
 |-------|------|
 | **palantir** | Background monitor during fellowship execution. Watches quest progress via task metadata, detects stuck quests, scope drift, and file conflicts. Reports to Gandalf. Defaults to the `haiku` model. |
-| **quest-runner** | Quest execution agent. Uses the fellowship CLI for gate management, status checks, and phase transitions. |
 | **balrog** | Adversarial validation agent spawned by quest between Implement and Review. Analyzes the diff for failure modes, writes and runs targeted test cases, and delivers a severity-ranked findings report. |
 | **scout** | Research & analysis agent spawned as a fellowship teammate for read-only investigation — no code edits, no git operations. Defaults to the `sonnet` model. |
 | **validator** | Read-only adversarial validator spawned by scout to verify research findings against the actual code (CONFIRMED/CONTESTED/UNVERIFIED). Tools restricted to Read/Glob/Grep. Defaults to the `sonnet` model. |
@@ -214,6 +217,16 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 - **Local scope only.** Teammates are restricted to code, tests, git, and the filesystem. MCP tools and external services (Notion, Slack, Jira, etc.) require explicit approval.
 
 ## Changelog
+
+### Unreleased
+
+- **Fail-closed hook dispatch** — Gate hooks (`gate-guard`, `gate-submit`, `gate-prereq`, `completion-guard`, `metadata-track`, `file-track`) now run through `plugin/hooks/scripts/fellowship.sh` instead of exec'ing the binary directly; if the binary is missing and can't be installed, they block (exit 2) instead of silently allowing the tool call through a shell "command not found". `worktree-guard` keeps its fail-open backstop posture. The `file-track` hook is now wired into `hooks.json` (it existed in the CLI but wasn't invoked), and `SessionStart` now installs the binary on `clear` and `compact` in addition to `startup`/`resume`.
+- **Verified downloads** — `ensure-binary.sh` verifies the downloaded tarball against the release's `checksums.txt` (`sha256sum`/`shasum`) before installing, assembles the binary in a scratch directory and moves it into place atomically, and holds a simple lock so concurrent sessions don't race the same install.
+- **CI** — added `gofmt -l .`, `go vet ./...`, `go test -race ./...`, `shellcheck` on the hook scripts, a check that every path in `.claude-plugin/plugin.json` exists, and a `site/` build job.
+- **Tightened skill triggers** — `quest`, `council`, `gather-lore`, and `warden` descriptions now name their actual invocation scope instead of "any non-trivial task", reducing over-triggering.
+- **Removed orphaned `quest-runner` agent** — never spawned (quest teammates use `general-purpose`); removed from the plugin manifest, README, and the site's Agents and How It Works pages.
+- **Documentation drift fixes** — corrected `gates.autoApprove` valid values on the site config page, replaced the removed `using-git-worktrees` dependency with `writing-plans` (Plan phase), added the missing v1.6.1 changelog entry, fixed the quest phase/gate count, documented `autopsy.expiryDays` and added the missing `dataDir` row to `/settings`' schema table, corrected the `.fellowship/` gitignore wording in lembas, corrected palantir's Bash tool description, and fixed several command titles and skill/command wording.
+- **Archived the `gate-state-machine` OpenSpec change** — superseded by the Go CLI + SQLite gate enforcement design (v1.5.1–v2.2.0); moved to `openspec/changes/archive/` with a SUPERSEDED note.
 
 ### v2.2.0
 
@@ -292,6 +305,14 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 ### v1.6.3
 
 - **Fix plugin discovery** — moved `.claude-plugin/plugin.json` to repo root with explicit path fields for skills, agents, commands, and hooks. Fixes skills not showing up after install.
+
+### v1.6.1
+
+- **GitHub Pages site** — SvelteKit static site with LOTR theme, all documentation pages, and CI deployment.
+- **`/rekindle` skill** — Crash recovery. Scans worktrees and state files, presents a recovery dashboard, and re-spawns Gandalf with recovered quest context.
+- **`/lorebook` skill** — Loads phase-specific guidance from quest templates created by `/scribe`.
+- **Skills to commands migration** — 5 user-only skills moved to `commands/` for lower base context cost.
+- **LOTR theming** — Internal renames: convoy → company, cv → tome, patrol → eagles, work/hook → errand, events/feed → herald.
 
 ### v1.6.0
 
