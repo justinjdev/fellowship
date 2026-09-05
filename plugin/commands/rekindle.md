@@ -36,7 +36,7 @@ Each quest gets one classification:
 
 | Classification | Condition | Action |
 |---|---|---|
-| **Complete** | Branch merged into main | Skip — already shipped |
+| **Shipped** | Branch merged into the base branch | Skip — already shipped |
 | **Resumable** | Has `.fellowship/checkpoint.md` | Continue from current phase with checkpoint context |
 | **Stale** | No checkpoint | Restart current phase from scratch |
 
@@ -48,8 +48,8 @@ Show the user what was found:
 The flame that was quenched can be rekindled.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-quest-api-auth    │ Implement (checkpoint ✓) │ Resumable
-quest-db-schema   │ Plan      (checkpoint ✓) │ Resumable
+quest-api-auth    │ Implement (checkpoint ✓)  │ Resumable
+quest-db-schema   │ Plan      (checkpoint ✓)  │ Resumable
 quest-ui-login    │ Research  (no checkpoint) │ Restart phase
 
 Merged (skipping):
@@ -68,93 +68,25 @@ On user confirmation, transition into Gandalf coordinator mode:
 2. **Create team:** `TeamCreate` with name `fellowship-{timestamp}`
 3. **Record fellowship state:** From the repo root, run `~/.claude/fellowship/bin/fellowship state init --name fellowship-{timestamp}` (it has no `--dir` — it operates on the current directory), then re-register each recovered quest with `~/.claude/fellowship/bin/fellowship state add-quest --name <quest_name> --task "<task>" [--branch <branch>] [--worktree <path>]` (same as `/fellowship` startup)
 4. **Write autopsies for dead quests:** Before respawning, run `~/.claude/fellowship/bin/fellowship autopsy infer --dir <worktree>` for each quest classified as `stale`. This preserves failure knowledge from the crashed session for future quests to learn from.
-5. **For each non-complete quest:**
+5. **For each quest that has not shipped:**
    a. `TaskCreate` with the original task description (from `~/.claude/fellowship/bin/fellowship state show` or inferred from quest name)
    b. Spawn a quest runner teammate with the **resume spawn prompt** (see below)
 6. **Enter Gandalf coordinator loop** — same behavior as `/fellowship` (gate handling, status reports, user commands)
 
-**Resume spawn prompt:**
+**Resume spawn prompt:** use the **Resume** variant of the base quest spawn
+template in `plugin/skills/fellowship/resources/spawn-prompts.md`. Rekindle
+keeps no copy of it — the gate, hold, isolation, and boundary language is the
+same for a resumed quest as for a fresh one, and a second copy here would
+drift. Fill the variant's `{worktree_path}`, `{phase}`, `{classification}`,
+and `{checkpoint_line}` from the Step 1 scan and the Step 2 classification,
+and every shared placeholder exactly as `/fellowship` does.
 
-```
-You are a quest runner resuming after a session crash.
-Gandalf the White has returned: "I come back to you now, at the turn of the tide."
+Two things are worth saying out loud when you send it:
 
-YOUR TASK: {task_description}
-
-RESUME CONTEXT:
-- Your worktree already exists at {worktree_path}
-- Your current phase: {phase}
-- Classification: {classification}
-- Checkpoint: {if resumable: "Load .fellowship/checkpoint.md for recovered context" | if stale: "No checkpoint — restart current phase from scratch"}
-
-INSTRUCTIONS:
-1. Run /quest to resume this task
-2. In Phase 0 (Onboard), detect the RESUME CONTEXT block above and:
-   - Skip worktree creation — you are already in your worktree
-   - Run `~/.claude/fellowship/bin/fellowship init` to reset gate state (clears gate_pending, preserves phase).
-     If a gate was still pending when the session crashed, the hooks block this —
-     message the lead to clear it; only the lead may clear a pending gate.
-   - Store your worktree path in task metadata: TaskUpdate(taskId: "{task_id}", metadata: {"worktree_path": "{worktree_path}"})
-   - If checkpoint exists, load .fellowship/checkpoint.md as your initial context
-   - Skip /council — checkpoint replaces orientation
-   - Proceed to your current phase: {phase}
-3. Gate handling — gates are enforced by plugin hooks reading quest state
-   from the fellowship database. The hooks structurally block your tools
-   after gate submission. Here is how it works:
-
-   Before EACH gate, you MUST:
-   a. Run /lembas to compress context (hooks verify this)
-   b. Run TaskUpdate(taskId: "{task_id}", metadata: {"phase": "<phase>"})
-      to record your current phase (hooks verify this)
-   c. Send ONE gate checklist via SendMessage to the lead.
-      The message content MUST start with [GATE] — e.g.:
-      "[GATE] Research complete\n- [x] Key files identified..."
-      Messages without the [GATE] prefix are not detected as gates.
-
-   After sending a gate message, your Edit/Write/Bash/Agent/Skill tools
-   are blocked by hooks until the lead approves. You cannot bypass this.
-   The lead approves by updating your quest state — only the lead can
-   unblock you.
-
-   {gate_config_override}
-
-   NEVER send two gates in one message.
-   NEVER approve your own gates — only the lead can approve.
-   NEVER write "approved" or "proceeding" — that is the lead's language.
-4. When /quest reaches Phase 5 (Complete), create a PR and message
-   the lead with the PR URL
-5. If you get stuck or need a decision, message the lead
-6. If you receive a shutdown request, respond immediately using
-   SendMessage with type "shutdown_response", approve: true, and
-   the request_id from the message. Do not just acknowledge in text.
-
-CONVENTIONS:
-- Use conventional commits for all git commits (e.g., feat:, fix:, docs:, refactor:)
-
-BOUNDARIES:
-- Stay in YOUR worktree. Do NOT read, write, or navigate into other
-  teammates' worktrees. Your working directory is your worktree root.
-- Do NOT use MCP tools or external service integrations (Notion, Slack,
-  Jira, etc.) without first messaging the lead and getting explicit
-  approval. Your scope is local: code, tests, git, and the filesystem.
-- Do NOT push branches, create PRs, or take any action visible to
-  others without lead approval (except at Phase 5 as instructed above).
-
-CONTEXT:
-- Fellowship team: {team_name}
-- Your quest: {quest_name}
-- Your task ID: {task_id}
-- Other active quests: {brief_list}
-- PR config: {pr_config_line}
-```
-
-**Substitution rules:** Same as `/fellowship` spawn prompt, plus:
-
-| Placeholder | Source |
-|---|---|
-| `{worktree_path}` | From `~/.claude/fellowship/bin/fellowship status --json` output |
-| `{phase}` | From `~/.claude/fellowship/bin/fellowship status --json` output |
-| `{classification}` | "resumable" or "stale" |
+- The quest resumes at the phase its state records. Recovery never skips a
+  phase and never waives a gate.
+- A quest classified `stale` restarts its current phase from scratch; it does
+  not fall back to an earlier one.
 
 ### Gandalf's Voice (Recovery)
 
@@ -169,7 +101,8 @@ CONTEXT:
 ## Key Principles
 
 1. **User confirms before recovery.** Never auto-resume without showing what was found.
-2. **Checkpoint is king.** `.fellowship/checkpoint.md` is the primary per-quest recovery artifact.
+2. **Checkpoint is king.** `.fellowship/checkpoint.md` is the primary per-quest recovery artifact. `/rekindle` is the recovery path *outside* a running quest; inside one, quest's Research step 0 is the only place that reads a checkpoint.
 3. **New team, new tasks.** Old task IDs are stale. Recovery creates fresh coordination state.
 4. **Same Gandalf behavior.** After recovery, the coordinator loop is identical to `/fellowship`.
-5. **Graceful degradation.** No fellowship recorded in the database? Fall back to worktree scanning. No checkpoint? Restart the phase.
+5. **One spawn template.** The resume prompt is a variant of the shared base template, not a copy. Gate, hold, isolation, and boundary language is edited in one place.
+6. **Graceful degradation.** No fellowship recorded in the database? Fall back to worktree scanning. No checkpoint? Restart the phase.

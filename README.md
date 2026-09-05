@@ -44,7 +44,7 @@ These are referenced by name in skill prompts. If a dependency isn't installed, 
 
 ### Project Setup (Optional)
 
-Add this hook to `.claude/settings.local.json` in repos where you use fellowship. It detects `/lembas` checkpoints from previous sessions and offers to resume:
+Add this hook to `.claude/settings.local.json` in repos where you use fellowship. It prints a one-line hint when a `/lembas` checkpoint from a previous session is lying around, so you know recovery is available:
 
 ```json
 {
@@ -54,7 +54,7 @@ Add this hook to `.claude/settings.local.json` in repos where you use fellowship
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f .fellowship/checkpoint.md ]; then echo '--- CHECKPOINT DETECTED ---'; cat .fellowship/checkpoint.md; echo '--- END CHECKPOINT ---'; echo 'A checkpoint from a previous session was found. Use /council to resume or start fresh.'; fi"
+            "command": "if [ -f .fellowship/checkpoint.md ]; then echo \"fellowship: a checkpoint from a previous session is present at .fellowship/checkpoint.md — run /rekindle to recover the fellowship, or /quest to resume a single quest.\"; fi"
           }
         ]
       }
@@ -62,6 +62,8 @@ Add this hook to `.claude/settings.local.json` in repos where you use fellowship
   }
 }
 ```
+
+It is a convenience only: it prints the hint and nothing else. Resuming is always something you ask for — see [Resuming after a crash](#resuming-after-a-crash).
 
 Also add the fellowship data directory to your `.gitignore` — checkpoints and state are local ephemeral files. Keep `.fellowship/config.json` trackable, though: it holds committable team-shared settings (see `/settings`):
 
@@ -205,6 +207,18 @@ Autonomous research with confidence levels. For complex questions, spawns a fres
 **Multiple tasks** — run `/fellowship`:
 
 Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolated worktrees and produce PRs. Scouts research questions and deliver findings. Say "status" to see a progress table. By default, all quest gates surface to you for approval — auto-approve specific gates via `~/.claude/fellowship.json` (see Configuration).
+
+### Resuming after a crash
+
+A `/lembas` checkpoint at `.fellowship/checkpoint.md` is what a dead session leaves behind. Exactly three things read it, and each has one job:
+
+| | Reads the checkpoint | When |
+|---|---|---|
+| **quest's Research step 0** | Yes | Inside a running quest. This is the *only* checkpoint check during a quest — a resumed teammate picks up at the phase its state records. |
+| **`/rekindle`** | Yes | Outside a quest, after the whole fellowship died. Scans worktrees, classifies each quest, and respawns them with the resume spawn prompt. |
+| **The SessionStart hook above** | No | At session start. Prints a hint that a checkpoint exists; it never resumes anything. |
+
+`/council` does not check for checkpoints. It is orientation for a fresh task, nothing more.
 
 **Gate enforcement** — gates are structurally enforced via plugin hooks. After a teammate submits a gate, their work tools (Edit, Write, Bash, etc.) are blocked until the lead approves by writing to the quest state file. Prerequisites (running `/lembas` and updating task metadata) are verified before gate submission is allowed. Self-approval is structurally impossible.
 

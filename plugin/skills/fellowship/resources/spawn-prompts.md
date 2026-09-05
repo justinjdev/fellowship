@@ -1,8 +1,8 @@
 # Spawn Prompts
 
-## Quest Spawn Prompt (one base template, three variants)
+## Quest Spawn Prompt (one base template, four variants)
 
-All quest teammates — **standard**, **plan-driven**, and **promoted** — are spawned from the single base template below. Three placeholders (`{mode_context}`, `{mode_instruction_1}`, `{boundaries_exception}`) carry everything that differs between variants; every other line is shared. When editing gate, hold, isolation, or boundary language, edit the base template once — never fork a per-variant copy.
+All quest teammates — **standard**, **plan-driven**, **promoted**, and **resume** (used by `/rekindle`) — are spawned from the single base template below. Three placeholders (`{mode_context}`, `{mode_instruction_1}`, `{boundaries_exception}`) carry everything that differs between variants; every other line is shared. When editing gate, hold, isolation, or boundary language, edit the base template once — never fork a per-variant copy.
 
 ### Base Template
 
@@ -56,7 +56,7 @@ INSTRUCTIONS:
    mechanism as gate blocking. Wait for the lead to unhold you. The
    lead will send you a message with updated instructions when you
    are resumed.
-5. When /quest reaches Phase 5 (Complete), create a PR and message
+5. When /quest reaches the last step of Review, create a PR and message
    the lead with the PR URL
 6. If you get stuck or need a decision, message the lead
 7. If you receive a shutdown request, respond immediately using
@@ -73,7 +73,8 @@ BOUNDARIES:
   Jira, etc.) without first messaging the lead and getting explicit
   approval. Your scope is local: code, tests, git, and the filesystem.
 - Do NOT push branches, create PRs, or take any action visible to
-  others without lead approval (except at Phase 5 as instructed above).
+  others without lead approval (except at the end of Review as
+  instructed above).
 
 CONTEXT:
 - Fellowship team: {team_name}
@@ -109,6 +110,8 @@ Before sending the spawn prompt, Gandalf substitutes these placeholders with act
 - **DEFAULT (no config, or `autoApprove` absent/empty):** substitute with `"All gates require lead approval. Do not proceed past any gate without receiving an explicit approval message from the lead."` — do NOT mention auto-approval in any form.
 - **Only if `autoApprove` explicitly lists gate names** (e.g., `["Research", "Plan"]`): substitute with `"The following gates are auto-approved and hooks will advance your state automatically: Research, Plan. For all other gates, your tools are blocked until the lead approves."`
 
+Valid gate names are the phases a gate leaves: `Research`, `Plan`, `Implement`. `Review` is not one — no gate leaves it.
+
 **`{template_guidance}` generation:**
 - **No template selected:** substitute with empty string (no extra content in spawn prompt)
 - **Template selected:** substitute with:
@@ -134,19 +137,19 @@ Use when the user provides a pre-existing plan file for a quest.
 |---|---|
 | `{mode_context}` | `PRE-EXISTING PLAN: {plan_path}` |
 | `{mode_instruction_1}` | See below |
-| `{boundaries_exception}` | ` Exception: you may read {plan_path} once during Onboard to copy it into your worktree.` |
+| `{boundaries_exception}` | ` Exception: you may read {plan_path} once while provisioning to copy it into your worktree.` |
 | `{plan_path}` | Absolute path to the plan file in the main repo |
 
 `{mode_instruction_1}` for plan-driven:
 
 ```
 Run /quest to execute this task — but with a pre-existing plan:
-   - In Phase 0 (Onboard), copy the plan file to .fellowship/plan.md
-   - The quest skill will detect this file and skip Research + Plan,
-     starting directly at Phase 3 (Implement)
+   - Copy the plan file to .fellowship/plan.md while provisioning
+   - The quest skill will detect this file and skip Research and Plan,
+     starting directly at Implement
 ```
 
-Note: a plan-driven quest's first gate is Implement (e.g. `[GATE] Implement complete`) — the base template's Research example does not apply to this variant.
+Note: a plan-driven quest has exactly one gate, Implement (e.g. `[GATE] Implement complete`) — the base template's Research example does not apply to this variant.
 
 ### Variant: Promoted
 
@@ -165,13 +168,39 @@ Use when promoting a scout's findings into a new quest. The quest enters validat
 
 ```
 PROMOTED FROM: scout "{scout_name}"
-Scout findings are pre-loaded at {findings_path}. Your Phase 1 (Research)
-should validate these findings rather than starting from scratch — see the
-quest skill for validation mode details.
+Scout findings are pre-loaded at {findings_path}. Your Research phase should
+validate these findings rather than starting from scratch — see the quest
+skill for validation mode details.
 
 SCOUT FINDINGS CONTENT:
 {scout_findings_content}
 ```
+
+### Variant: Resume
+
+Used by `/rekindle` to respawn a quest into the worktree a crashed session left behind. The quest picks up at whatever phase its state records; no phase is skipped, and no gate is waived.
+
+| Placeholder | Value |
+|---|---|
+| `{mode_context}` | See below |
+| `{mode_instruction_1}` | `Run /quest to resume this task. Research step 0 will detect the RESUME CONTEXT block above and pick up from your checkpoint at the phase your quest state records.` |
+| `{boundaries_exception}` | Empty string |
+| `{worktree_path}`, `{phase}` | From `~/.claude/fellowship/bin/fellowship status --json` |
+| `{classification}` | `resumable` or `stale` |
+
+`{mode_context}` for resume:
+
+```
+RESUME CONTEXT:
+- Your worktree already exists at {worktree_path} — do NOT create one
+- Your current phase: {phase}
+- Classification: {classification}
+- Checkpoint: {checkpoint_line}
+```
+
+`{checkpoint_line}`: for `resumable`, `"Load .fellowship/checkpoint.md for recovered context"`; for `stale`, `"No checkpoint — restart the current phase from scratch"`.
+
+The base template's step 2 (isolation self-check) still applies: a resumed quest verifies it is in a real worktree before touching anything, exactly as a fresh one does.
 
 ## Scout Spawn Prompt
 
@@ -217,9 +246,10 @@ goes wrong. You never write code or run quests.
 
 MONITORING CHECKLIST:
 1. Use TaskList to check quest progress — each quest updates its task
-   metadata with a "phase" field (Onboard/Research/Plan/Implement/Adversarial/Review/Complete).
-   A quest sitting in Adversarial is usually waiting on a balrog review run —
-   that phase legitimately takes a while; do not flag it as stuck prematurely.
+   metadata with a "phase" field (Research/Plan/Implement/Review).
+   Review runs a balrog adversarial pass, /warden, a code-quality review,
+   verification, and the PR, so it legitimately takes a while; do not flag
+   a quest in Review as stuck prematurely.
 2. Flag quests that appear stuck (phase hasn't advanced, no gate messages)
 3. Check worktree diffs for scope drift — compare modified files against
    the task description
