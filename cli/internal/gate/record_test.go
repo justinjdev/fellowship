@@ -7,8 +7,8 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/gate"
+	"github.com/justinjdev/fellowship/cli/internal/history"
 	"github.com/justinjdev/fellowship/cli/internal/state"
-	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
 // newQuest opens a store holding one quest in the given phase.
@@ -24,7 +24,7 @@ func newQuest(t *testing.T, phase string) *db.DB {
 }
 
 // An approval is three records: the gate event, the completed phase, and the
-// two heralds. Every approval path shares them, so a lead approval, a company
+// two events. Every approval path shares them, so a lead approval, a group
 // batch approval and an auto-approved gate cannot report different histories.
 func TestRecordApproval(t *testing.T) {
 	d := newQuest(t, "Research")
@@ -36,7 +36,7 @@ func TestRecordApproval(t *testing.T) {
 	}
 
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		qt, err := tome.Load(conn, "quest-1")
+		qt, err := history.Load(conn, "quest-1")
 		if err != nil {
 			return err
 		}
@@ -78,7 +78,7 @@ func TestRecordApproval(t *testing.T) {
 }
 
 // A rejection keeps the quest in phase, so it records the gate event and the
-// herald but no completed phase.
+// event but no completed phase.
 func TestRecordRejection(t *testing.T) {
 	d := newQuest(t, "Review")
 
@@ -89,7 +89,7 @@ func TestRecordRejection(t *testing.T) {
 	}
 
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		qt, err := tome.Load(conn, "quest-1")
+		qt, err := history.Load(conn, "quest-1")
 		if err != nil {
 			return err
 		}

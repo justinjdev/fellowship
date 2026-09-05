@@ -49,6 +49,7 @@ var baseSchema = []string{
 	)`,
 
 	// Phase history (replaces quest-tome.json phases)
+	// table: quest_phases, quest_gates, quest_files -> package history (cli/internal/history)
 	`CREATE TABLE IF NOT EXISTS quest_phases (
 		id           INTEGER PRIMARY KEY AUTOINCREMENT,
 		quest_name   TEXT NOT NULL REFERENCES quest_state(quest_name),

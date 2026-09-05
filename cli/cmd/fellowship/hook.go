@@ -178,7 +178,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			}
 			result = hooks.CompletionGuard(s, input)
 			if !result.Block && input.ToolInput.Status == "completed" {
-				if err := hooks.MarkTomeCompleted(conn, questName); err != nil {
+				if err := hooks.MarkHistoryCompleted(conn, questName); err != nil {
 					return err
 				}
 			}

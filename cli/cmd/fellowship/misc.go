@@ -22,10 +22,10 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/eagles"
 	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
+	"github.com/justinjdev/fellowship/cli/internal/history"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/status"
-	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
 func runStatus(d *db.DB, args []string) int {
@@ -377,10 +377,10 @@ func runTome(d *db.DB, args []string) int {
 		return 1
 	}
 
-	var c *tome.QuestTome
+	var c *history.QuestHistory
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		var err error
-		c, err = tome.Load(conn, questName)
+		c, err = history.Load(conn, questName)
 		return err
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)

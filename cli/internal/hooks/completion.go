@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/justinjdev/fellowship/cli/internal/history"
 	"github.com/justinjdev/fellowship/cli/internal/state"
-	"github.com/justinjdev/fellowship/cli/internal/tome"
 	"zombiezen.com/go/sqlite"
 )
 
@@ -32,7 +32,7 @@ func CompletionGuard(s *state.State, input *HookInput) HookResult {
 	return HookResult{}
 }
 
-// MarkTomeCompleted marks the quest tome status as "completed".
-func MarkTomeCompleted(conn *sqlite.Conn, questName string) error {
-	return tome.SetStatus(conn, questName, "completed")
+// MarkHistoryCompleted marks the quest history status as "completed".
+func MarkHistoryCompleted(conn *sqlite.Conn, questName string) error {
+	return history.SetStatus(conn, questName, "completed")
 }

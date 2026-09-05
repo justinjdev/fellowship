@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/history"
 	"github.com/justinjdev/fellowship/cli/internal/state"
-	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
 func seedQuest(t *testing.T, d *db.DB, name string) {
@@ -39,7 +39,7 @@ func TestFileTrack_EditToolInput(t *testing.T) {
 	}
 
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		files, err := tome.LoadFiles(conn, "q1")
+		files, err := history.LoadFiles(conn, "q1")
 		if err != nil {
 			t.Fatalf("loading files: %v", err)
 		}
@@ -76,7 +76,7 @@ func TestFileTrack_NotebookPath(t *testing.T) {
 	}
 
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		files, err := tome.LoadFiles(conn, "q1")
+		files, err := history.LoadFiles(conn, "q1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -158,7 +158,7 @@ func TestFileTrack_Deduplication(t *testing.T) {
 			t.Error("FileTrack should return false on duplicate file")
 		}
 
-		files, err := tome.LoadFiles(conn, "q1")
+		files, err := history.LoadFiles(conn, "q1")
 		if err != nil {
 			t.Fatal(err)
 		}

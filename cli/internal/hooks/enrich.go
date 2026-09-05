@@ -10,7 +10,7 @@ import (
 
 	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/events"
-	"github.com/justinjdev/fellowship/cli/internal/tome"
+	"github.com/justinjdev/fellowship/cli/internal/history"
 	"zombiezen.com/go/sqlite"
 )
 
@@ -36,7 +36,7 @@ func gatherErrandProgress(conn *sqlite.Conn, questName string) string {
 }
 
 func gatherFilesTouched(conn *sqlite.Conn, questName string) string {
-	t, err := tome.Load(conn, questName)
+	t, err := history.Load(conn, questName)
 	if err != nil {
 		return ""
 	}

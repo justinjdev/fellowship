@@ -1,12 +1,12 @@
-package tome_test
+package history_test
 
 import (
 	"context"
 	"testing"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/history"
 	"github.com/justinjdev/fellowship/cli/internal/state"
-	"github.com/justinjdev/fellowship/cli/internal/tome"
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
@@ -24,10 +24,10 @@ func TestRecordPhase(t *testing.T) {
 	seedQuest(t, d, "q1")
 
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := tome.RecordPhase(conn, "q1", "Research", 120); err != nil {
+		if err := history.RecordPhase(conn, "q1", "Research", 120); err != nil {
 			t.Fatal(err)
 		}
-		phases, err := tome.LoadPhases(conn, "q1")
+		phases, err := history.LoadPhases(conn, "q1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -45,14 +45,14 @@ func TestRecordGate(t *testing.T) {
 	seedQuest(t, d, "q1")
 
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := tome.RecordGate(conn, "q1", "Research", "submitted", ""); err != nil {
+		if err := history.RecordGate(conn, "q1", "Research", "submitted", ""); err != nil {
 			t.Fatal(err)
 		}
-		if err := tome.RecordGate(conn, "q1", "Research", "approved", ""); err != nil {
+		if err := history.RecordGate(conn, "q1", "Research", "approved", ""); err != nil {
 			t.Fatal(err)
 		}
 
-		gates, err := tome.LoadGates(conn, "q1")
+		gates, err := history.LoadGates(conn, "q1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -73,14 +73,14 @@ func TestRecordFiles(t *testing.T) {
 	seedQuest(t, d, "q1")
 
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := tome.RecordFiles(conn, "q1", []string{"src/main.go", "src/util.go"}); err != nil {
+		if err := history.RecordFiles(conn, "q1", []string{"src/main.go", "src/util.go"}); err != nil {
 			t.Fatal(err)
 		}
-		if err := tome.RecordFiles(conn, "q1", []string{"src/main.go", "src/new.go"}); err != nil {
+		if err := history.RecordFiles(conn, "q1", []string{"src/main.go", "src/new.go"}); err != nil {
 			t.Fatal(err)
 		}
 
-		files, err := tome.LoadFiles(conn, "q1")
+		files, err := history.LoadFiles(conn, "q1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -98,17 +98,17 @@ func TestLoad(t *testing.T) {
 	seedQuest(t, d, "q1")
 
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := tome.RecordPhase(conn, "q1", "Research", 60); err != nil {
+		if err := history.RecordPhase(conn, "q1", "Research", 60); err != nil {
 			t.Fatal(err)
 		}
-		if err := tome.RecordGate(conn, "q1", "Research", "approved", ""); err != nil {
+		if err := history.RecordGate(conn, "q1", "Research", "approved", ""); err != nil {
 			t.Fatal(err)
 		}
-		if err := tome.RecordFiles(conn, "q1", []string{"a.go"}); err != nil {
+		if err := history.RecordFiles(conn, "q1", []string{"a.go"}); err != nil {
 			t.Fatal(err)
 		}
 
-		qt, err := tome.Load(conn, "q1")
+		qt, err := history.Load(conn, "q1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -132,7 +132,7 @@ func TestLoad_NoData(t *testing.T) {
 	seedQuest(t, d, "q1")
 
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		qt, err := tome.Load(conn, "q1")
+		qt, err := history.Load(conn, "q1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -162,11 +162,11 @@ func TestRecordSkippedPhases(t *testing.T) {
 	seedQuest(t, d, "q1")
 
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := tome.RecordSkippedPhases(conn, "q1", []string{"Research", "Plan"}, "pre-existing plan"); err != nil {
+		if err := history.RecordSkippedPhases(conn, "q1", []string{"Research", "Plan"}, "pre-existing plan"); err != nil {
 			t.Fatal(err)
 		}
 
-		phases, err := tome.LoadPhases(conn, "q1")
+		phases, err := history.LoadPhases(conn, "q1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -174,7 +174,7 @@ func TestRecordSkippedPhases(t *testing.T) {
 			t.Fatalf("expected 2 phases, got %d", len(phases))
 		}
 
-		gates, err := tome.LoadGates(conn, "q1")
+		gates, err := history.LoadGates(conn, "q1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -208,7 +208,7 @@ func TestSetStatus(t *testing.T) {
 
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		// Insert a fellowship_quests row for SetStatus to update.
-		if err := tome.SetStatus(conn, "q1", "completed"); err != nil {
+		if err := history.SetStatus(conn, "q1", "completed"); err != nil {
 			t.Fatal(err)
 		}
 		return nil
@@ -222,11 +222,11 @@ func TestSetStatus(t *testing.T) {
 		if err := sqlitex.Execute(conn, `INSERT INTO fellowship_quests (name, status) VALUES ('q1', 'active')`, nil); err != nil {
 			t.Fatal(err)
 		}
-		if err := tome.SetStatus(conn, "q1", "completed"); err != nil {
+		if err := history.SetStatus(conn, "q1", "completed"); err != nil {
 			t.Fatal(err)
 		}
 
-		qt, err := tome.Load(conn, "q1")
+		qt, err := history.Load(conn, "q1")
 		if err != nil {
 			t.Fatal(err)
 		}

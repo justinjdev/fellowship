@@ -8,8 +8,8 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/fellowship"
+	"github.com/justinjdev/fellowship/cli/internal/history"
 	"github.com/justinjdev/fellowship/cli/internal/state"
-	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
 func TestCalculateProgress_MixedPhases(t *testing.T) {
@@ -312,7 +312,7 @@ func TestBatchApprove_HeraldLogging(t *testing.T) {
 	}
 }
 
-func TestBatchApprove_TomeRecording(t *testing.T) {
+func TestBatchApprove_HistoryRecording(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
@@ -331,7 +331,7 @@ func TestBatchApprove_TomeRecording(t *testing.T) {
 		}
 
 		company := fellowship.CompanyEntry{
-			Name:   "tome-test",
+			Name:   "history-test",
 			Quests: []string{"q1"},
 		}
 
@@ -340,7 +340,7 @@ func TestBatchApprove_TomeRecording(t *testing.T) {
 			t.Fatalf("expected 1 approved, got %d", len(approved))
 		}
 
-		gates, err := tome.LoadGates(conn, "q1")
+		gates, err := history.LoadGates(conn, "q1")
 		if err != nil {
 			t.Fatalf("loading gates: %v", err)
 		}
@@ -354,7 +354,7 @@ func TestBatchApprove_TomeRecording(t *testing.T) {
 			t.Errorf("expected phase 'Plan', got %q", gates[0].Phase)
 		}
 
-		phases, err := tome.LoadPhases(conn, "q1")
+		phases, err := history.LoadPhases(conn, "q1")
 		if err != nil {
 			t.Fatalf("loading phases: %v", err)
 		}
@@ -593,7 +593,7 @@ func TestLoadAndMarshalProgress(t *testing.T) {
 			return err
 		}
 		// Review is terminal — the entry status is what marks q2 finished.
-		if err := tome.SetStatus(conn, "q2", "completed"); err != nil {
+		if err := history.SetStatus(conn, "q2", "completed"); err != nil {
 			return err
 		}
 
