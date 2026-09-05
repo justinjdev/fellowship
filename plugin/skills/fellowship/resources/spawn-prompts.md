@@ -19,9 +19,12 @@ INSTRUCTIONS:
 2. ISOLATION SELF-CHECK (do this BEFORE any Edit/Write/commit): the lead should
    have placed you in your own git worktree, but isolation provisioning can
    silently fail — do NOT assume it worked. Verify before touching anything.
-   Run `git rev-parse --show-toplevel` and `git rev-parse --git-common-dir`.
-   The main repo root is the PARENT of the common git dir. Your top-level MUST
-   NOT equal the main repo root. If it IS the main root, STOP — do not edit,
+   Run `git rev-parse --path-format=absolute --show-toplevel` and
+   `git rev-parse --path-format=absolute --git-common-dir` (`--path-format=absolute`
+   matters — without it, `--git-common-dir` prints a relative path like `.git`
+   when you're already at the main root, which will never string-match an
+   absolute top-level path). The main repo root is the PARENT of the common
+   git dir. Your top-level MUST NOT equal the main repo root. If it IS the main root, STOP — do not edit,
    do not commit — and message the lead that you were not isolated. Only
    proceed once you have confirmed your top-level is a distinct worktree path.
    Note: the fail-closed `worktree-guard` hook blocks source writes from the
