@@ -86,6 +86,36 @@ func RecordLead(conn *sqlite.Conn, root, sessionID string) error {
 	return nil
 }
 
+// SessionIsTeammate reports whether sessionID is recorded against any quest —
+// that is, whether the session running this command is a quest teammate.
+//
+// It is the store-side half of "only the lead may name the lead": a teammate
+// that reached the main working tree and ran `state init --claim-lead` would
+// otherwise become the lead, which is the whole thing the lead row exists to
+// prevent. An empty id is nobody and reports false; so does a fellowship whose
+// teammates were started without a session id in their environment, which is
+// why gate-guard's refusal of lead commands from a quest worktree is the
+// primary defense and this is the backstop.
+func SessionIsTeammate(conn *sqlite.Conn, sessionID string) (bool, error) {
+	if sessionID == "" {
+		return false, nil
+	}
+	found := false
+	err := sqlitex.Execute(conn,
+		`SELECT 1 FROM quest_state WHERE session_id = :sid LIMIT 1`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":sid": sessionID},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				found = true
+				return nil
+			},
+		})
+	if err != nil {
+		return false, fmt.Errorf("state: look up quest sessions: %w", err)
+	}
+	return found, nil
+}
+
 // ReadLead returns the recorded lead. found is false when no lead row exists,
 // which is not an error: a fellowship initialized by an older binary has none.
 func ReadLead(conn *sqlite.Conn) (lead Lead, found bool, err error) {

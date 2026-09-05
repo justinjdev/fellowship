@@ -40,6 +40,17 @@ const leadTableSQL = `CREATE TABLE IF NOT EXISTS lead (
 		created_at TEXT NOT NULL
 	)`
 
+// questStateSessionColumnSQL records the Claude Code session that ran
+// `fellowship init` for a quest — the teammate working it.
+//
+// It is what lets `state init --claim-lead` tell a lead from a teammate: a
+// session that is already recorded against a quest cannot also be the lead, so
+// the one CLI door back into the lead row is closed to the sessions that door
+// exists to keep out. This is migration version 5 in migrations.go; declared
+// once here so the fresh-install schema and the upgrade migration apply
+// byte-identical DDL — see TestFreshSchemaMatchesMigratedSchema.
+const questStateSessionColumnSQL = `ALTER TABLE quest_state ADD COLUMN session_id TEXT`
+
 // baseSchema contains every CREATE TABLE, INDEX, and TRIGGER statement from
 // the original version-1 schema. Do not edit a statement here to ship a
 // schema change — add a migration step in migrations.go instead (see
@@ -256,7 +267,8 @@ var baseSchema = []string{
 // baseSchema plus the additive DDL from every migration step in
 // migrations.go, so a fresh install and a store upgraded through the ladder
 // always converge on identical schema objects.
-var schema = append(append([]string{}, baseSchema...), questWorktreeUniqueIndexSQL, leadTableSQL)
+var schema = append(append([]string{}, baseSchema...),
+	questWorktreeUniqueIndexSQL, leadTableSQL, questStateSessionColumnSQL)
 
 // applySchemaCalls counts how many times applySchema has actually run DDL.
 // Tests use it to assert that opening an already-current store takes the

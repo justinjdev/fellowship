@@ -391,6 +391,13 @@ func runInit(d *db.DB, args []string) int {
 			// were skipped.
 			recordSkipped = movePhase
 			existing.AutoApproveGates = autoApprove
+			// Record which session is working this quest. It is what lets
+			// `state init --claim-lead` refuse a session that is already a
+			// teammate; a session that cannot be identified records nothing
+			// and leaves that check to gate-guard.
+			if sid := state.CurrentSessionID(); sid != "" {
+				existing.SessionID = sid
+			}
 			if err := state.Upsert(conn, existing); err != nil {
 				return err
 			}
@@ -401,6 +408,7 @@ func runInit(d *db.DB, args []string) int {
 				QuestName:        qn,
 				Phase:            initPhase,
 				AutoApproveGates: autoApprove,
+				SessionID:        state.CurrentSessionID(),
 			}
 			if err := state.Upsert(conn, s); err != nil {
 				return err

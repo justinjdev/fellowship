@@ -75,17 +75,32 @@ func GateGuard(s *state.State, input *HookInput, p GuardParams) HookResult {
 		}
 	}
 
-	// `fellowship init --phase X` / `--plan-skip` rewrites the phase of an
-	// existing quest row, which walks a quest past every gate it has not
-	// passed. Only the lead may move a phase (runInit enforces the same rule),
-	// so the Bash form is refused here before it ever reaches the CLI.
-	if requested, ok := InitPhaseRequest(input.ToolInput.Command); ok &&
-		requested != s.Phase && !IsLeadSession(input.SessionID, p.LeadSessionID) {
-		return HookResult{
-			Block: true,
-			Message: fmt.Sprintf(
-				"Only the lead may move a quest's phase: \"fellowship init\" with --phase/--plan-skip would take this quest from %s to %s without a gate. Submit this phase's gate and wait for the lead instead.",
-				s.Phase, requested),
+	// Lead-only CLI commands. GateGuard runs only where a quest row was
+	// resolved — that is, inside a registered quest worktree — so any
+	// `fellowship state ...` here is a teammate reaching for the lead's own
+	// command set, and `fellowship init --phase/--plan-skip` is a phase move,
+	// which is a gate decision. Both are refused before they reach the CLI.
+	if inv, ok := LeadOnlyCommand(input.ToolInput.Command); ok &&
+		!IsLeadSession(input.SessionID, p.LeadSessionID) {
+		switch inv.Subcommand {
+		case "state":
+			return HookResult{
+				Block: true,
+				Message: fmt.Sprintf(
+					"\"fellowship state %s\" is a lead command and this is a quest worktree. `state init` records which session is the lead, so running it here would make this teammate the lead and lock the real one out. Ask the lead to run it.",
+					strings.TrimSpace(inv.Detail)),
+			}
+		case "init":
+			// Re-running init for the phase the quest is already in moves
+			// nothing, so it is not a gate decision.
+			if inv.Detail != s.Phase {
+				return HookResult{
+					Block: true,
+					Message: fmt.Sprintf(
+						"Only the lead may move a quest's phase: \"fellowship init\" with --phase/--plan-skip would take this quest from %s to %s without a gate. Submit this phase's gate and wait for the lead instead.",
+						s.Phase, inv.Detail),
+				}
+			}
 		}
 	}
 
@@ -221,52 +236,6 @@ func isLegacyWorktreePath(path string) bool {
 		strings.Contains(normalized, "/.claude/worktrees/")
 }
 
-// InitPhaseRequest reports the phase a Bash command asks `fellowship init` to
-// put the quest in, and whether the command asks for a phase at all.
-//
-// Unlike the escape allowlist this scans the whole command line rather than
-// only its first word: "cd wt && fellowship init --phase Implement" is the same
-// attempt as the bare form, and a detector that only looked at fields[0] would
-// wave the chained one through. --plan-skip implies Implement, exactly as
-// runInit resolves it.
-//
-// The line is split with shellFields, not strings.Fields, so a quoted argument
-// stays one token: a command NAMED inside a message (`git commit -m "fellowship
-// init --phase Implement"`) never looks like a command being RUN, and a quoted
-// binary that IS being run (`"$HOME/.claude/fellowship/bin/fellowship" init
-// --phase Implement`) is not waved through for carrying a quote.
-func InitPhaseRequest(command string) (string, bool) {
-	fields := shellFields(command)
-	for i := 0; i+1 < len(fields); i++ {
-		if !isFellowshipBinary(fields[i]) || fields[i+1] != "init" {
-			continue
-		}
-		phase, planSkip := "", false
-		for j := i + 2; j < len(fields); j++ {
-			arg := fields[j]
-			switch {
-			case arg == "--plan-skip" || arg == "-plan-skip":
-				planSkip = true
-			case arg == "--phase" || arg == "-phase":
-				if j+1 < len(fields) {
-					phase = fields[j+1]
-				}
-			case strings.HasPrefix(arg, "--phase="):
-				phase = strings.TrimPrefix(arg, "--phase=")
-			case strings.HasPrefix(arg, "-phase="):
-				phase = strings.TrimPrefix(arg, "-phase=")
-			}
-		}
-		if phase == "" && planSkip {
-			phase = PlanSkipPhase
-		}
-		if phase != "" {
-			return phase, true
-		}
-	}
-	return "", false
-}
-
 // IsStoreUpgradeCommand reports whether a Bash command is one that can bring an
 // out-of-date store up to date without being able to change quest state.
 //
@@ -288,9 +257,14 @@ func IsStoreUpgradeCommand(command string) bool {
 }
 
 // isFellowshipBinary reports whether a command-line token names the fellowship
-// CLI: the bare name, or any path ending in it.
+// CLI: the bare name or any path ending in it, and the wrapper script the
+// plugin ships (fellowship.sh), which execs the same binary.
 func isFellowshipBinary(token string) bool {
-	return token == "fellowship" || strings.HasSuffix(token, "/fellowship")
+	base := token
+	if i := strings.LastIndex(base, "/"); i >= 0 {
+		base = base[i+1:]
+	}
+	return base == "fellowship" || base == "fellowship.sh"
 }
 
 // shellFields splits a command line on whitespace that is OUTSIDE quotes,

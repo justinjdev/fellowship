@@ -103,6 +103,8 @@ func runStateInit(d *db.DB, args []string) int {
 	}
 	fmt.Printf("Fellowship %q initialized\n", *name)
 
+	leadAlreadyRecorded := false
+
 	// Record which Claude Code session this is. The main working tree is the
 	// lead's own workspace, so worktree-guard needs to know which session may
 	// write there; nothing in the git topology distinguishes the lead from a
@@ -111,12 +113,25 @@ func runStateInit(d *db.DB, args []string) int {
 	// so a marker there was forgeable by the sessions it identified.
 	// Best-effort — without a recorded lead the guard falls back to its
 	// narrower rule.
+	//
+	// A lead that is ALREADY recorded is not overwritten. `state init` was a
+	// second door into the lead row: re-running it — which the skill does on
+	// every `/fellowship`, and which any session can do — silently re-recorded
+	// whoever ran it. Re-recording is `--claim-lead`'s job, and it says so.
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
+		if _, found, err := state.ReadLead(conn); err == nil && found {
+			leadAlreadyRecorded = true
+			return nil
+		}
 		return state.RecordLead(conn, root, state.CurrentSessionID())
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: warning: could not record the lead session: %v\n", err)
 	}
-	warnNoSessionID()
+	if leadAlreadyRecorded {
+		fmt.Fprintln(os.Stderr, "fellowship: a lead session is already recorded for this repo and was left alone. If this session is the lead, run \"fellowship state init --claim-lead\" from the main working tree.")
+	} else {
+		warnNoSessionID()
+	}
 
 	// Register the worktree-guard hook in the project's .claude/settings.local.json.
 	// Teammate sessions do NOT inherit plugin hooks, so this settings file is
@@ -150,6 +165,28 @@ func sessionInMainWorktree(mainRoot string) bool {
 // changing nothing else. `fellowship state init --claim-lead`.
 func claimLeadSession(d *db.DB, root string) int {
 	session := state.CurrentSessionID()
+
+	// A session that is already working a quest is a teammate, and a teammate
+	// may not name itself the lead — that is the forgery the lead row moved
+	// into SQLite to stop, and --claim-lead is the one CLI door back into it.
+	// The id comes from quest_state, recorded when the quest ran `fellowship
+	// init`; a fellowship whose teammates had no session id in their
+	// environment records none, and gate-guard's refusal of lead commands from
+	// a quest worktree carries the case instead.
+	isTeammate := false
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		isTeammate, err = state.SessionIsTeammate(conn, session)
+		return err
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: could not check this session against the registered quests (%v) — refusing to record it as the lead.\n", err)
+		return 1
+	}
+	if isTeammate {
+		fmt.Fprintf(os.Stderr, "fellowship: this session (%s) is recorded as a quest teammate, so it cannot also be the fellowship's lead. Run --claim-lead from the lead's own session.\n", session)
+		return 1
+	}
+
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		return state.RecordLead(conn, root, session)
 	}); err != nil {
