@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -228,38 +229,32 @@ func isLegacyWorktreePath(path string) bool {
 // attempt as the bare form, and a detector that only looked at fields[0] would
 // wave the chained one through. --plan-skip implies Implement, exactly as
 // runInit resolves it.
+//
+// The line is split with shellFields, not strings.Fields, so a quoted argument
+// stays one token: a command NAMED inside a message (`git commit -m "fellowship
+// init --phase Implement"`) never looks like a command being RUN, and a quoted
+// binary that IS being run (`"$HOME/.claude/fellowship/bin/fellowship" init
+// --phase Implement`) is not waved through for carrying a quote.
 func InitPhaseRequest(command string) (string, bool) {
-	fields := strings.Fields(command)
+	fields := shellFields(command)
 	for i := 0; i+1 < len(fields); i++ {
-		// A token that OPENS a quote is text inside an argument, not a command
-		// being run: `git commit -m "fellowship init --phase Implement"` names
-		// the command in a message, and blocking it refuses a write nobody
-		// asked for. A chained command (`cd wt && fellowship init ...`) is
-		// still caught — its binary carries no leading quote.
-		if strings.HasPrefix(fields[i], `"`) || strings.HasPrefix(fields[i], `'`) {
-			continue
-		}
-		bin := strings.Trim(fields[i], `"'`)
-		if bin != "fellowship" && !strings.HasSuffix(bin, "/fellowship") {
-			continue
-		}
-		if fields[i+1] != "init" {
+		if !isFellowshipBinary(fields[i]) || fields[i+1] != "init" {
 			continue
 		}
 		phase, planSkip := "", false
 		for j := i + 2; j < len(fields); j++ {
-			arg := strings.Trim(fields[j], `"'`)
+			arg := fields[j]
 			switch {
 			case arg == "--plan-skip" || arg == "-plan-skip":
 				planSkip = true
 			case arg == "--phase" || arg == "-phase":
 				if j+1 < len(fields) {
-					phase = strings.Trim(fields[j+1], `"'`)
+					phase = fields[j+1]
 				}
 			case strings.HasPrefix(arg, "--phase="):
-				phase = strings.Trim(strings.TrimPrefix(arg, "--phase="), `"'`)
+				phase = strings.TrimPrefix(arg, "--phase=")
 			case strings.HasPrefix(arg, "-phase="):
-				phase = strings.Trim(strings.TrimPrefix(arg, "-phase="), `"'`)
+				phase = strings.TrimPrefix(arg, "-phase=")
 			}
 		}
 		if phase == "" && planSkip {
@@ -270,6 +265,90 @@ func InitPhaseRequest(command string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// IsStoreUpgradeCommand reports whether a Bash command is the `fellowship init`
+// (or `fellowship state init`) that brings an out-of-date store up to date.
+//
+// Hooks refuse to migrate, so an out-of-date store makes every gate hook block
+// until someone runs `fellowship init`. gate-guard gates Bash, so a blanket
+// refusal would deny the only way out of itself and freeze every session in the
+// repo. This is the one command the block lets through. Shell metacharacters
+// are rejected for the same reason isFellowshipEscapeCommand rejects them:
+// nothing may be chained onto the allowance.
+func IsStoreUpgradeCommand(command string) bool {
+	trimmed := strings.TrimSpace(command)
+	if trimmed == "" ||
+		strings.ContainsAny(trimmed, ";&|<>\n\r`") ||
+		strings.Contains(trimmed, "$(") {
+		return false
+	}
+	// The allowance is for the upgrade, not for a phase move riding along on
+	// it. runInit refuses the move anyway, but the guard has no reason to hand
+	// it the chance.
+	if _, movesPhase := InitPhaseRequest(trimmed); movesPhase {
+		return false
+	}
+	fields := shellFields(trimmed)
+	if len(fields) < 2 || !isFellowshipBinary(fields[0]) {
+		return false
+	}
+	if fields[1] == "init" {
+		return true
+	}
+	return fields[1] == "state" && len(fields) > 2 && fields[2] == "init"
+}
+
+// isFellowshipBinary reports whether a command-line token names the fellowship
+// CLI: the bare name, or any path ending in it.
+func isFellowshipBinary(token string) bool {
+	return token == "fellowship" || strings.HasSuffix(token, "/fellowship")
+}
+
+// shellFields splits a command line on whitespace that is OUTSIDE quotes,
+// keeping a quoted run as part of the token it appears in and dropping the
+// quote characters themselves.
+//
+// It is not a shell parser — escapes, substitutions and variable expansion are
+// left alone — but it is exactly enough to tell a command being RUN from a
+// command merely NAMED inside an argument. strings.Fields cannot: it splits
+// `-m "fellowship init --phase Implement"` into tokens that read as an
+// invocation, and the leading-quote heuristic that papered over that also
+// skipped a genuinely quoted binary path.
+func shellFields(command string) []string {
+	var (
+		fields []string
+		cur    strings.Builder
+		inTok  bool
+		quote  rune
+	)
+	flush := func() {
+		if inTok {
+			fields = append(fields, cur.String())
+			cur.Reset()
+			inTok = false
+		}
+	}
+	for _, r := range command {
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			} else {
+				cur.WriteRune(r)
+			}
+		case r == '\'' || r == '"':
+			quote = r
+			inTok = true
+		case unicode.IsSpace(r):
+			flush()
+		default:
+			cur.WriteRune(r)
+			inTok = true
+		}
+	}
+	flush()
+	return fields
 }
 
 // PlanSkipPhase is the phase `fellowship init --plan-skip` starts a quest in:
@@ -302,8 +381,7 @@ func isFellowshipEscapeCommand(command string) bool {
 		return false
 	}
 	// Accept bare "fellowship" or any path ending in "/fellowship".
-	bin := fields[0]
-	if bin != "fellowship" && !strings.HasSuffix(bin, "/fellowship") {
+	if !isFellowshipBinary(fields[0]) {
 		return false
 	}
 	// Allowlist of subcommands safe to run during gate_pending. Both the

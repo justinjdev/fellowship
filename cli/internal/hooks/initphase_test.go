@@ -32,11 +32,51 @@ func TestInitPhaseRequest(t *testing.T) {
 		// must not be mistaken for the command it quotes.
 		{command: `git commit -m "fellowship init --phase Implement"`, wantOK: false},
 		{command: `grep -rn 'fellowship init --phase Review' docs`, wantOK: false},
+		// The quote is around the binary being RUN, not around a message
+		// naming it: a leading-quote test alone waved these through.
+		{command: `'fellowship' init --phase Implement`, want: "Implement", wantOK: true},
+		{command: `"$HOME/.claude/fellowship/bin/fellowship" init --plan-skip`, want: "Implement", wantOK: true},
+		// ...and the quote opens earlier in the argument, so the binary name
+		// itself carries none. Still only a message.
+		{command: `git commit -m 'ran fellowship init --phase Implement'`, wantOK: false},
 	}
 	for _, c := range cases {
 		got, ok := InitPhaseRequest(c.command)
 		if ok != c.wantOK || got != c.want {
 			t.Errorf("InitPhaseRequest(%q) = (%q, %v), want (%q, %v)", c.command, got, ok, c.want, c.wantOK)
+		}
+	}
+}
+
+// An out-of-date store blocks every gate hook until `fellowship init` upgrades
+// it — and gate-guard gates Bash, so that one command has to get through or the
+// block denies its own remedy.
+func TestIsStoreUpgradeCommand(t *testing.T) {
+	cases := []struct {
+		command string
+		want    bool
+	}{
+		{"fellowship init", true},
+		{"fellowship init --quest alpha", true},
+		{"fellowship state init --name f", true},
+		{"/usr/local/bin/fellowship init", true},
+		{`"$HOME/.claude/fellowship/bin/fellowship" init`, true},
+		// Not the upgrade.
+		{"fellowship status", false},
+		{"fellowship state show", false},
+		{"fellowship", false},
+		{"", false},
+		{"git init", false},
+		// Nothing may ride along on the allowance.
+		{"fellowship init && rm -rf .fellowship", false},
+		{"fellowship init; echo done", false},
+		{"fellowship init $(whoami)", false},
+		{"fellowship init --phase Implement", false},
+		{"fellowship init --plan-skip", false},
+	}
+	for _, c := range cases {
+		if got := IsStoreUpgradeCommand(c.command); got != c.want {
+			t.Errorf("IsStoreUpgradeCommand(%q) = %v, want %v", c.command, got, c.want)
 		}
 	}
 }

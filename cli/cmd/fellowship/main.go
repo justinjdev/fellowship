@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/hooks"
 )
 
 var version = "dev"
@@ -171,6 +172,20 @@ var readOnlyHooks = map[string]bool{
 	"worktree-guard": true,
 }
 
+// pendingToolUpgradesStore reports whether the tool call this hook is deciding
+// on is the `fellowship init` that would bring an out-of-date store up to date.
+//
+// It consumes stdin, which is safe only because every caller exits immediately
+// afterwards: the payload is never needed again. A payload that will not parse,
+// or a tool that is not Bash, reads as "not the upgrade" and the block stands.
+func pendingToolUpgradesStore() bool {
+	input, err := hooks.ParseInput(os.Stdin)
+	if err != nil || input == nil || input.ToolName != "Bash" {
+		return false
+	}
+	return hooks.IsStoreUpgradeCommand(input.ToolInput.Command)
+}
+
 func openStore(cwd string, args []string) (*db.DB, error) {
 	if storeCreatingCommand(args) {
 		return db.Open(cwd)
@@ -210,7 +225,7 @@ func storeOpenExit(cwd string, args []string, err error) int {
 	if errors.Is(err, db.ErrNoStore) || errors.Is(err, db.ErrEmptyStore) {
 		if fellowshipExpected(cwd) {
 			if isGateHook(hookName) {
-				fmt.Fprintln(os.Stderr, "fellowship: store missing or empty — restore it or run \"fellowship state init\". Blocking for safety.")
+				fmt.Fprintln(os.Stderr, "fellowship: store missing or empty — restore it, or run \"fellowship state init\" from a terminal outside this session (this hook blocks the session's own tool calls). Blocking for safety.")
 				return 2
 			}
 			if isHook {
@@ -232,8 +247,17 @@ func storeOpenExit(cwd string, args []string, err error) int {
 
 	if errors.Is(err, db.ErrSchemaOutOfDate) {
 		// A hook found a store written by an older binary. Upgrading it is
-		// `init`'s job, not a decision hook's, so say what to run.
+		// `init`'s job, not a decision hook's, so say what to run — and let
+		// that one command through. gate-guard gates Bash, so a blanket block
+		// would deny the only way out of itself: after any binary upgrade every
+		// tool call in the repo would be refused, including the `fellowship
+		// init` the refusal asks for. An out-of-date store is a stale store,
+		// not a tampered one, so this is the one place the block yields.
 		if isGateHook(hookName) {
+			if hookName == "gate-guard" && pendingToolUpgradesStore() {
+				fmt.Fprintln(os.Stderr, `fellowship: the store is out of date — allowing this command to upgrade it.`)
+				return 0
+			}
 			fmt.Fprintln(os.Stderr, `fellowship: the store is out of date — run "fellowship init" to upgrade. Blocking for safety.`)
 			return 2
 		}

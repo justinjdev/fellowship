@@ -21,7 +21,7 @@ func TestUnregisteredQuestWorktree_TracksLiveQuests(t *testing.T) {
 	d := fellowshipWith(t, root, map[string]string{"quest-live-beta": worktree})
 
 	// A live quest: the stray worktree is a teammate somewhere it should not be.
-	if !unregisteredQuestWorktree(context.Background(), d, stray, stray) {
+	if !unregisteredQuestWorktree(context.Background(), d, stray, stray, "") {
 		t.Error("a stray worktree during a live fellowship should block")
 	}
 	if got := runHookWith("gate-guard", bashInput("ls"), stray, d); got != 2 {
@@ -34,7 +34,7 @@ func TestUnregisteredQuestWorktree_TracksLiveQuests(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if unregisteredQuestWorktree(context.Background(), d, stray, stray) {
+	if unregisteredQuestWorktree(context.Background(), d, stray, stray, "") {
 		t.Error("no quest is live: an unrelated worktree must not be blocked")
 	}
 	if got := runHookWith("gate-guard", bashInput("ls"), stray, d); got != 0 {
@@ -42,7 +42,7 @@ func TestUnregisteredQuestWorktree_TracksLiveQuests(t *testing.T) {
 	}
 
 	// The main tree is never this rule's business.
-	if unregisteredQuestWorktree(context.Background(), d, root, root) {
+	if unregisteredQuestWorktree(context.Background(), d, root, root, "") {
 		t.Error("the main tree must never read as an unregistered worktree")
 	}
 }

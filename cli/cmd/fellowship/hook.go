@@ -94,7 +94,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 		// means a teammate is somewhere no quest is registered — enforcement
 		// cannot be evaluated there, so gate hooks block instead of waving it
 		// through as if it were the lead.
-		if isGateHook(name) && unregisteredQuestWorktree(ctx, d, cwd, gitRoot) {
+		if isGateHook(name) && unregisteredQuestWorktree(ctx, d, cwd, gitRoot, mainRoot) {
 			fmt.Fprintf(os.Stderr, "fellowship: worktree %s has no registered quest while a fellowship is running — blocking for safety. The lead can register it with \"fellowship state update-quest --name <quest> --worktree %s\".\n", gitRoot, gitRoot)
 			return 2
 		}
@@ -398,10 +398,15 @@ func mainRootOrEmpty(ctx context.Context, dir string) string {
 // is never deleted, so "a row exists" is sticky: it made every linked worktree
 // of the repo unusable forever after one `state init`, long after the last
 // quest had merged.
-func unregisteredQuestWorktree(ctx context.Context, d *db.DB, cwd, gitRoot string) bool {
-	mainRoot, err := gitutil.MainRepoRootContext(ctx, cwd)
-	if err != nil {
-		return false
+// mainRoot is the caller's already-resolved main repo root; "" means it could
+// not resolve one, and this function resolves it from cwd itself rather than
+// spending a second `git rev-parse` on a path the caller already walked.
+func unregisteredQuestWorktree(ctx context.Context, d *db.DB, cwd, gitRoot, mainRoot string) bool {
+	if mainRoot == "" {
+		var err error
+		if mainRoot, err = gitutil.MainRepoRootContext(ctx, cwd); err != nil {
+			return false
+		}
 	}
 	if hooks.CanonicalPath(mainRoot) == hooks.CanonicalPath(gitRoot) {
 		return false // the main tree — this really is the lead session
@@ -475,6 +480,15 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 	}
 	filePath = hooks.CanonicalPath(filePath)
 
+	// Resolving the target's own working tree costs a git subprocess, and this
+	// guard fires on every Edit/Write inside a 5s budget. Spend it only when
+	// the guard can actually reach the comparison it feeds: with no fellowship
+	// running, or no target file, IsolationGuard returns before looking at it.
+	targetTop := ""
+	if active && filePath != "" {
+		targetTop = targetTopLevel(ctx, filePath)
+	}
+
 	// Canonicalize all paths so symlinked repo roots (e.g. macOS /tmp ->
 	// /private/tmp) don't defeat the main-root comparison. `git --show-toplevel`
 	// returns a resolved path; the cwd-derived main root does not.
@@ -482,7 +496,7 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 		FellowshipActive:         active,
 		MainRoot:                 hooks.CanonicalPath(mainRoot),
 		SessionTopLevel:          sessionTop,
-		TargetTopLevel:           targetTopLevel(ctx, filePath),
+		TargetTopLevel:           targetTop,
 		ToolName:                 input.ToolName,
 		FilePath:                 filePath,
 		DataDirName:              dataDirName,
