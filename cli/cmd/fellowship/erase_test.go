@@ -98,6 +98,43 @@ func TestStoreOpen_PlainRepoStillAllows(t *testing.T) {
 	}
 }
 
+// A fresh clone of a repo that COMMITS .fellowship/config.json (the documented
+// team-shared project config; the rest of the directory is git-ignored) has a
+// data directory and no store, and no fellowship has ever run in it. Blocking
+// there would refuse every Edit/Write/Bash in the repo until somebody ran
+// `fellowship state init`.
+func TestStoreOpen_CommittedProjectConfigIsNotAFellowship(t *testing.T) {
+	root := newMainRepo(t)
+	t.Setenv("HOME", t.TempDir())
+	if err := os.MkdirAll(filepath.Join(root, ".fellowship"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(root, ".fellowship", "config.json")
+	if err := os.WriteFile(config, []byte(`{"gates":{"autoApprove":[]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	d, err := openStore(root, []string{"hook", "gate-guard"})
+	if err == nil {
+		d.Close()
+		t.Fatal("expected a no-store error")
+	}
+	for _, name := range []string{"gate-guard", "gate-submit", "file-track"} {
+		if got := storeOpenExit(root, []string{"hook", name}, err); got != 0 {
+			t.Errorf("%s in a clone with only the project config: exit %d, want 0 (allow)", name, got)
+		}
+	}
+
+	// Anything else in the data directory is a fellowship's leftovers, and the
+	// missing store is then a destroyed store.
+	if err := os.WriteFile(filepath.Join(root, ".fellowship", "checkpoint.md"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := storeOpenExit(root, []string{"hook", "gate-guard"}, err); got != 2 {
+		t.Errorf("gate-guard with a fellowship's leftovers and no store: exit %d, want 2 (block)", got)
+	}
+}
+
 // --- missing quest row ------------------------------------------------------
 
 // A missing quest_state row is the bootstrap window — until the quest has done

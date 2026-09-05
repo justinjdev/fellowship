@@ -55,6 +55,15 @@ func runHook(d *db.DB, name string) int {
 func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 	ctx, cancel := context.WithTimeout(context.Background(), hookDBTimeout)
 	defer cancel()
+	// Worktree isolation guard: self-contained, independent of quest state.
+	// Runs in teammate sessions (inherited via project settings), so it must
+	// not depend on quest lookup keyed to this worktree. It resolves the roots
+	// it needs itself, so nothing above may spend a git call on its behalf —
+	// this guard fires on every Edit/Write inside a 5s budget.
+	if name == "worktree-guard" {
+		return runWorktreeGuard(ctx, d, cwd, stdin)
+	}
+
 	gitRoot := gitRootFrom(ctx, cwd)
 	// Every path decision keys off the MAIN repo root, the same way the store
 	// path does: the project config and the data directory live there, not in
@@ -62,13 +71,6 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 	// cannot answer, and datadir.Resolve falls back to the user config.
 	mainRoot := mainRootOrEmpty(ctx, cwd)
 	dataDirName := datadir.Resolve(mainRoot)
-
-	// Worktree isolation guard: self-contained, independent of quest state.
-	// Runs in teammate sessions (inherited via project settings), so it must
-	// not depend on quest lookup keyed to this worktree.
-	if name == "worktree-guard" {
-		return runWorktreeGuard(ctx, d, cwd, stdin)
-	}
 
 	// Find quest name for this worktree.
 	var questName string

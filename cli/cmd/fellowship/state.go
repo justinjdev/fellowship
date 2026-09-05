@@ -158,6 +158,13 @@ func warnNoSessionID() {
 // session's source writes in the main tree, and the fix — re-recording the lead
 // — is not something anyone would guess. Hooks are exempt (they decide, they do
 // not advise) and so are the commands that would fix it.
+//
+// It is said only while a fellowship is actually RUNNING, the same predicate
+// worktree-guard arms itself with: the lead row outlives the fellowship, so
+// without that check every command in the main tree announced a refusal the
+// guard would never make, forever after the last quest merged. The store read
+// comes first for the same reason — it answers "is there anything to say"
+// before the second git call is spent.
 func noticeLeadMismatch(d *db.DB, cwd string, args []string) {
 	if len(args) == 0 || args[0] == "hook" || storeCreatingCommand(args) {
 		return
@@ -171,18 +178,24 @@ func noticeLeadMismatch(d *db.DB, cwd string, args []string) {
 	if err != nil {
 		return
 	}
-	if hooks.CanonicalPath(gitRootFrom(ctx, cwd)) != hooks.CanonicalPath(mainRoot) {
-		return // not in the main tree; this is a teammate's worktree
-	}
 	lead := ""
+	running := false
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		lead = state.LeadSessionID(conn, mainRoot, datadir.Resolve(mainRoot))
+		fs, err := fellowship.LoadFellowship(conn)
+		if err != nil {
+			return nil
+		}
+		running = fellowshipRunning(fs)
 		return nil
 	}); err != nil {
 		return
 	}
-	if lead == "" || lead == session {
+	if !running || lead == "" || lead == session {
 		return
+	}
+	if hooks.CanonicalPath(gitRootFrom(ctx, cwd)) != hooks.CanonicalPath(mainRoot) {
+		return // not in the main tree; this is a teammate's worktree
 	}
 	fmt.Fprintln(os.Stderr, "fellowship: this session is not the fellowship's recorded lead, so worktree-guard will refuse its source writes in the main tree. If this session IS the lead, re-record it with \"fellowship state init --claim-lead\".")
 }

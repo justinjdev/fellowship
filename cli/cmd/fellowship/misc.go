@@ -263,21 +263,50 @@ func checkDir(dir string) error {
 }
 
 // fellowshipExpected reports whether the repo containing fromDir is supposed to
-// have a fellowship store: its main worktree has a fellowship data directory.
+// have a fellowship store: its main worktree has a fellowship data directory
+// that something other than a git checkout put there.
 //
 // That is the difference between "an ordinary repo, nothing to enforce" and "a
 // fellowship whose store went missing". Deleting <data-dir>/fellowship.db was
 // the cheapest way to switch enforcement off — every hook read "no store here"
 // and allowed. The data directory is left behind by everything else the
 // fellowship writes, so its presence says a fellowship was expected here.
+//
+// The one exception is projectConfigName: the data directory is git-ignored
+// except for that file, which teams commit to share settings (see the README).
+// A fresh clone of such a repo therefore has a data directory holding nothing
+// but the config, and no fellowship has ever run in it — blocking there would
+// refuse every tool call in a repo nobody has initialized. An EMPTY data
+// directory is still evidence, because git never checks one out: only the CLI
+// (or a person) creates it.
 func fellowshipExpected(fromDir string) bool {
 	mainRepo, err := gitutil.MainRepoRoot(fromDir)
 	if err != nil {
 		return false
 	}
-	info, err := os.Stat(filepath.Join(mainRepo, datadir.Resolve(mainRepo)))
-	return err == nil && info.IsDir()
+	dir := filepath.Join(mainRepo, datadir.Resolve(mainRepo))
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return true // present but unreadable — assume a fellowship was here
+	}
+	if len(entries) == 0 {
+		return true
+	}
+	for _, e := range entries {
+		if e.Name() != projectConfigName {
+			return true
+		}
+	}
+	return false // only the committable project config: a clone, not a fellowship
 }
+
+// projectConfigName is the one file inside the data directory that a repo
+// commits (README: `.fellowship/` is git-ignored except `!.fellowship/config.json`).
+const projectConfigName = "config.json"
 
 // jsonFilesExist checks whether legacy JSON state files exist in the .fellowship
 // directory, indicating a migration is needed.

@@ -144,7 +144,16 @@ func readConfigFile(path string) cfg {
 // gitRootFunc is the function used to find the git repository root.
 // It is a variable so tests can override it without spawning a subprocess.
 var gitRootFunc = func() (string, error) {
-	return gitutil.MainRepoRoot("")
+	// The working directory has to be named explicitly: `git rev-parse
+	// --git-common-dir` answers relatively in the main worktree (".git"), and
+	// MainRepoRoot can only absolutize that against the directory it was given.
+	// Passing "" made it return "." — a root that is only correct for as long
+	// as the process never changes directory.
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	return gitutil.MainRepoRoot(cwd)
 }
 
 func gitRoot() (string, error) {

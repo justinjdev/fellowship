@@ -28,6 +28,10 @@ func TestInitPhaseRequest(t *testing.T) {
 		{command: "fellowship status", wantOK: false},
 		{command: "", wantOK: false},
 		{command: "fellowship gate approve", wantOK: false},
+		// Named inside a quoted argument, not run: a commit message or an echo
+		// must not be mistaken for the command it quotes.
+		{command: `git commit -m "fellowship init --phase Implement"`, wantOK: false},
+		{command: `grep -rn 'fellowship init --phase Review' docs`, wantOK: false},
 	}
 	for _, c := range cases {
 		got, ok := InitPhaseRequest(c.command)

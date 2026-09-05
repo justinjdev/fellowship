@@ -231,6 +231,14 @@ func isLegacyWorktreePath(path string) bool {
 func InitPhaseRequest(command string) (string, bool) {
 	fields := strings.Fields(command)
 	for i := 0; i+1 < len(fields); i++ {
+		// A token that OPENS a quote is text inside an argument, not a command
+		// being run: `git commit -m "fellowship init --phase Implement"` names
+		// the command in a message, and blocking it refuses a write nobody
+		// asked for. A chained command (`cd wt && fellowship init ...`) is
+		// still caught — its binary carries no leading quote.
+		if strings.HasPrefix(fields[i], `"`) || strings.HasPrefix(fields[i], `'`) {
+			continue
+		}
 		bin := strings.Trim(fields[i], `"'`)
 		if bin != "fellowship" && !strings.HasSuffix(bin, "/fellowship") {
 			continue
