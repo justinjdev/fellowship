@@ -37,14 +37,14 @@ func NewServer(d *db.DB, pollInterval int) *Server {
 		pollInterval: pollInterval,
 	}
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
-	s.mux.HandleFunc("GET /api/eagles", s.handleEagles)
-	s.mux.HandleFunc("GET /api/herald", s.handleHerald)
-	s.mux.HandleFunc("GET /api/herald/problems", s.handleProblems)
+	s.mux.HandleFunc("GET /api/health", s.handleHealth)
+	s.mux.HandleFunc("GET /api/events", s.handleEvents)
+	s.mux.HandleFunc("GET /api/events/problems", s.handleProblems)
 	s.mux.HandleFunc("POST /api/gate/approve", s.handleGateApprove)
 	s.mux.HandleFunc("POST /api/gate/reject", s.handleGateReject)
-	s.mux.HandleFunc("POST /api/company/", s.handleCompanyApprove)
-	s.mux.HandleFunc("GET /api/errand/", s.handleErrand)
-	s.mux.HandleFunc("GET /api/bulletin", s.handleBulletin)
+	s.mux.HandleFunc("POST /api/group/", s.handleGroupApprove)
+	s.mux.HandleFunc("GET /api/todo/", s.handleTodo)
+	s.mux.HandleFunc("GET /api/notes", s.handleNotes)
 
 	staticFS, _ := iofs.Sub(staticFiles, "static")
 	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
@@ -242,22 +242,22 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
-	// Extract company name from path: /api/company/<name>/approve
-	path := strings.TrimPrefix(r.URL.Path, "/api/company/")
+func (s *Server) handleGroupApprove(w http.ResponseWriter, r *http.Request) {
+	// Extract group name from path: /api/group/<name>/approve
+	path := strings.TrimPrefix(r.URL.Path, "/api/group/")
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) != 2 || parts[1] != "approve" || parts[0] == "" {
-		http.Error(w, "usage: POST /api/company/<name>/approve", http.StatusBadRequest)
+		http.Error(w, "usage: POST /api/group/<name>/approve", http.StatusBadRequest)
 		return
 	}
 	name := parts[0]
 
-	type companyApproveResponse struct {
+	type groupApproveResponse struct {
 		Approved []string `json:"approved"`
 		Errors   []string `json:"errors,omitempty"`
 	}
 
-	var resp companyApproveResponse
+	var resp groupApproveResponse
 	resp.Approved = []string{}
 
 	err := s.db.WithTx(context.Background(), func(conn *db.Conn) error {
@@ -274,7 +274,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if target == nil {
-			return fmt.Errorf("company not found: %s", name)
+			return fmt.Errorf("group not found: %s", name)
 		}
 
 		approved, errs := group.BatchApprove(conn, *target)
@@ -288,7 +288,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		if strings.HasPrefix(err.Error(), "company not found") {
+		if strings.HasPrefix(err.Error(), "group not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
 		} else {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -300,7 +300,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-func (s *Server) handleEagles(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	opts := health.DefaultOptions()
 	var report *health.HealthReport
 	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
@@ -316,9 +316,9 @@ func (s *Server) handleEagles(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(report)
 }
 
-func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
-	// Extract base64-encoded quest name from URL: /api/errand/<base64>
-	pathPart := strings.TrimPrefix(r.URL.Path, "/api/errand/")
+func (s *Server) handleTodo(w http.ResponseWriter, r *http.Request) {
+	// Extract base64-encoded quest name from URL: /api/todo/<base64>
+	pathPart := strings.TrimPrefix(r.URL.Path, "/api/todo/")
 	if pathPart == "" {
 		http.Error(w, "missing quest identifier", http.StatusBadRequest)
 		return
@@ -339,7 +339,7 @@ func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var errands []todo.Todo
+	var todos []todo.Todo
 	err = s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		questName, findErr := state.FindQuest(conn, dir)
 		if findErr != nil {
@@ -349,7 +349,7 @@ func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 		var listErr error
-		errands, listErr = todo.List(conn, questName)
+		todos, listErr = todo.List(conn, questName)
 		return listErr
 	})
 	if err != nil {
@@ -357,13 +357,13 @@ func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if errands == nil {
-		http.Error(w, "no errand file found", http.StatusNotFound)
+	if todos == nil {
+		http.Error(w, "no todo file found", http.StatusNotFound)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(errands)
+	json.NewEncoder(w).Encode(todos)
 }
 
 func (s *Server) worktreeDirs() []string {
@@ -381,22 +381,22 @@ func (s *Server) worktreeDirs() []string {
 	return dirs
 }
 
-func (s *Server) handleHerald(w http.ResponseWriter, r *http.Request) {
-	var tidings []events.Event
+func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	var evts []events.Event
 	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
-		tidings, err = events.ReadAll(conn, 50)
+		evts, err = events.ReadAll(conn, 50)
 		return err
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if tidings == nil {
-		tidings = []events.Event{}
+	if evts == nil {
+		evts = []events.Event{}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tidings)
+	json.NewEncoder(w).Encode(evts)
 }
 
 func (s *Server) handleProblems(w http.ResponseWriter, r *http.Request) {
@@ -417,7 +417,7 @@ func (s *Server) handleProblems(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(problems)
 }
 
-func (s *Server) handleBulletin(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 	var entries []notes.Entry
 	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error

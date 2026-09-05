@@ -186,7 +186,7 @@ func TestAPIGateApprove_NoPending(t *testing.T) {
 	}
 }
 
-func TestAPIGateApprove_HeraldLogging(t *testing.T) {
+func TestAPIGateApprove_EventLogging(t *testing.T) {
 	d, worktreeDir := setupTestDB(t)
 	srv := NewServer(d, 5)
 
@@ -199,7 +199,7 @@ func TestAPIGateApprove_HeraldLogging(t *testing.T) {
 		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
 	}
 
-	// Read herald entries from DB
+	// Read event entries from DB
 	var tidings []events.Event
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		var err error
@@ -230,7 +230,7 @@ func TestAPIGateApprove_HeraldLogging(t *testing.T) {
 	}
 }
 
-func TestAPIGateReject_HeraldLogging(t *testing.T) {
+func TestAPIGateReject_EventLogging(t *testing.T) {
 	d, worktreeDir := setupTestDB(t)
 	srv := NewServer(d, 5)
 

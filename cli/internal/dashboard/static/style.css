@@ -289,28 +289,28 @@ main {
     display: none;
 }
 
-/* ── Errands ───────────────────────────────────── */
+/* ── Todos ───────────────────────────────────── */
 
-.errand-progress {
+.todo-progress {
     font-family: var(--font-body);
     font-size: 0.85rem;
     color: var(--gold-dim);
     margin-top: 0.5rem;
 }
 
-.errand-details {
+.todo-details {
     margin-top: 0.75rem;
     border-top: 1px solid rgba(58, 48, 40, 0.5);
     padding-top: 0.5rem;
 }
 
-.errand-item-list {
+.todo-item-list {
     list-style: none;
     font-size: 0.85rem;
     color: var(--text-secondary);
 }
 
-.errand-item-list li {
+.todo-item-list li {
     padding: 0.25rem 0;
 }
 
@@ -423,15 +423,15 @@ main {
     font-weight: 600;
 }
 
-/* ── Bulletin Board ────────────────────────────── */
+/* ── Notes Board ────────────────────────────── */
 
-#bulletin-section {
+#notes-section {
     max-width: 720px;
     margin: 2rem auto 0;
     display: none;
 }
 
-#bulletin-section h2 {
+#notes-section h2 {
     font-family: var(--font-heading);
     font-size: 1rem;
     font-weight: 600;
@@ -440,11 +440,11 @@ main {
     margin-bottom: 0.5rem;
 }
 
-.bulletin-topic-group {
+.notes-topic-group {
     margin-bottom: 0.75rem;
 }
 
-.bulletin-topic-header {
+.notes-topic-header {
     font-family: var(--font-heading);
     font-size: 0.85rem;
     font-weight: 600;
@@ -456,7 +456,7 @@ main {
     margin-bottom: 0.25rem;
 }
 
-.bulletin-item {
+.notes-item {
     padding: 0.3rem 0.5rem;
     border-bottom: 1px solid rgba(58, 48, 40, 0.5);
     border-left: 3px solid var(--gold-dim);
@@ -464,23 +464,23 @@ main {
     line-height: 1.5;
 }
 
-.bulletin-time {
+.notes-time {
     color: var(--text-secondary);
     margin-right: 0.3rem;
 }
 
-.bulletin-quest {
+.notes-quest {
     font-family: var(--font-heading);
     font-size: 0.8rem;
     color: var(--text-primary);
     margin-right: 0.3rem;
 }
 
-.bulletin-discovery {
+.notes-discovery {
     color: var(--text-primary);
 }
 
-.bulletin-files {
+.notes-files {
     display: block;
     font-size: 0.75rem;
     color: var(--text-secondary);

@@ -1,4 +1,4 @@
-// `fellowship autopsy ...`: post-mortem records and the scans over them.
+// `fellowship failures ...`: post-mortem records and the scans over them.
 package main
 
 import (
@@ -14,23 +14,23 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/failures"
 )
 
-func runAutopsy(d *db.DB, args []string) int {
+func runFailures(d *db.DB, args []string) int {
 	switch args[0] {
 	case "create":
-		return runAutopsyCreate(d, args[1:])
+		return runFailuresCreate(d, args[1:])
 	case "scan":
-		return runAutopsyScan(d, args[1:])
+		return runFailuresScan(d, args[1:])
 	case "infer":
-		return runAutopsyInfer(d, args[1:])
+		return runFailuresInfer(d, args[1:])
 	default:
-		fmt.Fprintf(os.Stderr, "unknown autopsy command: %s\n", args[0])
+		fmt.Fprintf(os.Stderr, "unknown failures command: %s\n", args[0])
 		return 1
 	}
 }
 
-func runAutopsyCreate(d *db.DB, args []string) int {
+func runFailuresCreate(d *db.DB, args []string) int {
 	ctx := context.Background()
-	fs := flag.NewFlagSet("autopsy create", flag.ExitOnError)
+	fs := flag.NewFlagSet("failures create", flag.ExitOnError)
 	dir := fs.String("dir", "", "Repo or worktree directory (default: current directory)")
 	fs.Parse(args)
 
@@ -56,17 +56,17 @@ func runAutopsyCreate(d *db.DB, args []string) int {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
-	fmt.Printf("Autopsy created (id=%d)\n", id)
+	fmt.Printf("Failure record created (id=%d)\n", id)
 	return 0
 }
 
-func runAutopsyScan(d *db.DB, args []string) int {
+func runFailuresScan(d *db.DB, args []string) int {
 	ctx := context.Background()
-	fs := flag.NewFlagSet("autopsy scan", flag.ExitOnError)
+	fs := flag.NewFlagSet("failures scan", flag.ExitOnError)
 	files := fs.String("files", "", "Comma-separated file paths to match")
 	modules := fs.String("modules", "", "Comma-separated module names to match")
 	tags := fs.String("tags", "", "Comma-separated tags to match")
-	all := fs.Bool("all", false, "Return every unexpired autopsy (ignores the other filters)")
+	all := fs.Bool("all", false, "Return every unexpired failure record (ignores the other filters)")
 	dir := fs.String("dir", "", "Repo or worktree directory (default: current directory)")
 	fs.Parse(args)
 
@@ -103,9 +103,9 @@ func runAutopsyScan(d *db.DB, args []string) int {
 	return 0
 }
 
-func runAutopsyInfer(d *db.DB, args []string) int {
+func runFailuresInfer(d *db.DB, args []string) int {
 	ctx := context.Background()
-	fs := flag.NewFlagSet("autopsy infer", flag.ExitOnError)
+	fs := flag.NewFlagSet("failures infer", flag.ExitOnError)
 	quest := fs.String("quest", "", "Quest name (default: the quest registered for --dir)")
 	dir := fs.String("dir", "", "Worktree directory (default: current directory)")
 	fs.Parse(args)
@@ -120,7 +120,7 @@ func runAutopsyInfer(d *db.DB, args []string) int {
 		questName = resolveDirQuest(d, *dir)
 	}
 	if questName == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship autopsy infer --quest <name> | --dir <worktree>")
+		fmt.Fprintln(os.Stderr, "usage: fellowship failures infer --quest <name> | --dir <worktree>")
 		return 1
 	}
 
@@ -133,6 +133,6 @@ func runAutopsyInfer(d *db.DB, args []string) int {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
-	fmt.Printf("Inferred autopsy created (id=%d)\n", id)
+	fmt.Printf("Inferred failure record created (id=%d)\n", id)
 	return 0
 }

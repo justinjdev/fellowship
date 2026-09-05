@@ -9,7 +9,7 @@
   let PHASES = FALLBACK_PHASES;
   let prevStatus = null;
   let pollTimer = null;
-  let eaglesData = null;
+  let healthData = null;
 
   // ── Bootstrap ──────────────────────────────────
 
@@ -17,10 +17,10 @@
     try {
       const data = await fetchStatus();
       if (data.phases && data.phases.length > 0) PHASES = data.phases;
-      eaglesData = await fetchEagles();
+      healthData = await fetchHealth();
       render(data);
-      await fetchAndRenderTidings();
-      await fetchAndRenderBulletin();
+      await fetchAndRenderEvents();
+      await fetchAndRenderNotes();
       await fetchAndRenderProblems();
       const interval = (data.poll_interval || 5) * 1000;
       pollTimer = setInterval(poll, interval);
@@ -35,9 +35,9 @@
     return res.json();
   }
 
-  async function fetchEagles() {
+  async function fetchHealth() {
     try {
-      const res = await fetch("/api/eagles");
+      const res = await fetch("/api/health");
       if (!res.ok) return null;
       return res.json();
     } catch (err) {
@@ -53,11 +53,11 @@
     try {
       const data = await fetchStatus();
       if (data.phases && data.phases.length > 0) PHASES = data.phases;
-      eaglesData = await fetchEagles();
+      healthData = await fetchHealth();
       detectChanges(data);
       render(data);
-      await fetchAndRenderTidings();
-      await fetchAndRenderBulletin();
+      await fetchAndRenderEvents();
+      await fetchAndRenderNotes();
       await fetchAndRenderProblems();
     } catch (err) {
       addActivity("Poll error: " + err.message);
@@ -82,28 +82,28 @@
     document.getElementById("quest-count").textContent = questCountText;
     document.getElementById("scout-count").textContent = scouts.length + " scout" + (scouts.length !== 1 ? "s" : "");
 
-    // Quest cards — group by company
+    // Quest cards — grouped
     const container = document.getElementById("quest-cards");
     container.innerHTML = "";
-    var companies = status.companies || [];
+    var groups = status.groups || [];
     var rendered = {};
 
-    companies.forEach(function (c) {
-      var companyQuests = activeQuests.filter(function (q) {
+    groups.forEach(function (c) {
+      var groupQuests = activeQuests.filter(function (q) {
         return c.quests && c.quests.indexOf(q.name) !== -1;
       });
-      var companyScouts = scouts.filter(function (s) {
+      var groupScouts = scouts.filter(function (s) {
         return c.scouts && c.scouts.indexOf(s.name) !== -1;
       });
-      if (companyQuests.length === 0 && companyScouts.length === 0) return;
+      if (groupQuests.length === 0 && groupScouts.length === 0) return;
 
-      container.appendChild(renderCompanyHeader(c, companyQuests));
+      container.appendChild(renderGroupHeader(c, groupQuests));
 
-      companyQuests.forEach(function (q) {
+      groupQuests.forEach(function (q) {
         container.appendChild(renderCard(q));
         rendered[q.name] = true;
       });
-      companyScouts.forEach(function (s) {
+      groupScouts.forEach(function (s) {
         container.appendChild(renderScoutCard(s));
         rendered[s.name] = true;
       });
@@ -113,9 +113,9 @@
     var ungroupedQuests = activeQuests.filter(function (q) { return !rendered[q.name]; });
     var ungroupedScouts = scouts.filter(function (s) { return !rendered[s.name]; });
     if (ungroupedQuests.length > 0 || ungroupedScouts.length > 0) {
-      if (companies.length > 0) {
+      if (groups.length > 0) {
         var ungroupedHeader = document.createElement("div");
-        ungroupedHeader.className = "company-header";
+        ungroupedHeader.className = "group-header";
         ungroupedHeader.innerHTML = "<h2>Ungrouped</h2>";
         container.appendChild(ungroupedHeader);
       }
@@ -158,30 +158,30 @@
     prevStatus = status;
   }
 
-  function renderCompanyHeader(company, companyQuests) {
+  function renderGroupHeader(group, groupQuests) {
     var header = document.createElement("div");
-    header.className = "company-header";
+    header.className = "group-header";
 
     var implementPlus = 0;
-    var total = (company.quests || []).length + (company.scouts || []).length;
+    var total = (group.quests || []).length + (group.scouts || []).length;
     var hasPending = false;
 
-    companyQuests.forEach(function (q) {
+    groupQuests.forEach(function (q) {
       var idx = PHASES.indexOf(q.phase);
       if (idx >= 3) implementPlus++; // Implement+
       if (q.gate_pending) hasPending = true;
     });
 
     var summary = implementPlus + "/" + total + " quests in Implement+";
-    header.innerHTML = "<h2>" + escapeHTML(company.name) + "</h2>" +
-      '<span class="company-summary">' + escapeHTML(summary) + "</span>";
+    header.innerHTML = "<h2>" + escapeHTML(group.name) + "</h2>" +
+      '<span class="group-summary">' + escapeHTML(summary) + "</span>";
 
     if (hasPending) {
       var approveAllBtn = document.createElement("button");
       approveAllBtn.className = "btn btn-approve";
       approveAllBtn.textContent = "Approve All";
       approveAllBtn.addEventListener("click", function () {
-        window.__approveCompany(company.name);
+        window.__approveGroup(group.name);
       });
       header.appendChild(approveAllBtn);
     }
@@ -203,8 +203,8 @@
     }
     progressHTML += "</div>";
 
-    var eaglesHealth = getQuestHealth(quest.worktree);
-    var badgeHTML = eaglesHealth ? " " + renderHealthBadge(eaglesHealth.health) : "";
+    var health = getQuestHealth(quest.worktree);
+    var badgeHTML = health ? " " + renderHealthBadge(health.health) : "";
 
     var statusBadgeHTML = "";
     if (isDone) {
@@ -213,10 +213,10 @@
       statusBadgeHTML = ' <span class="status-badge ' + statusClass + '">' + escapeHTML(statusLabel) + "</span>";
     }
 
-    var errandProgressHTML = "";
-    if (quest.errands_total > 0) {
-      errandProgressHTML = '<div class="errand-progress">' +
-        quest.errands_done + "/" + quest.errands_total + " errands done" +
+    var todoProgressHTML = "";
+    if (quest.todos_total > 0) {
+      todoProgressHTML = '<div class="todo-progress">' +
+        quest.todos_done + "/" + quest.todos_total + " todos done" +
         "</div>";
     }
 
@@ -224,21 +224,21 @@
       "<h3>" + escapeHTML(quest.name || quest.worktree) + badgeHTML + statusBadgeHTML + "</h3>" +
       '<div class="quest-phase">' + escapeHTML(quest.phase || "Unknown") + "</div>" +
       progressHTML +
-      errandProgressHTML;
+      todoProgressHTML;
 
-    if (quest.errands_total > 0) {
-      var errandDetails = document.createElement("div");
-      errandDetails.className = "errand-details";
-      errandDetails.style.display = "none";
-      card.appendChild(errandDetails);
+    if (quest.todos_total > 0) {
+      var todoDetails = document.createElement("div");
+      todoDetails.className = "todo-details";
+      todoDetails.style.display = "none";
+      card.appendChild(todoDetails);
 
       card.style.cursor = "pointer";
       card.addEventListener("click", function (e) {
         if (e.target.tagName === "BUTTON") return;
-        var details = card.querySelector(".errand-details");
+        var details = card.querySelector(".todo-details");
         if (details.style.display === "none") {
           details.style.display = "block";
-          loadErrandItems(quest.worktree, details);
+          loadTodoItems(quest.worktree, details);
         } else {
           details.style.display = "none";
         }
@@ -315,18 +315,18 @@
     }
   };
 
-  window.__approveCompany = async function (name) {
+  window.__approveGroup = async function (name) {
     try {
-      var res = await fetch("/api/company/" + encodeURIComponent(name) + "/approve", {
+      var res = await fetch("/api/group/" + encodeURIComponent(name) + "/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
       if (!res.ok) throw new Error("status " + res.status);
       var data = await res.json();
-      addActivity("Company '" + name + "': approved " + data.approved.length + " gate(s)");
+      addActivity("Group '" + name + "': approved " + data.approved.length + " gate(s)");
       poll();
     } catch (err) {
-      addActivity("Company approve failed: " + err.message);
+      addActivity("Group approve failed: " + err.message);
     }
   };
 
@@ -380,13 +380,13 @@
       if (old.gate_pending && !q.gate_pending) {
         addActivity((q.name || q.worktree) + ": gate resolved");
       }
-      if (q.errands_total > 0 && old.errands_done !== q.errands_done) {
-        addActivity((q.name || q.worktree) + ": errand progress " + q.errands_done + "/" + q.errands_total);
+      if (q.todos_total > 0 && old.todos_done !== q.todos_done) {
+        addActivity((q.name || q.worktree) + ": todo progress " + q.todos_done + "/" + q.todos_total);
       }
     });
   }
 
-  // ── Eagles Helpers ─────────────────────────────
+  // ── Health Helpers ─────────────────────────────
 
   var HEALTH_COLORS = {
     working: "#5a8a5a",
@@ -405,10 +405,10 @@
   };
 
   function getQuestHealth(worktree) {
-    if (!eaglesData || !eaglesData.quests) return null;
-    for (var i = 0; i < eaglesData.quests.length; i++) {
-      if (eaglesData.quests[i].worktree === worktree) {
-        return eaglesData.quests[i];
+    if (!healthData || !healthData.quests) return null;
+    for (var i = 0; i < healthData.quests.length; i++) {
+      if (healthData.quests[i].worktree === worktree) {
+        return healthData.quests[i];
       }
     }
     return null;
@@ -424,23 +424,23 @@
       '">' + escapeHTML(health) + "</span>";
   }
 
-  // ── Errands ──────────────────────────────────
+  // ── Todos ──────────────────────────────────
 
-  async function loadErrandItems(worktree, container) {
+  async function loadTodoItems(worktree, container) {
     try {
       var encoded = btoa(worktree).replace(/\+/g, '-').replace(/\//g, '_');
-      var res = await fetch("/api/errand/" + encoded);
+      var res = await fetch("/api/todo/" + encoded);
       if (!res.ok) {
-        container.innerHTML = "<p>No errands available.</p>";
+        container.innerHTML = "<p>No todos available.</p>";
         return;
       }
       var data = await res.json();
       var items = data.items || [];
       if (items.length === 0) {
-        container.innerHTML = "<p>No errands.</p>";
+        container.innerHTML = "<p>No todos.</p>";
         return;
       }
-      var html = '<ul class="errand-item-list">';
+      var html = '<ul class="todo-item-list">';
       for (var i = 0; i < items.length; i++) {
         var item = items[i];
         var badge = '<span class="status-badge status-' + escapeHTML(item.status) + '">' + escapeHTML(item.status) + "</span>";
@@ -449,29 +449,29 @@
       html += "</ul>";
       container.innerHTML = html;
     } catch (err) {
-      container.innerHTML = "<p>Failed to load errands.</p>";
+      container.innerHTML = "<p>Failed to load todos.</p>";
     }
   }
 
-  // ── Bulletin Board ───────────────────────────────
+  // ── Notes Board ───────────────────────────────
 
-  async function fetchAndRenderBulletin() {
+  async function fetchAndRenderNotes() {
     try {
-      var res = await fetch("/api/bulletin");
+      var res = await fetch("/api/notes");
       if (!res.ok) {
-        renderBulletin([]);
+        renderNotes([]);
         return;
       }
       var entries = await res.json();
-      renderBulletin(entries);
+      renderNotes(entries);
     } catch (err) {
-      renderBulletin([]);
+      renderNotes([]);
     }
   }
 
-  function renderBulletin(entries) {
-    var container = document.getElementById("bulletin-entries");
-    var section = document.getElementById("bulletin-section");
+  function renderNotes(entries) {
+    var container = document.getElementById("notes-entries");
+    var section = document.getElementById("notes-section");
     if (!container || !section) return;
 
     if (!entries || entries.length === 0) {
@@ -491,16 +491,16 @@
 
     Object.keys(byTopic).forEach(function (topic) {
       var group = document.createElement("div");
-      group.className = "bulletin-topic-group";
+      group.className = "notes-topic-group";
 
       var header = document.createElement("div");
-      header.className = "bulletin-topic-header";
+      header.className = "notes-topic-header";
       header.textContent = topic;
       group.appendChild(header);
 
       byTopic[topic].forEach(function (e) {
         var item = document.createElement("div");
-        item.className = "bulletin-item";
+        item.className = "notes-item";
 
         var timeStr = e.ts;
         try {
@@ -510,13 +510,13 @@
 
         var filesStr = "";
         if (e.files && e.files.length > 0) {
-          filesStr = ' <span class="bulletin-files">' + escapeHTML(e.files.join(", ")) + "</span>";
+          filesStr = ' <span class="notes-files">' + escapeHTML(e.files.join(", ")) + "</span>";
         }
 
         item.innerHTML =
-          '<span class="bulletin-time">' + escapeHTML(timeStr) + "</span> " +
-          '<span class="bulletin-quest">' + escapeHTML(e.quest || "") + "</span> " +
-          '<span class="bulletin-discovery">' + escapeHTML(e.discovery || "") + "</span>" +
+          '<span class="notes-time">' + escapeHTML(timeStr) + "</span> " +
+          '<span class="notes-quest">' + escapeHTML(e.quest || "") + "</span> " +
+          '<span class="notes-discovery">' + escapeHTML(e.discovery || "") + "</span>" +
           filesStr;
         group.appendChild(item);
       });
@@ -537,9 +537,9 @@
     file_modified: "event-neutral",
   };
 
-  async function fetchAndRenderTidings() {
+  async function fetchAndRenderEvents() {
     try {
-      var res = await fetch("/api/herald");
+      var res = await fetch("/api/events");
       if (!res.ok) return;
       var evts = await res.json();
       renderEventStream(evts);
@@ -555,7 +555,7 @@
     if (!evts || evts.length === 0) {
       var li = document.createElement("li");
       li.className = "event-item event-neutral";
-      li.textContent = "No tidings recorded yet.";
+      li.textContent = "No events recorded yet.";
       container.appendChild(li);
       return;
     }
@@ -583,7 +583,7 @@
 
   async function fetchAndRenderProblems() {
     try {
-      var res = await fetch("/api/herald/problems");
+      var res = await fetch("/api/events/problems");
       if (!res.ok) return;
       var problems = await res.json();
       renderProblems(problems);

@@ -143,7 +143,7 @@ func isLegacyWorktreePath(path string) bool {
 // and `fellowship init` would reset the quest state that carries the pending
 // flag. Both were previously allowed, which made the gate advisory rather than
 // enforced. What remains is either read-only or side-channel bookkeeping
-// (autopsy records, the bulletin board, errand status) that cannot advance the
+// (failure records, the notes board, todo status) that cannot advance the
 // quest past the gate.
 //
 // Shell metacharacters are rejected to prevent bypass abuse (e.g., chaining
@@ -164,15 +164,23 @@ func isFellowshipEscapeCommand(command string) bool {
 	if bin != "fellowship" && !strings.HasSuffix(bin, "/fellowship") {
 		return false
 	}
-	// Allowlist of subcommands safe to run during gate_pending.
+	// Allowlist of subcommands safe to run during gate_pending. Both the
+	// current names and their deprecated aliases are listed, since the
+	// dispatcher keeps the aliases working for one release.
 	allowed := map[string]bool{
-		"autopsy":  true, // write/read failure records
-		"bulletin": true, // read/write shared discovery board
-		"errand":   true, // read/update errand status
+		"failures": true, // write/read failure records
+		"autopsy":  true, // deprecated alias for failures
+		"notes":    true, // read/write shared discovery board
+		"bulletin": true, // deprecated alias for notes
+		"todo":     true, // read/update todo status
+		"errand":   true, // deprecated alias for todo
 		"status":   true, // read-only status scan
-		"eagles":   true, // read-only health scan
-		"tome":     true, // read-only quest history
-		"herald":   true, // read-only event log
+		"health":   true, // read-only health scan
+		"eagles":   true, // deprecated alias for health
+		"history":  true, // read-only quest history
+		"tome":     true, // deprecated alias for history
+		"events":   true, // read-only event log
+		"herald":   true, // deprecated alias for events
 		"version":  true, // print version
 	}
 	if allowed[fields[1]] {

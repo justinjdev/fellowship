@@ -1,4 +1,4 @@
-// `fellowship bulletin ...`: the shared notice board.
+// `fellowship notes ...`: the shared notice board.
 package main
 
 import (
@@ -14,29 +14,29 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/notes"
 )
 
-func runBulletin(d *db.DB, args []string) int {
+func runNotes(d *db.DB, args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: fellowship bulletin <post|scan|list|clear>")
+		fmt.Fprintln(os.Stderr, "usage: fellowship notes <post|scan|list|clear>")
 		return 1
 	}
 	switch args[0] {
 	case "post":
-		return runBulletinPost(d, args[1:])
+		return runNotesPost(d, args[1:])
 	case "scan":
-		return runBulletinScan(d, args[1:])
+		return runNotesScan(d, args[1:])
 	case "list":
-		return runBulletinList(d, args[1:])
+		return runNotesList(d, args[1:])
 	case "clear":
-		return runBulletinClear(d, args[1:])
+		return runNotesClear(d, args[1:])
 	default:
-		fmt.Fprintf(os.Stderr, "unknown bulletin command: %s\n", args[0])
+		fmt.Fprintf(os.Stderr, "unknown notes command: %s\n", args[0])
 		return 1
 	}
 }
 
-func runBulletinPost(d *db.DB, args []string) int {
+func runNotesPost(d *db.DB, args []string) int {
 	ctx := context.Background()
-	fs := flag.NewFlagSet("bulletin post", flag.ExitOnError)
+	fs := flag.NewFlagSet("notes post", flag.ExitOnError)
 	quest := fs.String("quest", "", "Quest name")
 	topic := fs.String("topic", "", "Topic tag")
 	files := fs.String("files", "", "Comma-separated file paths")
@@ -44,7 +44,7 @@ func runBulletinPost(d *db.DB, args []string) int {
 	fs.Parse(args)
 
 	if *quest == "" || *topic == "" || *discovery == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship bulletin post --quest NAME --topic TOPIC --discovery \"TEXT\" [--files FILE,FILE]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship notes post --quest NAME --topic TOPIC --discovery \"TEXT\" [--files FILE,FILE]")
 		return 1
 	}
 
@@ -62,13 +62,13 @@ func runBulletinPost(d *db.DB, args []string) int {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
-	fmt.Printf("Posted to bulletin: [%s] %s\n", *topic, *discovery)
+	fmt.Printf("Posted to notes: [%s] %s\n", *topic, *discovery)
 	return 0
 }
 
-func runBulletinScan(d *db.DB, args []string) int {
+func runNotesScan(d *db.DB, args []string) int {
 	ctx := context.Background()
-	fs := flag.NewFlagSet("bulletin scan", flag.ExitOnError)
+	fs := flag.NewFlagSet("notes scan", flag.ExitOnError)
 	files := fs.String("files", "", "Comma-separated file paths to match")
 	topics := fs.String("topics", "", "Comma-separated topics to match")
 	jsonOut := fs.Bool("json", false, "Output as JSON")
@@ -94,7 +94,7 @@ func runBulletinScan(d *db.DB, args []string) int {
 	}
 
 	if len(entries) == 0 {
-		fmt.Println("No matching bulletin entries.")
+		fmt.Println("No matching notes entries.")
 		return 0
 	}
 
@@ -105,9 +105,9 @@ func runBulletinScan(d *db.DB, args []string) int {
 	return 0
 }
 
-func runBulletinList(d *db.DB, args []string) int {
+func runNotesList(d *db.DB, args []string) int {
 	ctx := context.Background()
-	fs := flag.NewFlagSet("bulletin list", flag.ExitOnError)
+	fs := flag.NewFlagSet("notes list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	fs.Parse(args)
 
@@ -131,7 +131,7 @@ func runBulletinList(d *db.DB, args []string) int {
 	}
 
 	if len(entries) == 0 {
-		fmt.Println("No bulletin entries.")
+		fmt.Println("No notes entries.")
 		return 0
 	}
 
@@ -153,12 +153,12 @@ func runBulletinList(d *db.DB, args []string) int {
 	return 0
 }
 
-func runBulletinClear(d *db.DB, args []string) int {
+func runNotesClear(d *db.DB, args []string) int {
 	ctx := context.Background()
-	fs := flag.NewFlagSet("bulletin clear", flag.ExitOnError)
+	fs := flag.NewFlagSet("notes clear", flag.ExitOnError)
 	fs.Parse(args)
 	if fs.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "usage: fellowship bulletin clear")
+		fmt.Fprintln(os.Stderr, "usage: fellowship notes clear")
 		return 1
 	}
 
@@ -168,6 +168,6 @@ func runBulletinClear(d *db.DB, args []string) int {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
-	fmt.Println("Bulletin cleared.")
+	fmt.Println("Notes cleared.")
 	return 0
 }

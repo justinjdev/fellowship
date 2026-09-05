@@ -165,7 +165,7 @@ func finishedQuests(conn *db.Conn) (map[string]bool, error) {
 	return finished, err
 }
 
-// classifyQuest examines a quest's state and herald tidings to determine health.
+// classifyQuest examines a quest's state and events to determine health.
 func classifyQuest(conn *db.Conn, s *state.State, finished bool, opts Options) QuestHealth {
 	qh := QuestHealth{
 		Name:   s.QuestName,
@@ -212,7 +212,7 @@ func classifyQuest(conn *db.Conn, s *state.State, finished bool, opts Options) Q
 		}
 	}
 
-	// Check for zombie: use updated_at from quest_state and herald timestamps.
+	// Check for zombie: use updated_at from quest_state and event timestamps.
 	lastAct := lastActivity(conn, s)
 	qh.LastActivity = lastAct
 
@@ -235,10 +235,11 @@ func classifyQuest(conn *db.Conn, s *state.State, finished bool, opts Options) Q
 	return qh
 }
 
-// lastActivity returns the most recent timestamp from herald tidings for a quest,
-// or falls back to the quest_state updated_at. It queries the herald table
-// directly rather than importing the events package, so health carries no
-// dependency on it — events depends on health for classification instead.
+// lastActivity returns the most recent timestamp from events for a quest, or
+// falls back to the quest_state updated_at. It queries the underlying event
+// log table directly rather than importing the events package, so health
+// carries no dependency on it — events depends on health for classification
+// instead.
 func lastActivity(conn *db.Conn, s *state.State) string {
 	var timestamp string
 	sqlitex.Execute(conn,
@@ -268,11 +269,11 @@ func lastActivity(conn *db.Conn, s *state.State) string {
 	return updatedAt
 }
 
-// rejectionCount returns how many gate_rejected tidings a quest has recorded
-// in its current phase — the "struggling" signal. It uses the literal tiding
-// type string rather than the herald package's constant for the same reason
+// rejectionCount returns how many gate_rejected events a quest has recorded
+// in its current phase — the "struggling" signal. It uses the literal event
+// type string rather than the events package's constant for the same reason
 // lastActivity queries the table directly: keeping health free of a
-// dependency on herald.
+// dependency on events.
 func rejectionCount(conn *db.Conn, questName, phase string) int {
 	var count int
 	sqlitex.Execute(conn,
@@ -288,7 +289,7 @@ func rejectionCount(conn *db.Conn, questName, phase string) int {
 }
 
 // hasCheckpoint checks if the quest has a checkpoint by looking for
-// a lembas_completed herald tiding, which indicates checkpoint creation.
+// a lembas_completed event, which indicates checkpoint creation.
 func hasCheckpoint(conn *db.Conn, questName string) bool {
 	var found bool
 	sqlitex.Execute(conn,

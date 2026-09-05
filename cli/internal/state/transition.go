@@ -5,7 +5,7 @@ import "errors"
 // The gate state machine.
 //
 // Every gate transition in the CLI — the lead's `gate approve` / `gate reject`,
-// a company batch approval, the auto-approve path inside the gate-submit hook,
+// a group batch approval, the auto-approve path inside the gate-submit hook,
 // and the resets performed by `init` and `state clean-worktrees` — mutates the
 // same handful of fields in lockstep: gate_pending, gate_id, phase, and the two
 // prerequisite flags. Those rules used to be spelled out again at each call
@@ -25,7 +25,7 @@ var (
 )
 
 // Transition records the endpoints of an approved gate: the phase the quest
-// left and the phase it entered. Callers use it for tome entries and heralds.
+// left and the phase it entered. Callers use it for history entries and events.
 type Transition struct {
 	Prev string
 	Next string

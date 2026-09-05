@@ -254,7 +254,7 @@ func TestProgressSummary(t *testing.T) {
 	}
 }
 
-func TestBatchApprove_HeraldLogging(t *testing.T) {
+func TestBatchApprove_EventLogging(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
@@ -273,7 +273,7 @@ func TestBatchApprove_HeraldLogging(t *testing.T) {
 		}
 
 		grp := fellowship.GroupEntry{
-			Name:   "herald-test",
+			Name:   "events-test",
 			Quests: []string{"q1"},
 		}
 
@@ -288,7 +288,7 @@ func TestBatchApprove_HeraldLogging(t *testing.T) {
 
 		tidings, err := events.Read(conn, "q1", 0)
 		if err != nil {
-			t.Fatalf("reading herald: %v", err)
+			t.Fatalf("reading events: %v", err)
 		}
 
 		var foundApproved, foundTransition bool
