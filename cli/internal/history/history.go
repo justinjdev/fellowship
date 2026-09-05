@@ -14,7 +14,7 @@ type QuestHistory struct {
 	GateHistory     []GateEvent   `json:"gate_history"`
 	FilesTouched    []string      `json:"files_touched"`
 	Respawns        int           `json:"respawns"`
-	Status          string        `json:"status"` // "active", "completed", "failed"
+	Status          string        `json:"status"` // "active", "completed", "cancelled"
 	Task            string        `json:"task"`
 }
 

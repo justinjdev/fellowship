@@ -41,7 +41,6 @@ func runTodoInit(d *db.DB, args []string) int {
 	fs := flag.NewFlagSet("todo init", flag.ExitOnError)
 	quest := fs.String("quest", "", "Quest name")
 	dir := fs.String("dir", "", "Worktree directory (default: current directory)")
-	task := fs.String("task", "", "Task description")
 	fs.Parse(args)
 
 	if err := checkDir(*dir); err != nil {
@@ -54,12 +53,12 @@ func runTodoInit(d *db.DB, args []string) int {
 		questName = resolveDirQuest(d, *dir)
 	}
 	if questName == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship todo init --quest <name> [--dir <worktree>] [--task \"desc\"]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship todo init --quest <name> [--dir <worktree>]")
 		return 1
 	}
 
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
-		return todo.Init(conn, questName, *task)
+		return todo.Init(conn, questName)
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1

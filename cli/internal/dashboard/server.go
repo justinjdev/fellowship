@@ -337,21 +337,6 @@ func (s *Server) handleTodo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(todos)
 }
 
-func (s *Server) worktreeDirs() []string {
-	var dirs []string
-	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
-		status, err := fellowship.DiscoverQuests(conn)
-		if err != nil {
-			return nil
-		}
-		for _, q := range status.Quests {
-			dirs = append(dirs, q.Worktree)
-		}
-		return nil
-	})
-	return dirs
-}
-
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	var evts []events.Event
 	err := s.db.WithConn(context.Background(), func(conn *db.Conn) error {

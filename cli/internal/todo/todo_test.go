@@ -47,6 +47,40 @@ func TestAddAndList(t *testing.T) {
 	}
 }
 
+// `todo show` marshals List's result straight to JSON, so a quest with no
+// todos yet must read as [], not null.
+func TestList_EmptyIsNotNil(t *testing.T) {
+	d := db.OpenTest(t)
+	seedQuest(t, d, "q1")
+
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		items, err := todo.List(conn, "q1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if items == nil {
+			t.Fatal("List() = nil, want a non-nil empty slice")
+		}
+		if len(items) != 0 {
+			t.Errorf("len(items) = %d, want 0", len(items))
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestInit(t *testing.T) {
+	d := db.OpenTest(t)
+	seedQuest(t, d, "q1")
+
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		return todo.Init(conn, "q1")
+	}); err != nil {
+		t.Fatalf("Init() error: %v", err)
+	}
+}
+
 func TestAddSequentialIDs(t *testing.T) {
 	d := db.OpenTest(t)
 	seedQuest(t, d, "q1")

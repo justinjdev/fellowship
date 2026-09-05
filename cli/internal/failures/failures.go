@@ -414,8 +414,11 @@ func inferTriggerFromDB(conn *sqlite.Conn, questName, status string, respawns in
 		return "rejection", detail, nil
 	}
 
-	// Check for failed/cancelled status
-	if status == "failed" || status == "cancelled" {
+	// Check for cancelled status. "failed" is not a status this codebase ever
+	// sets — fellowship_quests.status is constrained to active/completed/cancelled
+	// (see cmd/fellowship/state.go's --status validation) — so that branch was
+	// unreachable and has been removed.
+	if status == "cancelled" {
 		return "abandonment", fmt.Sprintf("Quest %s with status: %s", questName, status), nil
 	}
 

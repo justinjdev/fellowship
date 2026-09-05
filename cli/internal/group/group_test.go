@@ -2,7 +2,6 @@ package group
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
@@ -221,36 +220,6 @@ func TestBatchApprove_MissingQuestState(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestFindGroupForQuest(t *testing.T) {
-	groups := []fellowship.GroupEntry{
-		{Name: "API", Quests: []string{"q-api", "q-tests"}},
-		{Name: "Docs", Quests: []string{"q-docs"}},
-	}
-
-	if got := FindGroupForQuest(groups, "q-api"); got != "API" {
-		t.Errorf("expected 'API', got %q", got)
-	}
-	if got := FindGroupForQuest(groups, "q-docs"); got != "Docs" {
-		t.Errorf("expected 'Docs', got %q", got)
-	}
-	if got := FindGroupForQuest(groups, "q-other"); got != "" {
-		t.Errorf("expected empty string for ungrouped quest, got %q", got)
-	}
-}
-
-func TestProgressSummary(t *testing.T) {
-	p := GroupProgress{
-		Name:       "API Work",
-		Total:      3,
-		InProgress: 2,
-	}
-	got := ProgressSummary(p)
-	expected := "2/3 quests in Implement+"
-	if got != expected {
-		t.Errorf("expected %q, got %q", expected, got)
 	}
 }
 
@@ -570,7 +539,10 @@ func TestApprove_WithPendingGates(t *testing.T) {
 	}
 }
 
-func TestLoadAndMarshalProgress(t *testing.T) {
+// `group show --json` (LoadDetail) wires in CalculateProgress via
+// fellowship.DiscoverQuests, so its Progress field must reflect the same
+// completed/in-progress counts CalculateProgress computes directly.
+func TestLoadDetail_Progress(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
@@ -597,16 +569,12 @@ func TestLoadAndMarshalProgress(t *testing.T) {
 			return err
 		}
 
-		data, err := LoadAndMarshalProgress(conn, "team-alpha")
+		detail, err := LoadDetail(conn, "team-alpha")
 		if err != nil {
-			t.Fatalf("LoadAndMarshalProgress() error: %v", err)
+			t.Fatalf("LoadDetail() error: %v", err)
 		}
 
-		var progress GroupProgress
-		if err := json.Unmarshal(data, &progress); err != nil {
-			t.Fatalf("unmarshal error: %v", err)
-		}
-
+		progress := detail.Progress
 		if progress.Name != "team-alpha" {
 			t.Errorf("Name = %q, want %q", progress.Name, "team-alpha")
 		}
@@ -618,22 +586,6 @@ func TestLoadAndMarshalProgress(t *testing.T) {
 		}
 		if progress.InProgress != 2 { // Implement and Review both rank >= Implement
 			t.Errorf("InProgress = %d, want 2", progress.InProgress)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestLoadAndMarshalProgress_NotFound(t *testing.T) {
-	d := db.OpenTest(t)
-	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
-			return err
-		}
-		_, err := LoadAndMarshalProgress(conn, "nonexistent")
-		if err == nil {
-			t.Fatal("expected error for nonexistent grp")
 		}
 		return nil
 	}); err != nil {

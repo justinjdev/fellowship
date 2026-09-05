@@ -1,7 +1,6 @@
 package group
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -143,9 +142,10 @@ type QuestSummary struct {
 
 // Detail is a group's full detail, for `group show --json`.
 type Detail struct {
-	Name   string         `json:"name"`
-	Quests []QuestSummary `json:"quests"`
-	Scouts []string       `json:"scouts"`
+	Name     string         `json:"name"`
+	Quests   []QuestSummary `json:"quests"`
+	Scouts   []string       `json:"scouts"`
+	Progress GroupProgress  `json:"progress"`
 }
 
 // LoadDetail loads a group's full detail — the same data Show prints as a
@@ -169,6 +169,16 @@ func LoadDetail(conn *sqlite.Conn, name string) (*Detail, error) {
 		}
 		d.Quests = append(d.Quests, QuestSummary{Name: qName, Phase: st.Phase, GatePending: st.GatePending})
 	}
+
+	// DiscoverQuests carries the fellowship-entry status (completed/cancelled)
+	// alongside phase and gate state, exactly what CalculateProgress needs and
+	// more than state.Load alone provides.
+	dash, err := fellowship.DiscoverQuests(conn)
+	if err != nil {
+		return nil, err
+	}
+	d.Progress = CalculateProgress(*grp, dash.Quests)
+
 	return d, nil
 }
 
@@ -231,73 +241,6 @@ func Approve(conn *sqlite.Conn, name string) error {
 		fmt.Printf("  %s\n", name)
 	}
 	return nil
-}
-
-// FindGroupForQuest returns the group name a quest belongs to, or "" if ungrouped.
-func FindGroupForQuest(groups []fellowship.GroupEntry, questName string) string {
-	for _, c := range groups {
-		for _, q := range c.Quests {
-			if q == questName {
-				return c.Name
-			}
-		}
-	}
-	return ""
-}
-
-// ProgressSummary returns a human-readable summary like "2/3 quests in Implement+".
-func ProgressSummary(progress GroupProgress) string {
-	active := progress.InProgress
-	return fmt.Sprintf("%d/%d quests in Implement+", active, progress.Total)
-}
-
-// LoadAndMarshalProgress loads state and returns JSON-serializable progress for a group.
-func LoadAndMarshalProgress(conn *sqlite.Conn, name string) ([]byte, error) {
-	grp, err := findGroup(conn, name)
-	if err != nil {
-		return nil, err
-	}
-
-	// Build quest statuses from DB.
-	entryStatus, err := questEntryStatuses(conn)
-	if err != nil {
-		return nil, err
-	}
-	var quests []fellowship.QuestStatus
-	for _, qName := range grp.Quests {
-		st, err := state.Load(conn, qName)
-		if err != nil {
-			continue
-		}
-		quests = append(quests, fellowship.QuestStatus{
-			Name:        qName,
-			Phase:       st.Phase,
-			GatePending: st.GatePending,
-			Status:      entryStatus[qName],
-		})
-	}
-
-	progress := CalculateProgress(*grp, quests)
-	return json.Marshal(progress)
-}
-
-// questEntryStatuses maps quest name to its fellowship entry status, treating
-// a missing or empty value as "active". Review is terminal, so this status is
-// the only thing that says a quest has finished.
-func questEntryStatuses(conn *sqlite.Conn) (map[string]string, error) {
-	out := map[string]string{}
-	err := sqlitex.Execute(conn,
-		`SELECT name, COALESCE(NULLIF(status, ''), 'active') FROM fellowship_quests`,
-		&sqlitex.ExecOptions{
-			ResultFunc: func(stmt *sqlite.Stmt) error {
-				out[stmt.ColumnText(0)] = stmt.ColumnText(1)
-				return nil
-			},
-		})
-	if err != nil {
-		return nil, fmt.Errorf("loading quest entry statuses: %w", err)
-	}
-	return out, nil
 }
 
 // findGroup looks up a group by name from the DB.
