@@ -41,7 +41,7 @@ Hooks are subcommands of the CLI, not standalone scripts. `plugin/hooks/hooks.js
   - `fellowship state init` writes a lead marker at `<data-dir>/lead` (JSON: `session_id`, `root`, `created_at`). The session id comes from `CLAUDE_CODE_SESSION_ID`, which Claude Code exports to the commands it runs and which is the same id it puts in hook payloads as `session_id`.
   - At hook time the guard compares the payload's `session_id` with the marker, in this order: **(1)** payload id == marker id → the lead, allow; **(2)** the session's git top-level is *both* the main root and a registered quest worktree → a quest provisioned into the main tree, block (this one needs no session ids); **(3)** both ids are known and differ → a session that is not the lead, block; **(4)** otherwise the writer cannot be identified — no marker, or no id in the payload — and the fail-open backstop allows.
   - Consequence to know: if the lead's session id changes mid-fellowship (a brand-new session in the main tree rather than a resumed one), rule 3 blocks it. Deleting `<data-dir>/lead` drops the guard back to rule 2 only; re-running `fellowship state init` re-records the lead.
-- The wrapper (`fellowship.sh`) applies that same posture to distribution itself: it never execs the `fellowship` binary directly from `hooks.json`. If the binary is missing or not executable, it runs `ensure-binary.sh` once to try to install it. If the binary is still unavailable afterwards, every gate hook (`gate-guard`, `gate-submit`, `gate-prereq`, `completion-guard`, `metadata-track`, `file-track`) blocks (exit 2, with a message on stderr) rather than silently letting the tool call through; `worktree-guard` alone exits 0 in that case, consistent with its fail-open backstop posture.
+- The wrapper (`fellowship.sh`) applies that same posture to distribution itself: it never execs the `fellowship` binary directly from `hooks.json`, and it never installs it — only the `SessionStart` hook (`ensure-binary.sh`) does that, so a hook invocation can't trigger a network download on the critical path of the tool call it's guarding. If the binary isn't installed when a gate hook runs, every gate hook (`gate-guard`, `gate-submit`, `gate-prereq`, `completion-guard`, `metadata-track`, `file-track`) blocks immediately (exit 2, with a message on stderr pointing at `ensure-binary.sh`) rather than silently letting the tool call through; `worktree-guard` alone exits 0 in that case, consistent with its fail-open backstop posture. `ensure-binary.sh`'s own install lock (a mkdir-based lock in the install directory) records its holder's PID and acquisition time, so a session killed mid-install can't wedge every future install: a contending session reclaims the lock once the recorded PID is no longer alive, or once 120s have passed regardless.
 
 Current hooks: `gate-guard`, `gate-submit`, `gate-prereq`, `completion-guard`, `metadata-track`, `file-track`, `worktree-guard`. Run `fellowship` with no args for the full command reference.
 
@@ -82,8 +82,8 @@ plugin/skills/<name>/SKILL.md       # Skills — auto-invocable by Claude
 plugin/commands/<name>.md           # Commands — user-invoked only
 plugin/agents/<name>.md             # Agent definitions
 plugin/hooks/hooks.json             # Maps hook events to `fellowship hook <name>`
-plugin/hooks/scripts/ensure-binary.sh  # Downloads the CLI binary from GitHub releases
-plugin/hooks/scripts/fellowship.sh  # Thin wrapper — ensures binary, then exec's it
+plugin/hooks/scripts/ensure-binary.sh  # Downloads the CLI binary from GitHub releases (SessionStart only)
+plugin/hooks/scripts/fellowship.sh  # Thin wrapper — execs the binary, never installs it
 cli/cmd/fellowship/main.go          # CLI entrypoint and subcommand dispatch
 cli/internal/hooks/                 # Hook decision logic (pure, table-tested)
 cli/internal/                       # State, db (SQLite), dashboard, events, etc.

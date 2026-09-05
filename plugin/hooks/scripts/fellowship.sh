@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Thin wrapper — ensures the fellowship binary exists, then execs it with
-# all args.
+# Thin wrapper — execs the fellowship binary with all args. Never installs
+# it: only the SessionStart hook (ensure-binary.sh) does that, so a hook
+# invocation never blocks the tool call it's guarding on a network download.
 #
 # Posture: gate hooks (gate-guard, gate-submit, gate-prereq,
 # completion-guard, metadata-track, file-track) fail *closed* — if the
-# binary cannot be made available, this script blocks the tool call
-# (exit 2) so enforcement can't be silently skipped just because the
-# binary hasn't been installed yet. worktree-guard is defense-in-depth
-# behind lead-provisioned isolation, so it fails *open* (exit 0) when the
-# binary is unavailable, matching its posture inside the CLI itself.
+# binary isn't installed yet, this script blocks the tool call (exit 2)
+# rather than trying to fetch it inline, so enforcement can't be silently
+# skipped. worktree-guard is defense-in-depth behind lead-provisioned
+# isolation, so it fails *open* (exit 0) when the binary is unavailable,
+# matching its posture inside the CLI itself.
 
 set -uo pipefail
 
@@ -27,21 +28,13 @@ for arg in "$@"; do
   prev="$arg"
 done
 
-binary_ready() {
-  [ -x "$BINARY" ]
-}
-
-if ! binary_ready; then
-  "$SCRIPT_DIR/ensure-binary.sh" || true
-fi
-
-if ! binary_ready; then
+if [ ! -x "$BINARY" ]; then
   if [ "$HOOK_NAME" = "worktree-guard" ]; then
     # Fail open: backstop behind lead-provisioned isolation, not the
     # primary enforcement mechanism.
     exit 0
   fi
-  echo "fellowship: binary unavailable at $BINARY after install attempt — blocking (hook: ${HOOK_NAME:-unknown}) to fail closed" >&2
+  echo "fellowship: binary not installed; it is installed at session start — restart the session or run $SCRIPT_DIR/ensure-binary.sh" >&2
   exit 2
 fi
 
