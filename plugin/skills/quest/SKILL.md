@@ -56,8 +56,12 @@ Then end your turn and wait for the lead.
 The hooks also block Edit/Write outside `.fellowship/` during Research and
 Plan (Bash, Agent, Skill, and reads are always allowed); require `[GATE]` at
 the start of a line to detect a gate; block your tools between a submission
-and the lead's decision; refuse a second gate while one is pending; and refuse
-to mark the task completed unless the phase is Review with no gate pending.
+and the lead's decision; refuse a second gate while one is pending; block
+your tools while the quest is held ("Quest is held — wait; do nothing until
+the lead unholds"); and refuse to mark the task completed unless the phase is
+Review with no gate pending. If you receive a `shutdown_request`, respond
+immediately via SendMessage with type `shutdown_response`, `approve: true`,
+and the request's `request_id` — do not just acknowledge it in text.
 
 ## Phase 1: Research
 
@@ -75,10 +79,10 @@ a `RESUME CONTEXT:` block, or `.fellowship/checkpoint.md` exists:
    session died the hooks block this — only the lead can clear it, so ask.
 3. `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})`.
 4. Read `.fellowship/checkpoint.md` as your starting context in place of step
-   2, and `fellowship history show --dir $(pwd)` for your phases, gates, and
-   files touched.
-5. Resume at the phase `fellowship gate status` reports, going straight there
-   if it is past Research.
+   2, and `~/.claude/fellowship/bin/fellowship history show --dir $(pwd)` for
+   your phases, gates, and files touched.
+5. Resume at the phase `~/.claude/fellowship/bin/fellowship gate status`
+   reports, going straight there if it is past Research.
 
 With no checkpoint, restart the current phase from scratch.
 
@@ -116,7 +120,8 @@ prompt carries a `PRE-EXISTING PLAN:`.
    Research (or, on a respawn, resets `gate_pending` and keeps the phase),
    resolves your quest name from the worktree the lead registered (override
    with `--quest <name>`), and loads `gates.autoApprove` from the merged
-   config. Confirm with `fellowship gate status --dir <worktree_path>`, then
+   config. Confirm with `~/.claude/fellowship/bin/fellowship gate status --dir
+   <worktree_path>`, then
    `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})`.
 
 ### Step 2 — orient
@@ -208,9 +213,10 @@ change; a test strategy; the user's approval of the plan.
 Execute the plan in small verifiable steps. TDD by default.
 
 **Todos** are the source of truth for remaining work, not the original
-prompt. `fellowship todo list --dir .` shows the checklist;
-`fellowship todo update --dir . <id> <status>` moves one along, through
-`pending`, `in_progress`, `done`, `blocked`, `skipped`.
+prompt. `~/.claude/fellowship/bin/fellowship todo list --dir .` shows the
+checklist; `~/.claude/fellowship/bin/fellowship todo update --dir . <id>
+<status>` moves one along, through `pending`, `in_progress`, `done`,
+`blocked`, `skipped`.
 
 **Single-stream (default):** invoke `superpowers:test-driven-development` and
 work the plan step by step — failing test, minimal implementation, refactor —
@@ -240,9 +246,9 @@ document which step failed and why the plan does not hold, record it:
 echo '{"quest":"<quest>","task":"<task>","phase":"Implement","trigger":"recovery","files":["<files>"],"modules":["<modules>"],"what_failed":"<specific>","resolution":"<what changed>","tags":["<tags>"]}' | ~/.claude/fellowship/bin/fellowship failures create --dir <main_repo>
 ```
 
-Then `/lembas` with phase "Implement (partial)", message the lead with the
-blocker, re-enter plan mode, revise only the affected steps, and get approval
-before resuming.
+Then `/lembas` with phase "Implement", noting "partial" in the checkpoint
+summary, message the lead with the blocker, re-enter plan mode, revise only
+the affected steps, and get approval before resuming.
 
 **Gate — Implement must produce:** the plan executed or a documented recovery;
 tests passing for what you changed; each logical unit committed.
