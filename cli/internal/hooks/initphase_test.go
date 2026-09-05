@@ -48,31 +48,34 @@ func TestInitPhaseRequest(t *testing.T) {
 	}
 }
 
-// An out-of-date store blocks every gate hook until `fellowship init` upgrades
-// it — and gate-guard gates Bash, so that one command has to get through or the
-// block denies its own remedy.
+// An out-of-date store blocks every gate hook until some non-hook invocation
+// migrates it — and gate-guard gates Bash, so a command has to get through or
+// the block denies its own remedy. It must be one that cannot also advance the
+// quest: `fellowship init` resets an existing row's gate_pending, so a
+// gate-blocked teammate would release itself the first time a binary upgrade
+// made the store stale.
 func TestIsStoreUpgradeCommand(t *testing.T) {
 	cases := []struct {
 		command string
 		want    bool
 	}{
-		{"fellowship init", true},
-		{"fellowship init --quest alpha", true},
-		{"fellowship state init --name f", true},
-		{"/usr/local/bin/fellowship init", true},
-		{`"$HOME/.claude/fellowship/bin/fellowship" init`, true},
-		// Not the upgrade.
-		{"fellowship status", false},
-		{"fellowship state show", false},
+		{"fellowship status", true},
+		{"fellowship gate status", true},
+		{"fellowship history show", true},
+		{"/usr/local/bin/fellowship status", true},
+		{`"$HOME/.claude/fellowship/bin/fellowship" status`, true},
+		// Mutating commands are never the remedy.
+		{"fellowship init", false},
+		{"fellowship init --quest alpha", false},
+		{"fellowship state init --name f", false},
+		{"fellowship gate approve", false},
 		{"fellowship", false},
 		{"", false},
 		{"git init", false},
 		// Nothing may ride along on the allowance.
-		{"fellowship init && rm -rf .fellowship", false},
-		{"fellowship init; echo done", false},
-		{"fellowship init $(whoami)", false},
-		{"fellowship init --phase Implement", false},
-		{"fellowship init --plan-skip", false},
+		{"fellowship status && rm -rf .fellowship", false},
+		{"fellowship status; echo done", false},
+		{"fellowship status $(whoami)", false},
 	}
 	for _, c := range cases {
 		if got := IsStoreUpgradeCommand(c.command); got != c.want {

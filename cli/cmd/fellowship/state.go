@@ -71,6 +71,16 @@ func runStateInit(d *db.DB, args []string) int {
 	// session in the main tree rather than a resumed one), so worktree-guard
 	// now reads the lead as a mis-placed teammate and refuses its writes.
 	if *name == "" {
+		// The lead moved into the store precisely so the sessions it
+		// identifies could not rewrite it. --claim-lead is a CLI door back
+		// into that row, so it is only opened from the main working tree —
+		// the lead's own workspace. A teammate stands in its worktree, where
+		// this refuses; reaching the main tree at all is a violation
+		// worktree-guard already reports.
+		if !sessionInMainWorktree(root) {
+			fmt.Fprintf(os.Stderr, "fellowship: --claim-lead only runs in the main working tree (%s); the lead's session is the one that may record itself.\n", root)
+			return 1
+		}
 		return claimLeadSession(d, root)
 	}
 
@@ -118,6 +128,22 @@ func runStateInit(d *db.DB, args []string) int {
 		installWorktreeGuardHook(root)
 	}
 	return 0
+}
+
+// sessionInMainWorktree reports whether this process is standing in the main
+// working tree of the repo rooted at mainRoot. Anything it cannot determine
+// reads as true: the check exists to keep a teammate from naming itself the
+// lead, not to refuse a lead whose git lookup failed.
+func sessionInMainWorktree(mainRoot string) bool {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return true
+	}
+	top, err := gitutil.TopLevel(cwd)
+	if err != nil {
+		return true
+	}
+	return hooks.CanonicalPath(top) == hooks.CanonicalPath(mainRoot)
 }
 
 // claimLeadSession re-records the running session as the fellowship's lead,

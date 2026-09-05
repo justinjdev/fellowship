@@ -480,21 +480,24 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 	}
 	filePath = hooks.CanonicalPath(filePath)
 
-	// Resolving the target's own working tree costs a git subprocess, and this
-	// guard fires on every Edit/Write inside a 5s budget. Spend it only when
-	// the guard can actually reach the comparison it feeds: with no fellowship
-	// running, or no target file, IsolationGuard returns before looking at it.
-	targetTop := ""
-	if active && filePath != "" {
-		targetTop = targetTopLevel(ctx, filePath)
-	}
-
 	// Canonicalize all paths so symlinked repo roots (e.g. macOS /tmp ->
 	// /private/tmp) don't defeat the main-root comparison. `git --show-toplevel`
 	// returns a resolved path; the cwd-derived main root does not.
+	canonicalMainRoot := hooks.CanonicalPath(mainRoot)
+
+	// Resolving the target's own working tree costs a git subprocess, and this
+	// guard fires on every Edit/Write inside a 5s budget. Spend it only when
+	// the guard can actually reach the comparison it feeds: with no fellowship
+	// running, no target file, or a target outside the main worktree,
+	// IsolationGuard returns before looking at it.
+	targetTop := ""
+	if active && pathUnder(canonicalMainRoot, filePath) {
+		targetTop = targetTopLevel(ctx, filePath)
+	}
+
 	result := hooks.IsolationGuard(hooks.IsolationParams{
 		FellowshipActive:         active,
-		MainRoot:                 hooks.CanonicalPath(mainRoot),
+		MainRoot:                 canonicalMainRoot,
 		SessionTopLevel:          sessionTop,
 		TargetTopLevel:           targetTop,
 		ToolName:                 input.ToolName,
@@ -532,6 +535,22 @@ func targetTopLevel(ctx context.Context, path string) string {
 		return ""
 	}
 	return hooks.CanonicalPath(root)
+}
+
+// pathUnder reports whether target sits strictly inside root. It is the cheap
+// filesystem-free version of the containment IsolationGuard checks with
+// relWithin: a target that is not under the main root is allowed there whatever
+// its own working tree turns out to be, so resolving that tree is wasted work.
+func pathUnder(root, target string) bool {
+	if root == "" || target == "" {
+		return false
+	}
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(target))
+	if err != nil {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, "../")
 }
 
 // nearestExistingDir walks up from dir to the first directory that exists, or

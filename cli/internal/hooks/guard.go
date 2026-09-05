@@ -267,36 +267,24 @@ func InitPhaseRequest(command string) (string, bool) {
 	return "", false
 }
 
-// IsStoreUpgradeCommand reports whether a Bash command is the `fellowship init`
-// (or `fellowship state init`) that brings an out-of-date store up to date.
+// IsStoreUpgradeCommand reports whether a Bash command is one that can bring an
+// out-of-date store up to date without being able to change quest state.
 //
 // Hooks refuse to migrate, so an out-of-date store makes every gate hook block
-// until someone runs `fellowship init`. gate-guard gates Bash, so a blanket
-// refusal would deny the only way out of itself and freeze every session in the
-// repo. This is the one command the block lets through. Shell metacharacters
-// are rejected for the same reason isFellowshipEscapeCommand rejects them:
+// until some other invocation runs the schema ladder. gate-guard gates Bash, so
+// a blanket refusal would deny the only way out of itself and freeze every
+// session in the repo. Every non-hook command opens the store through
+// db.OpenExisting, which migrates, so the allowance does not need to name a
+// mutating command — and must not. `fellowship init` also RESETS an existing
+// quest row, clearing gate_pending; letting it through here would hand a
+// gate-blocked teammate its own release the first time a binary upgrade made
+// the store stale, at exactly the moment gate-guard cannot read the gate flag
+// to refuse it. The escape allowlist is the right set: read-only reporting and
+// side-channel bookkeeping, which upgrade the schema on open and can advance
+// nothing. Shell metacharacters are rejected there for the same reason —
 // nothing may be chained onto the allowance.
 func IsStoreUpgradeCommand(command string) bool {
-	trimmed := strings.TrimSpace(command)
-	if trimmed == "" ||
-		strings.ContainsAny(trimmed, ";&|<>\n\r`") ||
-		strings.Contains(trimmed, "$(") {
-		return false
-	}
-	// The allowance is for the upgrade, not for a phase move riding along on
-	// it. runInit refuses the move anyway, but the guard has no reason to hand
-	// it the chance.
-	if _, movesPhase := InitPhaseRequest(trimmed); movesPhase {
-		return false
-	}
-	fields := shellFields(trimmed)
-	if len(fields) < 2 || !isFellowshipBinary(fields[0]) {
-		return false
-	}
-	if fields[1] == "init" {
-		return true
-	}
-	return fields[1] == "state" && len(fields) > 2 && fields[2] == "init"
+	return isFellowshipEscapeCommand(command)
 }
 
 // isFellowshipBinary reports whether a command-line token names the fellowship
@@ -376,7 +364,11 @@ func isFellowshipEscapeCommand(command string) bool {
 		strings.Contains(trimmed, "$(") {
 		return false
 	}
-	fields := strings.Fields(trimmed)
+	// shellFields, not strings.Fields, for the same reason InitPhaseRequest
+	// uses it: a quoted binary path ("$HOME/.claude/fellowship/bin/fellowship")
+	// is one token being RUN, and a command merely NAMED inside a quoted
+	// argument is not an invocation at all.
+	fields := shellFields(trimmed)
 	if len(fields) < 2 {
 		return false
 	}

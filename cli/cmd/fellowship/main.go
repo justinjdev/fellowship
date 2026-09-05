@@ -173,7 +173,7 @@ var readOnlyHooks = map[string]bool{
 }
 
 // pendingToolUpgradesStore reports whether the tool call this hook is deciding
-// on is the `fellowship init` that would bring an out-of-date store up to date.
+// on is a fellowship command that would bring an out-of-date store up to date.
 //
 // It consumes stdin, which is safe only because every caller exits immediately
 // afterwards: the payload is never needed again. A payload that will not parse,
@@ -246,19 +246,20 @@ func storeOpenExit(cwd string, args []string, err error) int {
 	}
 
 	if errors.Is(err, db.ErrSchemaOutOfDate) {
-		// A hook found a store written by an older binary. Upgrading it is
-		// `init`'s job, not a decision hook's, so say what to run — and let
-		// that one command through. gate-guard gates Bash, so a blanket block
-		// would deny the only way out of itself: after any binary upgrade every
-		// tool call in the repo would be refused, including the `fellowship
-		// init` the refusal asks for. An out-of-date store is a stale store,
-		// not a tampered one, so this is the one place the block yields.
+		// A hook found a store written by an older binary. Migrating is not a
+		// decision hook's job, so say what to run — and let that command
+		// through. gate-guard gates Bash, so a blanket block would deny the
+		// only way out of itself: after any binary upgrade every tool call in
+		// the repo would be refused, including the one the refusal asks for.
+		// What is let through is a read-only command: every non-hook
+		// invocation migrates on open, so the remedy does not have to be one
+		// that can also reset a quest's gate (see hooks.IsStoreUpgradeCommand).
 		if isGateHook(hookName) {
 			if hookName == "gate-guard" && pendingToolUpgradesStore() {
 				fmt.Fprintln(os.Stderr, `fellowship: the store is out of date — allowing this command to upgrade it.`)
 				return 0
 			}
-			fmt.Fprintln(os.Stderr, `fellowship: the store is out of date — run "fellowship init" to upgrade. Blocking for safety.`)
+			fmt.Fprintln(os.Stderr, `fellowship: the store is out of date — run "fellowship status" to upgrade it (every non-hook command migrates the store on open). Blocking for safety.`)
 			return 2
 		}
 		if isHook {

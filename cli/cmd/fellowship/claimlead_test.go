@@ -98,3 +98,28 @@ func fellowshipName(t *testing.T, d *db.DB) string {
 	}
 	return name
 }
+
+// --claim-lead writes the one row the guards trust, so it must not be a door a
+// teammate can walk through. A session standing in a linked worktree is
+// refused; the lead is always in the main tree.
+func TestStateInit_ClaimLeadRefusedOutsideMainTree(t *testing.T) {
+	root := newMainRepo(t)
+	t.Setenv("HOME", t.TempDir())
+	worktree := addWorktree(t, root, "quest-alpha")
+	d := db.OpenTest(t)
+
+	t.Chdir(root)
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "lead-1")
+	if got := runStateInit(d, []string{"--name", "demo", "--skip-hook-install"}); got != 0 {
+		t.Fatalf("state init = %d, want 0", got)
+	}
+
+	t.Chdir(worktree)
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "teammate-1")
+	if got := runStateInit(d, []string{"--claim-lead"}); got == 0 {
+		t.Error("state init --claim-lead from a worktree = 0, want a refusal")
+	}
+	if got := recordedLead(t, d, root); got != "lead-1" {
+		t.Errorf("recorded lead = %q, want lead-1 (unchanged)", got)
+	}
+}
