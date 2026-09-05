@@ -1,6 +1,6 @@
 ---
 name: quest
-description: Use for any non-trivial task. Orchestrates the Research-Plan-Implement cycle with compaction between phases, integrating council, lembas, gather-lore, and warden. Enforces discipline and phase gates.
+description: Use for multi-file or multi-step changes that need research and a plan — not single-file fixes under ~50 lines that follow an existing pattern (see Escape Hatch below). Orchestrates the Research-Plan-Implement cycle with compaction between phases, integrating council, lembas, gather-lore, and warden.
 ---
 
 # Quest — Research, Plan, Implement

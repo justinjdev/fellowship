@@ -43,7 +43,7 @@
 	const fellowshipSteps = [
 		{ label: 'Describe', detail: 'You describe multiple tasks (quests and scouts)' },
 		{ label: 'Analyze', detail: 'Gandalf analyzes them, creates task list' },
-		{ label: 'Spawn', detail: 'Spawns quest-runner agents in isolated worktrees' },
+		{ label: 'Spawn', detail: 'Spawns quest teammates in isolated worktrees' },
 		{ label: 'Scout', detail: 'Spawns scout agents for research questions' },
 		{ label: 'Monitor', detail: 'Palantir monitors progress (at 2+ quests)' },
 		{ label: 'Gate', detail: 'Gates surface to you for approval' },

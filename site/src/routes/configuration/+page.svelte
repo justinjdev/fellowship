@@ -26,6 +26,9 @@
   "issues": {
     "autoClose": true
   },
+  "autopsy": {
+    "expiryDays": 90
+  },
   "models": {
     "quest": null,
     "scout": null,
@@ -114,7 +117,7 @@
 		{
 			key: 'gates.autoApprove',
 			default_val: '[]',
-			desc: 'Gate names to auto-approve: "Research", "Plan", "Implement", "Review", "Complete". Gates not listed still surface to you.'
+			desc: 'Gate names to auto-approve: "Onboard", "Research", "Plan", "Implement", "Adversarial", "Review" (the phase being left). Gates not listed still surface to you.'
 		},
 		{
 			key: 'pr.draft',
@@ -140,6 +143,11 @@
 			key: 'issues.autoClose',
 			default_val: 'true',
 			desc: 'When true, /missive includes "Closes #N" in PR keywords so issues close on merge.'
+		},
+		{
+			key: 'autopsy.expiryDays',
+			default_val: '90',
+			desc: 'Days before a quest autopsy (failure record) expires and is eligible for cleanup.'
 		},
 		{
 			key: 'models.quest',

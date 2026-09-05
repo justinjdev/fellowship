@@ -1,6 +1,6 @@
 ---
 name: gather-lore
-description: Use BEFORE writing any code in an unfamiliar area. Studies reference files from CLAUDE.md to extract conventions and patterns. Prevents "wrong approach" code review rework by understanding how things are done before writing anything.
+description: Use when about to write code in an area with reference files documented in CLAUDE.md's Reference Files section. Studies those files to extract conventions and patterns, preventing wrong-approach review rework.
 ---
 
 # Gather Lore — Study Patterns Before Writing Code
@@ -31,7 +31,6 @@ If the user can't identify any:
 > Run: `git log --oneline --diff-filter=A -- [relevant directory] | head -10` to find recently added files.
 
 ### Step 2: Extract Patterns
-
 
 Read each reference file and produce a structured analysis. Be exhaustive — the patterns you miss are the ones that get flagged in review:
 

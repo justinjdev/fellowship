@@ -10,6 +10,27 @@
 <div class="container page">
 	<h1>Changelog</h1>
 
+	<!-- Unreleased -->
+	<section class="version" id="unreleased">
+		<h2 class="version-heading"><a href="{base}/changelog#unreleased">Unreleased</a></h2>
+		<ul class="changes">
+			<li>
+				<strong>Tightened skill triggers</strong> — <code>quest</code>, <code>council</code>, <code>gather-lore</code>, and <code>warden</code> descriptions now name their actual invocation scope instead of "any non-trivial task", reducing over-triggering.
+			</li>
+			<li>
+				<strong>Removed orphaned <code>quest-runner</code> agent</strong> — never spawned (quest teammates use <code>general-purpose</code>); removed from the plugin manifest, README, and the site's Agents and How It Works pages.
+			</li>
+			<li>
+				<strong>Documentation drift fixes</strong> — corrected <code>gates.autoApprove</code> valid values on the site config page, replaced the removed <code>using-git-worktrees</code> dependency with <code>writing-plans</code> (Plan phase), added the missing v1.6.1 changelog entry, fixed the quest phase/gate count, documented <code>autopsy.expiryDays</code> and added the missing <code>dataDir</code> row to <code>/settings</code>' schema table, corrected the <code>.fellowship/</code> gitignore wording in lembas, corrected palantir's Bash tool description, and fixed several command titles and skill/command wording.
+			</li>
+			<li>
+				<strong>Archived the <code>gate-state-machine</code> OpenSpec change</strong> — superseded by the Go CLI + SQLite gate enforcement design (v1.5.1&ndash;v2.2.0); moved to <code>openspec/changes/archive/</code> with a SUPERSEDED note.
+			</li>
+		</ul>
+	</section>
+
+	<div class="divider"><span class="divider-ring"></span></div>
+
 	<!-- v2.2.0 -->
 	<section class="version" id="v2-2-0">
 		<h2 class="version-heading"><a href="{base}/changelog#v2-2-0">v2.2.0</a></h2>
