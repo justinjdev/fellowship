@@ -57,6 +57,21 @@ func seedFinished(t *testing.T, d *db.DB, questName, status string) {
 	}
 }
 
+// seedFellowshipQuest registers a quest's worktree in fellowship_quests, the
+// way `fellowship state add-quest` does — quest_state carries no worktree
+// column, so Sweep has to join here to fill in QuestHealth.Worktree.
+func seedFellowshipQuest(t *testing.T, d *db.DB, questName, worktree string) {
+	t.Helper()
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		return sqlitex.Execute(conn,
+			`INSERT INTO fellowship_quests (name, worktree) VALUES (:name, :worktree)
+			 ON CONFLICT(name) DO UPDATE SET worktree = :worktree`,
+			&sqlitex.ExecOptions{Named: map[string]any{":name": questName, ":worktree": worktree}})
+	}); err != nil {
+		t.Fatalf("registering worktree for %s: %v", questName, err)
+	}
+}
+
 // seedEvent inserts an event directly (see testEvent).
 func seedEvent(t *testing.T, d *db.DB, event testEvent) {
 	t.Helper()
@@ -680,6 +695,43 @@ func TestSweepEmptyDB(t *testing.T) {
 	}
 	if report.Problems != 0 {
 		t.Errorf("Problems = %d, want 0", report.Problems)
+	}
+}
+
+// quest_state carries no worktree column, so Sweep must join
+// fellowship_quests by name to fill in QuestHealth.Worktree — the dashboard
+// and app.js both key off it.
+func TestSweepPopulatesWorktree(t *testing.T) {
+	d := db.OpenTest(t)
+	now := time.Now().UTC()
+
+	seedQuest(t, d, &state.State{
+		QuestName: "quest-a",
+		Phase:     "Implement",
+	})
+	seedFellowshipQuest(t, d, "quest-a", "/tmp/worktrees/quest-a")
+
+	opts := Options{
+		GateThreshold: 10 * time.Minute,
+		ZombieTimeout: 15 * time.Minute,
+		Now:           now,
+	}
+
+	var report *HealthReport
+	err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		report, err = Sweep(conn, opts)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	if len(report.Quests) != 1 {
+		t.Fatalf("len(Quests) = %d, want 1", len(report.Quests))
+	}
+	if got := report.Quests[0].Worktree; got != "/tmp/worktrees/quest-a" {
+		t.Errorf("Worktree = %q, want %q", got, "/tmp/worktrees/quest-a")
 	}
 }
 

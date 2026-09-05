@@ -166,9 +166,10 @@
     var total = (group.quests || []).length + (group.scouts || []).length;
     var hasPending = false;
 
+    var implementIdx = PHASES.indexOf("Implement");
     groupQuests.forEach(function (q) {
       var idx = PHASES.indexOf(q.phase);
-      if (idx >= 3) implementPlus++; // Implement+
+      if (implementIdx >= 0 && idx >= implementIdx) implementPlus++; // Implement+
       if (q.gate_pending) hasPending = true;
     });
 
@@ -203,7 +204,7 @@
     }
     progressHTML += "</div>";
 
-    var health = getQuestHealth(quest.worktree);
+    var health = getQuestHealth(quest.worktree, quest.name);
     var badgeHTML = health ? " " + renderHealthBadge(health.health) : "";
 
     var statusBadgeHTML = "";
@@ -404,11 +405,12 @@
     complete: "rgba(90, 138, 90, 0.15)"
   };
 
-  function getQuestHealth(worktree) {
+  function getQuestHealth(worktree, name) {
     if (!healthData || !healthData.quests) return null;
     for (var i = 0; i < healthData.quests.length; i++) {
-      if (healthData.quests[i].worktree === worktree) {
-        return healthData.quests[i];
+      var h = healthData.quests[i];
+      if ((worktree && h.worktree === worktree) || (name && h.name === name)) {
+        return h;
       }
     }
     return null;

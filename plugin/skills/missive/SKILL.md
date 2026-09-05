@@ -1,6 +1,6 @@
 ---
 name: missive
-description: Fetches GitHub issue context for quest spawning. Parses issue references, retrieves structured data via gh, and produces branch suggestions and PR keywords. Used standalone or as input to quest orchestration.
+description: Invoke only when spawning a quest from a GitHub issue reference. Fetches GitHub issue context for quest spawning. Parses issue references, retrieves structured data via gh, and produces branch suggestions and PR keywords. Used standalone or as input to quest orchestration.
 ---
 
 # Missive — GitHub Issue Context

@@ -64,6 +64,89 @@ func TestAddQuest(t *testing.T) {
 	}
 }
 
+// A worktree carries a UNIQUE index (schema v2), so re-registering it under a
+// new quest name must clear it from whichever quest held it before, rather
+// than fail the insert with a constraint violation.
+func TestAddQuest_ReregisterWorktree(t *testing.T) {
+	d := db.OpenTest(t)
+	worktree := t.TempDir()
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := InitFellowship(conn, "f1", "/tmp", "main"); err != nil {
+			t.Fatal(err)
+		}
+		if err := AddQuest(conn, QuestEntry{
+			Name: "q1", TaskDescription: "first attempt", Worktree: worktree, Branch: "feat/q1",
+		}); err != nil {
+			t.Fatalf("registering q1: %v", err)
+		}
+		if err := AddQuest(conn, QuestEntry{
+			Name: "q1b", TaskDescription: "retry", Worktree: worktree, Branch: "feat/q1b",
+		}); err != nil {
+			t.Fatalf("registering q1b on the same worktree: %v", err)
+		}
+
+		got, err := state.FindQuest(conn, worktree)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "q1b" {
+			t.Errorf("FindQuest(%q) = %q, want %q", worktree, got, "q1b")
+		}
+
+		quests, err := ListQuests(conn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(quests) != 2 {
+			t.Fatalf("expected 2 quest rows, got %d", len(quests))
+		}
+		for _, q := range quests {
+			if q.Name == "q1" && q.Worktree != "" {
+				t.Errorf("q1 should have had its worktree cleared, still has %q", q.Worktree)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Re-registering the same quest name against the same worktree is just an
+// update in place — nothing else should have its worktree cleared.
+func TestAddQuest_ReregisterSameName(t *testing.T) {
+	d := db.OpenTest(t)
+	worktree := t.TempDir()
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		if err := InitFellowship(conn, "f1", "/tmp", "main"); err != nil {
+			t.Fatal(err)
+		}
+		for i := 0; i < 2; i++ {
+			if err := AddQuest(conn, QuestEntry{
+				Name: "q1", TaskDescription: "attempt", Worktree: worktree, Branch: "feat/q1",
+			}); err != nil {
+				t.Fatalf("registering q1 (pass %d): %v", i, err)
+			}
+		}
+		quests, err := ListQuests(conn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(quests) != 1 {
+			t.Fatalf("expected 1 quest row, got %d", len(quests))
+		}
+		got, err := state.FindQuest(conn, worktree)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "q1" {
+			t.Errorf("FindQuest(%q) = %q, want %q", worktree, got, "q1")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAddAndRemoveScout(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {

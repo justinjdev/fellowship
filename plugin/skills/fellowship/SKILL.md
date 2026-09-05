@@ -47,7 +47,7 @@ User: "group: API work — quest: add endpoint, quest: add tests, scout: review 
 
 ### Pre-flight: Verify CWD
 
-Run `pwd`. If the path contains `.claude/worktrees` you are inside a quest worktree and Gandalf must not start here — stop and tell the user: "Error: Gandalf cannot start from inside a quest worktree (`<CWD>`). Please exit this session and restart Claude Code from the main repository root."
+Run `git rev-parse --path-format=absolute --show-toplevel` and `git rev-parse --path-format=absolute --git-common-dir` (`--path-format=absolute` matters — without it, `--git-common-dir` prints a relative path like `.git` when you're already at the main root, which will never string-match an absolute top-level path). The main repo root is the PARENT of the common git dir. If your top-level does not equal the main repo root, you are inside a distinct worktree (a quest worktree, or any other) and Gandalf must not start here — stop and tell the user: "Error: Gandalf cannot start from inside a worktree (`<CWD>`). Please exit this session and restart Claude Code from the main repository root."
 
 ### Load Config
 
@@ -179,11 +179,19 @@ Each quest runs the full `/quest` lifecycle: **Research → Plan → Implement �
 1. Read the worktree path: `TaskGet(taskId)` → `metadata.worktree_path`
 2. `~/.claude/fellowship/bin/fellowship gate approve --dir <worktree_path>`
 3. SendMessage the teammate that it is approved
+4. Send palantir a "check" message if active; otherwise run
+   `~/.claude/fellowship/bin/fellowship health --json` yourself — see
+   "Health Monitoring Without Palantir" in
+   [resources/lead-behavior.md](resources/lead-behavior.md)
 
 ### Gate Rejection Procedure
 
 1. `~/.claude/fellowship/bin/fellowship gate reject --dir <worktree_path>`
 2. SendMessage the feedback; the teammate addresses it, re-runs the prerequisites, and resubmits
+3. Send palantir a "check" message if active; otherwise run
+   `~/.claude/fellowship/bin/fellowship health --json` yourself — see
+   "Health Monitoring Without Palantir" in
+   [resources/lead-behavior.md](resources/lead-behavior.md)
 
 ## Conflict Resolution
 

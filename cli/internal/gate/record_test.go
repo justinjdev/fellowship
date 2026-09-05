@@ -3,6 +3,9 @@ package gate_test
 import (
 	"context"
 	"testing"
+	"time"
+
+	"zombiezen.com/go/sqlite/sqlitex"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/events"
@@ -70,6 +73,95 @@ func TestRecordApproval(t *testing.T) {
 			if !seen {
 				t.Errorf("missing tiding %q", ty)
 			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// RecordApproval must record how long the quest actually spent in the phase
+// it left — measured from the quest's created_at, for its first phase
+// completion — rather than a hardcoded 0.
+func TestRecordApproval_DurationFromCreatedAt(t *testing.T) {
+	d := newQuest(t, "Research")
+
+	createdAt := time.Now().UTC().Add(-90 * time.Second).Format(time.RFC3339)
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		return sqlitex.Execute(conn,
+			`UPDATE quest_state SET created_at = :created_at WHERE quest_name = 'quest-1'`,
+			&sqlitex.ExecOptions{Named: map[string]any{":created_at": createdAt}})
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		return gate.RecordApproval(conn, "quest-1", "Research", "Plan", "")
+	}); err != nil {
+		t.Fatalf("RecordApproval: %v", err)
+	}
+
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		phases, err := history.LoadPhases(conn, "quest-1")
+		if err != nil {
+			return err
+		}
+		if len(phases) != 1 {
+			t.Fatalf("phases = %+v, want 1", phases)
+		}
+		// Allow slack for the time this test itself takes to run.
+		if phases[0].DurationS < 85 || phases[0].DurationS > 120 {
+			t.Errorf("DurationS = %d, want ~90", phases[0].DurationS)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A quest's second phase completion measures from the first phase's
+// completed_at, not from created_at again.
+func TestRecordApproval_DurationFromPreviousPhase(t *testing.T) {
+	d := newQuest(t, "Research")
+
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		return gate.RecordApproval(conn, "quest-1", "Research", "Plan", "")
+	}); err != nil {
+		t.Fatalf("RecordApproval (Research): %v", err)
+	}
+
+	// Push the recorded Research completion into the past so the second
+	// approval's duration is measurably nonzero and driven by it, not by
+	// created_at.
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		return sqlitex.Execute(conn,
+			`UPDATE quest_phases SET completed_at = :t WHERE quest_name = 'quest-1' AND phase = 'Research'`,
+			&sqlitex.ExecOptions{Named: map[string]any{
+				":t": time.Now().UTC().Add(-60 * time.Second).Format(time.RFC3339),
+			}})
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		return gate.RecordApproval(conn, "quest-1", "Plan", "Implement", "")
+	}); err != nil {
+		t.Fatalf("RecordApproval (Plan): %v", err)
+	}
+
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		phases, err := history.LoadPhases(conn, "quest-1")
+		if err != nil {
+			return err
+		}
+		if len(phases) != 2 {
+			t.Fatalf("phases = %+v, want 2", phases)
+		}
+		if phases[1].Phase != "Plan" {
+			t.Fatalf("phases[1] = %+v, want Plan", phases[1])
+		}
+		if phases[1].DurationS < 55 || phases[1].DurationS > 90 {
+			t.Errorf("Plan DurationS = %d, want ~60", phases[1].DurationS)
 		}
 		return nil
 	}); err != nil {

@@ -11,6 +11,11 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/db"
 )
 
+// fixedNow is the clock DetectProblems is told to use in these tests, in
+// place of time.Now() offsets — it makes every "N minutes ago" fixture
+// deterministic instead of depending on how long the test takes to run.
+var fixedNow = time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+
 func insertQuestState(t *testing.T, conn *db.Conn, questName, phase string, gatePending bool, gateID string) {
 	t.Helper()
 	gp := 0
@@ -35,11 +40,11 @@ func insertQuestState(t *testing.T, conn *db.Conn, questName, phase string, gate
 func TestStalledDetection(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		oldTimestamp := time.Now().Add(-15 * time.Minute).Unix()
+		oldTimestamp := fixedNow.Add(-15 * time.Minute).Unix()
 		gateID := fmt.Sprintf("gate-Plan-%d", oldTimestamp)
 		insertQuestState(t, conn, "q1", "Plan", true, gateID)
 
-		problems, err := DetectProblems(conn)
+		problems, err := DetectProblems(conn, Options{Now: fixedNow})
 		if err != nil {
 			t.Fatalf("DetectProblems: %v", err)
 		}
@@ -65,11 +70,11 @@ func TestStalledDetection(t *testing.T) {
 func TestStalledNotDetectedWhenRecent(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		recentTimestamp := time.Now().Add(-2 * time.Minute).Unix()
+		recentTimestamp := fixedNow.Add(-2 * time.Minute).Unix()
 		gateID := fmt.Sprintf("gate-Plan-%d", recentTimestamp)
 		insertQuestState(t, conn, "q1", "Plan", true, gateID)
 
-		problems, err := DetectProblems(conn)
+		problems, err := DetectProblems(conn, Options{Now: fixedNow})
 		if err != nil {
 			t.Fatalf("DetectProblems: %v", err)
 		}
@@ -90,7 +95,7 @@ func TestZombieDetection(t *testing.T) {
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		insertQuestState(t, conn, "q1", "Implement", false, "")
 
-		oldTime := time.Now().Add(-20 * time.Minute).UTC().Format(time.RFC3339)
+		oldTime := fixedNow.Add(-20 * time.Minute).Format(time.RFC3339)
 		if err := Record(conn, Event{
 			Timestamp: oldTime,
 			Quest:     "q1",
@@ -99,7 +104,7 @@ func TestZombieDetection(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		problems, err := DetectProblems(conn)
+		problems, err := DetectProblems(conn, Options{Now: fixedNow})
 		if err != nil {
 			t.Fatalf("DetectProblems: %v", err)
 		}
@@ -110,6 +115,9 @@ func TestZombieDetection(t *testing.T) {
 				found = true
 				if p.Severity != Critical {
 					t.Errorf("zombie severity = %q, want %q", p.Severity, Critical)
+				}
+				if p.Message != "No activity for 20m" {
+					t.Errorf("zombie message = %q, want %q", p.Message, "No activity for 20m")
 				}
 			}
 		}
@@ -133,7 +141,7 @@ func TestZombieNotDetectedWhenComplete(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		oldTime := time.Now().Add(-20 * time.Minute).UTC().Format(time.RFC3339)
+		oldTime := fixedNow.Add(-20 * time.Minute).Format(time.RFC3339)
 		if err := Record(conn, Event{
 			Timestamp: oldTime,
 			Quest:     "q1",
@@ -142,7 +150,7 @@ func TestZombieNotDetectedWhenComplete(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		problems, err := DetectProblems(conn)
+		problems, err := DetectProblems(conn, Options{Now: fixedNow})
 		if err != nil {
 			t.Fatalf("DetectProblems: %v", err)
 		}
@@ -163,7 +171,7 @@ func TestStrugglingDetection(t *testing.T) {
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		insertQuestState(t, conn, "q1", "Plan", false, "")
 
-		now := time.Now().UTC().Format(time.RFC3339)
+		now := fixedNow.Format(time.RFC3339)
 		if err := Record(conn, Event{Timestamp: now, Quest: "q1", Type: GateRejected, Phase: "Plan"}); err != nil {
 			t.Fatal(err)
 		}
@@ -171,7 +179,7 @@ func TestStrugglingDetection(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		problems, err := DetectProblems(conn)
+		problems, err := DetectProblems(conn, Options{Now: fixedNow})
 		if err != nil {
 			t.Fatalf("DetectProblems: %v", err)
 		}
@@ -199,12 +207,12 @@ func TestStrugglingNotDetectedWithOneRejection(t *testing.T) {
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		insertQuestState(t, conn, "q1", "Plan", false, "")
 
-		now := time.Now().UTC().Format(time.RFC3339)
+		now := fixedNow.Format(time.RFC3339)
 		if err := Record(conn, Event{Timestamp: now, Quest: "q1", Type: GateRejected, Phase: "Plan"}); err != nil {
 			t.Fatal(err)
 		}
 
-		problems, err := DetectProblems(conn)
+		problems, err := DetectProblems(conn, Options{Now: fixedNow})
 		if err != nil {
 			t.Fatalf("DetectProblems: %v", err)
 		}
@@ -225,7 +233,7 @@ func TestNoProblemsForHealthyQuest(t *testing.T) {
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		insertQuestState(t, conn, "q1", "Implement", false, "")
 
-		now := time.Now().UTC().Format(time.RFC3339)
+		now := fixedNow.Format(time.RFC3339)
 		if err := Record(conn, Event{
 			Timestamp: now,
 			Quest:     "q1",
@@ -235,7 +243,7 @@ func TestNoProblemsForHealthyQuest(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		problems, err := DetectProblems(conn)
+		problems, err := DetectProblems(conn, Options{Now: fixedNow})
 		if err != nil {
 			t.Fatalf("DetectProblems: %v", err)
 		}

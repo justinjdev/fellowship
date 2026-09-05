@@ -30,7 +30,6 @@ type Todo struct {
 
 type QuestTodoList struct {
 	QuestName string `json:"quest_name"`
-	Task      string `json:"task"`
 	Items     []Todo `json:"items"`
 }
 
@@ -58,11 +57,15 @@ func ValidStatus(s string) (TodoStatus, bool) {
 
 // Init creates the initial todo list metadata for a quest.
 // This is a no-op for DB-backed storage since todos reference quest_state via FK.
-func Init(conn *sqlite.Conn, quest, task string) error {
+//
+// It used to also accept a task description to store alongside the list, but
+// neither errands nor errand_deps carries a column for it, and adding one is
+// a schema change out of scope here — `fellowship todo init` dropped --task
+// rather than silently discard it.
+func Init(conn *sqlite.Conn, quest string) error {
 	// todos are stored per-row with quest_name FK; nothing to initialize.
 	_ = conn
 	_ = quest
-	_ = task
 	return nil
 }
 
@@ -132,9 +135,11 @@ func UpdateStatus(conn *sqlite.Conn, quest, id string, status TodoStatus) error 
 	return nil
 }
 
-// List returns all todos for a quest, ordered by ID.
+// List returns all todos for a quest, ordered by ID. It always returns a
+// non-nil slice — `todo show` marshals this straight to JSON, and a quest
+// with no todos yet should read as [], not null.
 func List(conn *sqlite.Conn, quest string) ([]Todo, error) {
-	var items []Todo
+	items := []Todo{}
 	err := sqlitex.Execute(conn,
 		`SELECT id, description, status, phase, created_at, updated_at
 		 FROM errands WHERE quest_name = :quest ORDER BY id`,
