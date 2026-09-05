@@ -167,9 +167,13 @@ func openStore(cwd string, args []string) (*db.DB, error) {
 // storeOpenExit turns a store-open failure into an exit code according to the
 // enforcement posture:
 //
-//   - No store at all — this is an ordinary repo with no fellowship, so hooks
-//     allow (exit 0) and there is nothing to enforce. Other commands report the
-//     missing store.
+//   - No store, and no fellowship data directory either — this is an ordinary
+//     repo with no fellowship, so hooks allow (exit 0) and there is nothing to
+//     enforce. Other commands report the missing store.
+//   - No store (or a zero-byte one) in a repo that HAS a data directory — a
+//     fellowship is expected here and its state is gone. Deleting the store was
+//     the cheapest way to switch enforcement off, so gate hooks block (exit 2);
+//     worktree-guard still fails open.
 //   - Store present but unopenable (corrupt, unreadable, locked out) — gate
 //     hooks block (exit 2) because enforcement state is unknown; worktree-guard
 //     still fails open.
@@ -180,7 +184,18 @@ func storeOpenExit(cwd string, args []string, err error) int {
 		hookName = args[1]
 	}
 
-	if errors.Is(err, db.ErrNoStore) {
+	if errors.Is(err, db.ErrNoStore) || errors.Is(err, db.ErrEmptyStore) {
+		if fellowshipExpected(cwd) {
+			if isGateHook(hookName) {
+				fmt.Fprintln(os.Stderr, "fellowship: store missing or empty — restore it or run \"fellowship state init\". Blocking for safety.")
+				return 2
+			}
+			if isHook {
+				return 0 // worktree-guard and unknown hooks fail open
+			}
+			fmt.Fprintln(os.Stderr, "fellowship: store missing or empty — restore it or run \"fellowship state init\".")
+			return 1
+		}
 		if isHook {
 			return 0 // no fellowship here — nothing to enforce
 		}

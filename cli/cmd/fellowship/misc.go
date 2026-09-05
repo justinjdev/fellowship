@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
@@ -244,6 +245,23 @@ func checkDir(dir string) error {
 		return fmt.Errorf("--dir %q belongs to a different repository than the current directory", dir)
 	}
 	return nil
+}
+
+// fellowshipExpected reports whether the repo containing fromDir is supposed to
+// have a fellowship store: its main worktree has a fellowship data directory.
+//
+// That is the difference between "an ordinary repo, nothing to enforce" and "a
+// fellowship whose store went missing". Deleting <data-dir>/fellowship.db was
+// the cheapest way to switch enforcement off — every hook read "no store here"
+// and allowed. The data directory is left behind by everything else the
+// fellowship writes, so its presence says a fellowship was expected here.
+func fellowshipExpected(fromDir string) bool {
+	mainRepo, err := gitutil.MainRepoRoot(fromDir)
+	if err != nil {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(mainRepo, datadir.Resolve(mainRepo)))
+	return err == nil && info.IsDir()
 }
 
 // jsonFilesExist checks whether legacy JSON state files exist in the .fellowship

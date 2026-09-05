@@ -29,6 +29,16 @@ type DB struct {
 // than block (and must not bring a store into existence by looking).
 var ErrNoStore = errors.New("db: no fellowship store")
 
+// ErrEmptyStore reports that the store file exists but is zero bytes.
+//
+// This is what deleting the store looks like when something recreates the file
+// — and it used to be indistinguishable from a brand-new one: ensureSchema saw
+// user_version 0, wrote the whole schema, and the hook that opened it reported
+// "no quest here" for a store it had just built itself. An empty store is a
+// destroyed store, never a fresh one; only `init` and `state init` may build a
+// schema.
+var ErrEmptyStore = errors.New("db: fellowship store is empty")
+
 // StorePath returns the fellowship database path for the repo containing
 // fromDir, without touching the filesystem.
 //
@@ -72,11 +82,15 @@ func OpenExisting(fromDir string) (*DB, error) {
 
 // openExistingPath is OpenExisting once the store path is known.
 func openExistingPath(dbPath string) (*DB, error) {
-	if _, err := os.Stat(dbPath); err != nil {
+	info, err := os.Stat(dbPath)
+	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("%w at %s", ErrNoStore, dbPath)
 		}
 		return nil, fmt.Errorf("db: stat %s: %w", dbPath, err)
+	}
+	if info.Size() == 0 {
+		return nil, fmt.Errorf("%w at %s", ErrEmptyStore, dbPath)
 	}
 	return openPath(dbPath, false)
 }

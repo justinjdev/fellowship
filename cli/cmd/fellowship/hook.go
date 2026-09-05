@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
@@ -135,7 +134,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 	case "gate-guard":
 		var result hooks.HookResult
 		if err := d.WithConn(ctx, func(conn *db.Conn) error {
-			s, err := state.Load(conn, questName)
+			s, err := loadQuestState(conn, questName)
 			if err != nil {
 				return err
 			}
@@ -155,7 +154,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 	case "gate-prereq":
 		// Recording-only: GatePrereq never blocks, it just marks lembas done.
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
-			s, err := state.Load(conn, questName)
+			s, err := loadQuestState(conn, questName)
 			if err != nil {
 				return err
 			}
@@ -180,7 +179,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 	case "completion-guard":
 		var result hooks.HookResult
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
-			s, err := state.Load(conn, questName)
+			s, err := loadQuestState(conn, questName)
 			if err != nil {
 				return err
 			}
@@ -202,7 +201,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 
 	case "file-track":
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
-			s, err := state.Load(conn, questName)
+			s, err := loadQuestState(conn, questName)
 			if err != nil {
 				return err
 			}
@@ -217,7 +216,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 		var result hooks.HookResult
 		var gateSubmitEnrich bool
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
-			s, err := state.Load(conn, questName)
+			s, err := loadQuestState(conn, questName)
 			if err != nil {
 				return err
 			}
@@ -286,7 +285,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 
 	case "metadata-track":
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
-			s, err := state.Load(conn, questName)
+			s, err := loadQuestState(conn, questName)
 			if err != nil {
 				return err
 			}
@@ -314,23 +313,48 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 	}
 }
 
-// bootstrapNotice makes the bootstrap allow visible exactly once per process,
-// so a teammate can see why the hook let a call through without every
-// subsequent tool call repeating it.
-var bootstrapNotice sync.Once
+// errQuestRowMissing reports a quest_state row that is gone from under a quest
+// that has already done something. Unlike the bootstrap window this fails
+// closed: see loadQuestState.
+var errQuestRowMissing = errors.New("quest state row missing")
+
+// loadQuestState loads a quest's row, telling the bootstrap window apart from a
+// row that was deleted.
+//
+// A missing row has to allow during bootstrap — the lead has registered the
+// worktree, the teammate has not run `fellowship init` yet, and blocking would
+// deadlock the quest before it starts. But "no row" was also the state a
+// teammate could manufacture to shake off a pending gate. A quest that has
+// submitted a gate or logged an event is past its bootstrap, so a row missing
+// under it is a destroyed row and blocks.
+func loadQuestState(conn *db.Conn, questName string) (*state.State, error) {
+	s, err := state.Load(conn, questName)
+	if !errors.Is(err, state.ErrNotFound) {
+		return s, err
+	}
+	hasHistory, histErr := hooks.QuestHasHistory(conn, questName)
+	if histErr != nil {
+		return nil, histErr // unknown — fail closed
+	}
+	if hasHistory {
+		return nil, fmt.Errorf("%w: %s", errQuestRowMissing, questName)
+	}
+	return nil, err
+}
 
 // hookDBExit maps a hook's database error to an exit code.
 //
-// state.ErrNotFound is the bootstrap window: the lead has registered this
-// worktree as a quest, but the teammate has not run `fellowship init` yet, so
-// no quest_state row exists. Blocking there is a deadlock — the teammate cannot
-// run the very command that would create the row. So a missing quest row
-// allows. Every other error is a real failure and fails closed.
+// state.ErrNotFound is the bootstrap window (see loadQuestState): a missing
+// quest row on a quest with no history allows, so the teammate can run the very
+// command that creates the row. Every other error is a real failure and fails
+// closed.
 func hookDBExit(err error) int {
+	if errors.Is(err, errQuestRowMissing) {
+		fmt.Fprintln(os.Stderr, `fellowship: quest state row missing — run "fellowship init --quest <name>" from the lead. Blocking for safety.`)
+		return 2
+	}
 	if errors.Is(err, state.ErrNotFound) {
-		bootstrapNotice.Do(func() {
-			fmt.Fprintln(os.Stderr, `fellowship: no quest state for this worktree yet — allowing so the quest can be started with "fellowship init".`)
-		})
+		fmt.Fprintln(os.Stderr, `fellowship: no quest state for this worktree yet — allowing so the quest can be started with "fellowship init".`)
 		return 0
 	}
 	fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
