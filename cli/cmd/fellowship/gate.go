@@ -352,7 +352,7 @@ func runInit(d *db.DB, args []string) int {
 	// being submitted, and gate-guard waves it through because nothing is
 	// pending. Only the lead may do that. On a row being created for the first
 	// time the flags are ordinary bootstrap and anyone may pass them.
-	callerIsLead, leadKnown := initCallerIsLead(root)
+	callerIsLead, leadKnown := initCallerIsLead(d, root)
 	// Whether --plan-skip's history entry is written: only alongside a phase
 	// move that actually happened.
 	recordSkipped := true
@@ -429,12 +429,18 @@ func runInit(d *db.DB, args []string) int {
 // leadKnown is what separates "you are not the lead" (a teammate — refuse) from
 // "nobody knows who the lead is" (an old fellowship, or a plain shell — refuse
 // the phase move, but do not accuse anyone).
-func initCallerIsLead(dir string) (callerIsLead, leadKnown bool) {
+func initCallerIsLead(d *db.DB, dir string) (callerIsLead, leadKnown bool) {
 	mainRoot := dir
 	if mr, err := gitutil.MainRepoRoot(dir); err == nil {
 		mainRoot = mr
 	}
-	lead := state.LeadSessionID(mainRoot, datadir.Resolve(mainRoot))
+	lead := ""
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		lead = state.LeadSessionID(conn, mainRoot, datadir.Resolve(mainRoot))
+		return nil
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: warning: could not read the recorded lead: %v\n", err)
+	}
 	return hooks.IsLeadSession(state.CurrentSessionID(), lead), lead != ""
 }
 

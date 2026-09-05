@@ -24,6 +24,21 @@ const baseSchemaVersion = 1
 // TestFreshSchemaMatchesMigratedSchema in migrations_test.go.
 const questWorktreeUniqueIndexSQL = `CREATE UNIQUE INDEX IF NOT EXISTS idx_fellowship_quests_worktree ON fellowship_quests(worktree) WHERE worktree IS NOT NULL AND worktree != ''`
 
+// leadTableSQL records which Claude Code session is the fellowship's lead.
+// It lives in the store rather than in a file under the data directory: the
+// data directory is exempt from the write guards (teammates legitimately write
+// coordination files there), so a marker file was editable by the very sessions
+// the guard exists to identify. Nothing writes SQLite through Edit/Write.
+// This is migration version 4 in migrations.go; declared once here so the
+// fresh-install schema and the upgrade migration apply byte-identical DDL —
+// see TestFreshSchemaMatchesMigratedSchema in migrations_test.go.
+const leadTableSQL = `CREATE TABLE IF NOT EXISTS lead (
+		id         INTEGER PRIMARY KEY CHECK (id = 1),
+		session_id TEXT NOT NULL,
+		root       TEXT NOT NULL,
+		created_at TEXT NOT NULL
+	)`
+
 // baseSchema contains every CREATE TABLE, INDEX, and TRIGGER statement from
 // the original version-1 schema. Do not edit a statement here to ship a
 // schema change — add a migration step in migrations.go instead (see
@@ -240,7 +255,7 @@ var baseSchema = []string{
 // baseSchema plus the additive DDL from every migration step in
 // migrations.go, so a fresh install and a store upgraded through the ladder
 // always converge on identical schema objects.
-var schema = append(append([]string{}, baseSchema...), questWorktreeUniqueIndexSQL)
+var schema = append(append([]string{}, baseSchema...), questWorktreeUniqueIndexSQL, leadTableSQL)
 
 // applySchemaCalls counts how many times applySchema has actually run DDL.
 // Tests use it to assert that opening an already-current store takes the

@@ -6,13 +6,18 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"zombiezen.com/go/sqlite"
+	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-// LeadMarkerName is the file, inside the fellowship data directory, that
-// records which Claude Code session started the fellowship.
+// LeadMarkerName is the legacy file, inside the fellowship data directory, that
+// recorded which Claude Code session started the fellowship. Fellowships now
+// record the lead in the store (the `lead` table); the file is read as a
+// one-release fallback and never written.
 const LeadMarkerName = "lead"
 
-// LeadMarker is the content of that file.
+// Lead is the fellowship's recorded lead session.
 //
 // The worktree-guard needs to tell the lead's own session (which legitimately
 // writes in the main worktree) from a quest teammate that was mis-placed into
@@ -20,18 +25,25 @@ const LeadMarkerName = "lead"
 // root — so the lead is identified by session: `fellowship state init` records
 // the id of the session it ran in, and hook payloads carry the id of the
 // session the hook is firing for.
-type LeadMarker struct {
+//
+// It lives in SQLite because everything else about the data directory is
+// writable by the sessions this identifies: the guards exempt the data
+// directory so teammates can keep coordination files there, which made the old
+// <data-dir>/lead file a marker its own subjects could forge. Teammates cannot
+// write SQLite through Edit/Write, and the store file itself is no longer
+// exempt from the write guards.
+type Lead struct {
 	// SessionID is the Claude Code session that ran `fellowship state init`.
 	// Empty when the environment exposed no session id, in which case the
 	// guard falls back to its narrower rule.
 	SessionID string `json:"session_id,omitempty"`
 	// Root is the main worktree root the fellowship was initialized in.
 	Root string `json:"root,omitempty"`
-	// CreatedAt is when the marker was written (RFC3339, UTC).
+	// CreatedAt is when the lead was recorded (RFC3339, UTC).
 	CreatedAt string `json:"created_at,omitempty"`
 }
 
-// LeadMarkerPath returns the marker path for a data directory in root.
+// LeadMarkerPath returns the legacy marker path for a data directory in root.
 func LeadMarkerPath(root, dataDirName string) string {
 	if dataDirName == "" {
 		dataDirName = ".fellowship"
@@ -52,42 +64,65 @@ func CurrentSessionID() string {
 	return ""
 }
 
-// WriteLeadMarker records sessionID as the fellowship's lead session. An empty
-// sessionID is still written (with the root and timestamp) so the marker
-// documents that a lead was recorded but no session id was available.
-func WriteLeadMarker(root, dataDirName, sessionID string) error {
-	path := LeadMarkerPath(root, dataDirName)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("state: create data directory: %w", err)
-	}
-	data, err := json.Marshal(LeadMarker{
-		SessionID: sessionID,
-		Root:      root,
-		CreatedAt: time.Now().UTC().Format(time.RFC3339),
-	})
+// RecordLead writes sessionID as the fellowship's lead session, replacing any
+// previously recorded lead. An empty sessionID is still recorded (with the root
+// and timestamp) so the row documents that a lead was recorded but no session
+// id was available.
+func RecordLead(conn *sqlite.Conn, root, sessionID string) error {
+	err := sqlitex.Execute(conn, `INSERT INTO lead (id, session_id, root, created_at)
+		VALUES (1, :session_id, :root, :now)
+		ON CONFLICT(id) DO UPDATE SET
+			session_id = :session_id, root = :root, created_at = :now`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{
+				":session_id": sessionID,
+				":root":       root,
+				":now":        time.Now().UTC().Format(time.RFC3339),
+			},
+		})
 	if err != nil {
-		return fmt.Errorf("state: encode lead marker: %w", err)
-	}
-	if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
-		return fmt.Errorf("state: write lead marker: %w", err)
+		return fmt.Errorf("state: record lead: %w", err)
 	}
 	return nil
 }
 
-// ReadLeadMarker reads the marker. A missing marker is not an error: fellowships
-// initialized before the marker existed simply have none, and the guard treats
-// that as "lead unknown".
-func ReadLeadMarker(root, dataDirName string) (LeadMarker, error) {
+// ReadLead returns the recorded lead. found is false when no lead row exists,
+// which is not an error: a fellowship initialized by an older binary has none.
+func ReadLead(conn *sqlite.Conn) (lead Lead, found bool, err error) {
+	err = sqlitex.Execute(conn, `SELECT session_id, root, created_at FROM lead WHERE id = 1`,
+		&sqlitex.ExecOptions{
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				found = true
+				lead.SessionID = stmt.ColumnText(0)
+				lead.Root = stmt.ColumnText(1)
+				lead.CreatedAt = stmt.ColumnText(2)
+				return nil
+			},
+		})
+	if err != nil {
+		return Lead{}, false, fmt.Errorf("state: read lead: %w", err)
+	}
+	return lead, found, nil
+}
+
+// ReadLeadMarker reads the legacy marker file. A missing marker is not an
+// error: fellowships that recorded their lead in the store have none, and the
+// guard treats a missing one as "lead unknown".
+//
+// Deprecated: the lead lives in the store (see RecordLead). This remains only
+// so a fellowship initialized by the previous release keeps its lead for one
+// more release, and it is consulted only when the store holds no lead at all.
+func ReadLeadMarker(root, dataDirName string) (Lead, error) {
 	data, err := os.ReadFile(LeadMarkerPath(root, dataDirName))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return LeadMarker{}, nil
+			return Lead{}, nil
 		}
-		return LeadMarker{}, fmt.Errorf("state: read lead marker: %w", err)
+		return Lead{}, fmt.Errorf("state: read lead marker: %w", err)
 	}
-	var m LeadMarker
+	var m Lead
 	if err := json.Unmarshal(data, &m); err != nil {
-		return LeadMarker{}, fmt.Errorf("state: parse lead marker: %w", err)
+		return Lead{}, fmt.Errorf("state: parse lead marker: %w", err)
 	}
 	return m, nil
 }
@@ -95,7 +130,16 @@ func ReadLeadMarker(root, dataDirName string) (LeadMarker, error) {
 // LeadSessionID returns the recorded lead session id, or "" for any reason it
 // cannot be read. Callers use it to identify the lead, never to block, so a
 // failure to read it must read as "unknown" rather than propagate.
-func LeadSessionID(root, dataDirName string) string {
+//
+// The store is the authority. The legacy marker file is consulted only when the
+// store holds no lead row at all — a store that names a lead is never overruled
+// by a file the sessions it identifies could have written themselves.
+func LeadSessionID(conn *sqlite.Conn, root, dataDirName string) string {
+	if conn != nil {
+		if lead, found, err := ReadLead(conn); err == nil && found {
+			return lead.SessionID
+		}
+	}
 	m, err := ReadLeadMarker(root, dataDirName)
 	if err != nil {
 		return ""

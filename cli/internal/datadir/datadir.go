@@ -13,6 +13,22 @@ import (
 // DefaultName is the default directory name for fellowship working files.
 const DefaultName = ".fellowship"
 
+// StoreFileName is the SQLite store's file name inside the data directory.
+const StoreFileName = "fellowship.db"
+
+// IsStorePath reports whether a path names the SQLite store or one of the
+// sidecar files SQLite keeps beside it (-wal, -shm, -journal).
+//
+// The data directory as a whole is exempt from the write guards — teammates
+// legitimately keep coordination files there — but the store is not a
+// coordination file: it IS the enforcement state, and a session that can write
+// it can rewrite its own phase, clear its own gate, or name itself the lead.
+// Nothing legitimate edits it through Edit/Write; the CLI is the only writer.
+func IsStorePath(path string) bool {
+	base := filepath.Base(filepath.Clean(filepath.FromSlash(path)))
+	return base == StoreFileName || strings.HasPrefix(base, StoreFileName+"-")
+}
+
 // cfg holds the subset of fellowship config the CLI cares about.
 type cfg struct {
 	DataDir  string `json:"dataDir"`

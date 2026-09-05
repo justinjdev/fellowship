@@ -10,7 +10,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/fellowship"
 	"github.com/justinjdev/fellowship/cli/internal/install"
@@ -80,9 +79,14 @@ func runStateInit(d *db.DB, args []string) int {
 	// Record which Claude Code session this is. The main working tree is the
 	// lead's own workspace, so worktree-guard needs to know which session may
 	// write there; nothing in the git topology distinguishes the lead from a
-	// teammate that was mis-placed into the main tree. Best-effort: without a
-	// marker the guard falls back to its narrower rule.
-	if err := state.WriteLeadMarker(root, datadir.Name(), state.CurrentSessionID()); err != nil {
+	// teammate that was mis-placed into the main tree. It goes in the store,
+	// not in a file under the data directory: the guards exempt that directory,
+	// so a marker there was forgeable by the sessions it identified.
+	// Best-effort — without a recorded lead the guard falls back to its
+	// narrower rule.
+	if err := d.WithTx(ctx, func(conn *db.Conn) error {
+		return state.RecordLead(conn, root, state.CurrentSessionID())
+	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: warning: could not record the lead session: %v\n", err)
 	}
 

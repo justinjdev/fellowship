@@ -64,11 +64,12 @@ func GateGuard(s *state.State, input *HookInput, p GuardParams) HookResult {
 		}
 	}
 
+	if result := StoreWriteGuard(input); result.Block {
+		return result
+	}
+
+	filePath := TargetPath(input)
 	if state.IsEarlyPhase(s.Phase) {
-		filePath := input.ToolInput.FilePath
-		if filePath == "" {
-			filePath = input.ToolInput.NotebookPath
-		}
 		if filePath != "" && !datadir.IsDataDirPath(filePath) {
 			return HookResult{
 				Block:   true,
@@ -78,6 +79,36 @@ func GateGuard(s *state.State, input *HookInput, p GuardParams) HookResult {
 	}
 
 	return HookResult{}
+}
+
+// StoreWriteGuard refuses an Edit/Write/NotebookEdit aimed at the SQLite store.
+//
+// The data directory is exempt from the phase write rule — teammates keep
+// coordination files there — but the store inside it is not a coordination
+// file: it IS the enforcement state, and hand-editing it rewrites a phase,
+// clears a gate, or renames the lead. Blocked in every phase, for every
+// session; the CLI is the only writer.
+func StoreWriteGuard(input *HookInput) HookResult {
+	filePath := TargetPath(input)
+	if filePath == "" || !datadir.IsStorePath(filePath) {
+		return HookResult{}
+	}
+	return HookResult{
+		Block:   true,
+		Message: "The fellowship store is not editable by hand — it is the enforcement state itself. Use the fellowship CLI (gate, init, todo, notes) to change it.",
+	}
+}
+
+// TargetPath returns the file a tool call writes: file_path, or notebook_path
+// for NotebookEdit. Empty for tool calls that write no file (Bash, Task, ...).
+func TargetPath(input *HookInput) string {
+	if input == nil {
+		return ""
+	}
+	if p := input.ToolInput.FilePath; p != "" {
+		return p
+	}
+	return input.ToolInput.NotebookPath
 }
 
 // WorktreeGuard blocks the lead session from cd'ing into a quest worktree.

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 )
 
 // IsolationParams carries the facts the isolation guard needs, already resolved
@@ -152,7 +154,13 @@ func relWithin(root, target string) (string, bool) {
 // legitimately manages these even in the main tree. The data directory is
 // user-configurable (datadir.Name), so the caller passes its resolved name
 // rather than assuming the ".fellowship" default; .git and .claude are fixed.
+// The store is the one thing inside the data directory that is never exempt:
+// it is the enforcement state, not a coordination file, and a session that can
+// write it can name itself the lead.
 func isCoordinationPath(rel, dataDirName string) bool {
+	if datadir.IsStorePath(rel) {
+		return false
+	}
 	first := strings.SplitN(filepath.ToSlash(rel), "/", 2)[0]
 	if first == ".git" || first == ".claude" {
 		return true

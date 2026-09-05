@@ -48,9 +48,7 @@ func TestRunInit_PhaseMoveOnExistingRowIsLeadOnly(t *testing.T) {
 	t.Chdir(root)
 	d := db.OpenTest(t)
 
-	if err := state.WriteLeadMarker(root, ".fellowship", "lead-1"); err != nil {
-		t.Fatal(err)
-	}
+	recordLead(t, d, root, "lead-1")
 
 	// Bootstrap: the row does not exist yet, so anyone may pick the phase.
 	t.Setenv("CLAUDE_CODE_SESSION_ID", "teammate-1")
@@ -97,9 +95,7 @@ func TestRunInit_ResetWithoutPhaseIsAllowedForTeammates(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Chdir(root)
 	d := db.OpenTest(t)
-	if err := state.WriteLeadMarker(root, ".fellowship", "lead-1"); err != nil {
-		t.Fatal(err)
-	}
+	recordLead(t, d, root, "lead-1")
 
 	gateID := "gate-Research-1"
 	setQuestState(t, d, &state.State{

@@ -41,7 +41,7 @@ func StorePath(fromDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("db: resolve main repo: %w", err)
 	}
-	return filepath.Join(mainRepo, datadir.Resolve(mainRepo), "fellowship.db"), nil
+	return filepath.Join(mainRepo, datadir.Resolve(mainRepo), datadir.StoreFileName), nil
 }
 
 // Open resolves the main repo from fromDir (via git rev-parse --git-common-dir),

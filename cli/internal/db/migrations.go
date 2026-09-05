@@ -88,6 +88,21 @@ var migrations = []migration{
 			return sqlitex.ExecuteTransient(conn, remapAutoApproveSQL(), nil)
 		},
 	},
+	{
+		version: 4,
+		up: func(conn *Conn) error {
+			// The lead's session id moves out of <data-dir>/lead and into
+			// the store. The data directory is exempt from the write
+			// guards, so a teammate could rewrite the marker with its own
+			// session id and become the lead as far as worktree-guard was
+			// concerned. Nothing writes SQLite through Edit/Write.
+			//
+			// The row is not backfilled: the marker file is still read as
+			// a one-release fallback, and `fellowship state init` (or
+			// `state init --claim-lead`) writes the row.
+			return sqlitex.ExecuteTransient(conn, leadTableSQL, nil)
+		},
+	},
 }
 
 // retiredPhases maps each phase name removed by the four-phase lifecycle

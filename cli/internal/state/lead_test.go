@@ -1,63 +1,145 @@
 package state_test
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
-func TestLeadMarker_RoundTrip(t *testing.T) {
-	root := t.TempDir()
-	if err := state.WriteLeadMarker(root, ".fellowship", "session-123"); err != nil {
-		t.Fatalf("WriteLeadMarker: %v", err)
+// writeLegacyMarker writes the pre-store <data-dir>/lead file by hand. Nothing
+// in the CLI writes it any more; these tests keep the one-release fallback
+// read honest.
+func writeLegacyMarker(t *testing.T, root, dataDirName, sessionID string) {
+	t.Helper()
+	path := state.LeadMarkerPath(root, dataDirName)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
 	}
-
-	if _, err := os.Stat(filepath.Join(root, ".fellowship", "lead")); err != nil {
-		t.Fatalf("marker file: %v", err)
-	}
-
-	m, err := state.ReadLeadMarker(root, ".fellowship")
+	data, err := json.Marshal(state.Lead{SessionID: sessionID, Root: root})
 	if err != nil {
-		t.Fatalf("ReadLeadMarker: %v", err)
+		t.Fatal(err)
 	}
-	if m.SessionID != "session-123" {
-		t.Errorf("SessionID = %q, want session-123", m.SessionID)
-	}
-	if m.Root != root {
-		t.Errorf("Root = %q, want %q", m.Root, root)
-	}
-	if m.CreatedAt == "" {
-		t.Error("CreatedAt should be recorded")
-	}
-	if got := state.LeadSessionID(root, ".fellowship"); got != "session-123" {
-		t.Errorf("LeadSessionID = %q, want session-123", got)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestLeadMarker_CustomDataDir(t *testing.T) {
+func TestLead_StoreRoundTrip(t *testing.T) {
 	root := t.TempDir()
-	if err := state.WriteLeadMarker(root, "queststate", "session-abc"); err != nil {
-		t.Fatalf("WriteLeadMarker: %v", err)
+	d := db.OpenTest(t)
+
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		return state.RecordLead(conn, root, "session-123")
+	}); err != nil {
+		t.Fatalf("RecordLead: %v", err)
 	}
+
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		lead, found, err := state.ReadLead(conn)
+		if err != nil {
+			return err
+		}
+		if !found {
+			t.Fatal("ReadLead found no lead after RecordLead")
+		}
+		if lead.SessionID != "session-123" {
+			t.Errorf("SessionID = %q, want session-123", lead.SessionID)
+		}
+		if lead.Root != root {
+			t.Errorf("Root = %q, want %q", lead.Root, root)
+		}
+		if lead.CreatedAt == "" {
+			t.Error("CreatedAt should be recorded")
+		}
+		if got := state.LeadSessionID(conn, root, ".fellowship"); got != "session-123" {
+			t.Errorf("LeadSessionID = %q, want session-123", got)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Re-recording replaces the lead rather than accumulating rows: a resumed
+// fellowship gets a new session id, and only one session can be the lead.
+func TestLead_RecordReplaces(t *testing.T) {
+	root := t.TempDir()
+	d := db.OpenTest(t)
+	for _, sid := range []string{"first", "second"} {
+		if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+			return state.RecordLead(conn, root, sid)
+		}); err != nil {
+			t.Fatalf("RecordLead(%s): %v", sid, err)
+		}
+	}
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		if got := state.LeadSessionID(conn, root, ".fellowship"); got != "second" {
+			t.Errorf("LeadSessionID = %q, want second", got)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The whole point of moving the lead into the store: a marker file a teammate
+// wrote must not overrule the lead the store names.
+func TestLead_StoreBeatsLegacyMarker(t *testing.T) {
+	root := t.TempDir()
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		return state.RecordLead(conn, root, "real-lead")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	writeLegacyMarker(t, root, ".fellowship", "spoofed-teammate")
+
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		if got := state.LeadSessionID(conn, root, ".fellowship"); got != "real-lead" {
+			t.Errorf("LeadSessionID = %q, want real-lead (the store wins)", got)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A fellowship initialized by the previous release recorded its lead in the
+// data directory. That file is still honored — but only while the store names
+// no lead at all.
+func TestLead_LegacyMarkerFallback(t *testing.T) {
+	root := t.TempDir()
+	d := db.OpenTest(t)
+	writeLegacyMarker(t, root, "queststate", "session-abc")
+
 	if got := state.LeadMarkerPath(root, "queststate"); got != filepath.Join(root, "queststate", "lead") {
 		t.Errorf("LeadMarkerPath = %q", got)
 	}
-	if got := state.LeadSessionID(root, "queststate"); got != "session-abc" {
-		t.Errorf("LeadSessionID = %q, want session-abc", got)
-	}
-	// The marker is per data directory: looking in the default one finds nothing.
-	if got := state.LeadSessionID(root, ".fellowship"); got != "" {
-		t.Errorf("LeadSessionID in the default dir = %q, want empty", got)
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		if got := state.LeadSessionID(conn, root, "queststate"); got != "session-abc" {
+			t.Errorf("LeadSessionID = %q, want session-abc", got)
+		}
+		// The marker is per data directory: looking in the default one finds nothing.
+		if got := state.LeadSessionID(conn, root, ".fellowship"); got != "" {
+			t.Errorf("LeadSessionID in the default dir = %q, want empty", got)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
-// A fellowship initialized before the marker existed has none, and a corrupt
-// marker is no better than a missing one: both read as "lead unknown", never as
-// an error the guard would act on.
-func TestLeadMarker_MissingAndCorrupt(t *testing.T) {
+// A missing marker and a corrupt one both read as "lead unknown", never as an
+// error the guard would act on.
+func TestLead_MissingAndCorruptMarker(t *testing.T) {
 	root := t.TempDir()
+	d := db.OpenTest(t)
+
 	m, err := state.ReadLeadMarker(root, ".fellowship")
 	if err != nil {
 		t.Fatalf("missing marker should not error: %v", err)
@@ -75,20 +157,40 @@ func TestLeadMarker_MissingAndCorrupt(t *testing.T) {
 	if _, err := state.ReadLeadMarker(root, ".fellowship"); err == nil {
 		t.Error("a corrupt marker should report an error to callers that want one")
 	}
-	if got := state.LeadSessionID(root, ".fellowship"); got != "" {
-		t.Errorf("LeadSessionID on a corrupt marker = %q, want empty", got)
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		if got := state.LeadSessionID(conn, root, ".fellowship"); got != "" {
+			t.Errorf("LeadSessionID on a corrupt marker = %q, want empty", got)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestWriteLeadMarker_EmptySessionID(t *testing.T) {
+// No session id available (not run by Claude Code): the row still records that
+// a lead initialized here, and the guard reads "unknown".
+func TestLead_EmptySessionID(t *testing.T) {
 	root := t.TempDir()
-	// No session id available (not run by Claude Code): the marker still
-	// records that a lead initialized here, and the guard reads "unknown".
-	if err := state.WriteLeadMarker(root, ".fellowship", ""); err != nil {
-		t.Fatalf("WriteLeadMarker: %v", err)
+	d := db.OpenTest(t)
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		return state.RecordLead(conn, root, "")
+	}); err != nil {
+		t.Fatal(err)
 	}
-	if got := state.LeadSessionID(root, ".fellowship"); got != "" {
-		t.Errorf("LeadSessionID = %q, want empty", got)
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		_, found, err := state.ReadLead(conn)
+		if err != nil {
+			return err
+		}
+		if !found {
+			t.Error("a lead with no session id should still be recorded")
+		}
+		if got := state.LeadSessionID(conn, root, ".fellowship"); got != "" {
+			t.Errorf("LeadSessionID = %q, want empty", got)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 

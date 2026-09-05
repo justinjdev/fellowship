@@ -96,6 +96,12 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			if err != nil {
 				input = &hooks.HookInput{}
 			}
+			// No quest row here, but the store is nobody's to hand-edit —
+			// not the lead's either.
+			if result := hooks.StoreWriteGuard(input); result.Block {
+				fmt.Fprintln(os.Stderr, result.Message)
+				return 2
+			}
 			// Only enumerate worktrees when the command looks like a cd/pushd,
 			// so the extra git call is off the common hot path.
 			var worktrees []string
@@ -134,7 +140,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 				return err
 			}
 			result = hooks.GateGuard(s, input, hooks.GuardParams{
-				LeadSessionID: hookLeadSessionID(cwd),
+				LeadSessionID: hookLeadSessionID(conn, cwd),
 			})
 			return nil
 		}); err != nil {
@@ -332,15 +338,16 @@ func hookDBExit(err error) int {
 }
 
 // hookLeadSessionID resolves the session id recorded for the fellowship's lead
-// in the repo containing cwd. Any failure to resolve it reads as "unknown",
-// which every guard treats as "the writer cannot be identified" rather than as
-// a licence to act.
-func hookLeadSessionID(cwd string) string {
+// in the repo containing cwd. The store is the authority; the legacy marker
+// file is a one-release fallback consulted only when the store names no lead.
+// Any failure to resolve it reads as "unknown", which every guard treats as
+// "the writer cannot be identified" rather than as a licence to act.
+func hookLeadSessionID(conn *db.Conn, cwd string) string {
 	mainRoot, err := gitutil.MainRepoRoot(cwd)
 	if err != nil {
 		return ""
 	}
-	return state.LeadSessionID(mainRoot, datadir.Resolve(mainRoot))
+	return state.LeadSessionID(conn, mainRoot, datadir.Resolve(mainRoot))
 }
 
 // unregisteredQuestWorktree reports whether cwd sits in a git worktree that is
@@ -393,9 +400,15 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 	// The same read answers whether this session's top-level is registered as
 	// a quest worktree, which is what tells a quest provisioned into the main
 	// tree apart from the lead standing in it.
+	dataDirName := datadir.Resolve(mainRoot)
 	active := false
 	sessionIsQuest := false
+	leadSessionID := ""
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
+		// The lead is read from the store, whatever else this read finds: a
+		// fellowship that is not running still has a lead, and reading it here
+		// costs nothing extra.
+		leadSessionID = state.LeadSessionID(conn, mainRoot, dataDirName)
 		fs, err := fellowship.LoadFellowship(conn)
 		if err != nil {
 			return nil
@@ -424,7 +437,6 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 	// Canonicalize all paths so symlinked repo roots (e.g. macOS /tmp ->
 	// /private/tmp) don't defeat the main-root comparison. `git --show-toplevel`
 	// returns a resolved path; the cwd-derived main root does not.
-	dataDirName := datadir.Name()
 	result := hooks.IsolationGuard(hooks.IsolationParams{
 		FellowshipActive:         active,
 		MainRoot:                 hooks.CanonicalPath(mainRoot),
@@ -433,7 +445,7 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 		FilePath:                 hooks.CanonicalPath(filePath),
 		DataDirName:              dataDirName,
 		SessionID:                input.SessionID,
-		LeadSessionID:            state.LeadSessionID(mainRoot, dataDirName),
+		LeadSessionID:            leadSessionID,
 		SessionIsRegisteredQuest: sessionIsQuest,
 	})
 	if result.Block {
