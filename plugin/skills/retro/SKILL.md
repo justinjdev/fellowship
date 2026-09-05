@@ -21,9 +21,9 @@ Analyzes a completed fellowship's history to surface patterns and interactively 
 1. Find the git root directory and run all commands below from it
 2. Enumerate the fellowship's quests and their metadata:
    ```bash
-   ~/.claude/fellowship/bin/fellowship state show
+   ~/.claude/fellowship/bin/fellowship state show --json
    ```
-   The output is JSON with `name`, `quests[]` (each with `name`, `worktree`, `branch`, `task_description`, `status`), `scouts[]`, and `companies[]`.
+   The output is JSON with `name`, `quests[]` (each with `name`, `worktree`, `branch`, `task_description`, `status`), `scouts[]`, and `companies[]`. `status` is `completed` or `cancelled` for a finished quest — this is what Step 2.2 below checks instead of asking each worktree individually.
 3. If the command reports that no fellowship is initialized, report "No fellowship state found — nothing to analyze" and stop
 
 ### Step 2: Collect Data
@@ -32,7 +32,7 @@ Everything below reads the fellowship database via the CLI — there are no stat
 
 1. **Gate events:** Run `~/.claude/fellowship/bin/fellowship herald --limit 0 --json` for the whole fellowship (or `--quest <name>` for one quest). Each entry has `timestamp`, `quest`, `type`, `phase`, and `detail`. Collect all entries of type `gate_approved`, `gate_rejected`, `gate_submitted`, and `phase_transition`.
 
-2. **Quest state:** Run `~/.claude/fellowship/bin/fellowship gate status --dir <worktree>` for each quest. Record the final `phase` and whether the quest reached `Complete`.
+2. **Quest state:** Run `~/.claude/fellowship/bin/fellowship eagles --json` once for every quest's `phase` and `health` (`stalled`/`zombie`/`idle` quests and a `struggling` flag are useful retrospective signals in their own right — a quest that struggled but still finished is worth calling out) — no need to shell into each worktree individually with `gate status --dir <worktree>`. Cross-reference with the `status` field from Step 1's `state show --json` to record whether the quest reached `completed`.
 
 3. **Quest tome:** Run `~/.claude/fellowship/bin/fellowship tome show --quest <quest_name> --json`. Record gate history (approved/rejected counts per phase), phases completed with durations, and files touched.
 
@@ -57,6 +57,7 @@ Compute the following from collected data:
 - Which phases have the highest rejection rates
 - Which quests spent the longest time in each phase (from tome phase durations)
 - Phases where all gates were approved (candidates for auto-approve)
+- Quests eagles flagged `struggling` at any point (from Step 2.2) — even one that finished is worth naming, since repeated rejections in one phase are a pattern worth a recommendation
 
 **Warden violations:**
 - Check tome gate history for any rejection reasons mentioning convention or warden issues
