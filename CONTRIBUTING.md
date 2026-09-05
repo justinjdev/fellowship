@@ -82,8 +82,8 @@ plugin/skills/<name>/SKILL.md       # Skills — auto-invocable by Claude
 plugin/commands/<name>.md           # Commands — user-invoked only
 plugin/agents/<name>.md             # Agent definitions
 plugin/hooks/hooks.json             # Maps hook events to `fellowship hook <name>`
-plugin/hooks/scripts/ensure-binary.sh  # Downloads the CLI binary from GitHub releases
-plugin/hooks/scripts/fellowship.sh  # Thin wrapper — ensures binary, then exec's it
+plugin/hooks/scripts/ensure-binary.sh  # Downloads the CLI binary from GitHub releases (SessionStart only)
+plugin/hooks/scripts/fellowship.sh  # Thin wrapper — execs the binary, never installs it
 cli/cmd/fellowship/main.go          # CLI entrypoint and subcommand dispatch
 cli/internal/hooks/                 # Hook decision logic (pure, table-tested)
 cli/internal/                       # State, db (SQLite), dashboard, events, etc.

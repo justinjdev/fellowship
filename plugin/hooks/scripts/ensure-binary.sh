@@ -56,7 +56,10 @@ elif command -v node >/dev/null 2>&1; then
 const fs = require("fs");
 try {
   const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-  process.stdout.write(String(data.version));
+  if (typeof data.version !== "string" || data.version === "") {
+    throw new Error("missing version");
+  }
+  process.stdout.write(data.version);
 } catch (e) {
   process.exit(1);
 }
@@ -159,8 +162,21 @@ STALE_LOCK_SECONDS=120
 # without running its EXIT trap, e.g. kill -9), or the owner's timestamp is
 # older than STALE_LOCK_SECONDS regardless of liveness (a wedged holder).
 lock_is_stale() {
-  local pid ts now
+  local pid ts now dir_mtime
   if [ ! -f "$LOCK_DIR_OWNER" ]; then
+    # mkdir and the owner-file write below aren't one atomic step, so a lock
+    # dir that was JUST created is briefly ownerless while its holder is
+    # still alive and about to write it — that's mid-acquisition, not
+    # abandoned. Use the lock dir's own mtime as a short grace window before
+    # treating a missing owner file as evidence of a lock nobody is
+    # finishing (e.g. the write itself failed): without this, a contender
+    # that checks in that window reclaims a live process's lock out from
+    # under it.
+    dir_mtime=$( (stat -c %Y "$LOCK_DIR" 2>/dev/null || stat -f %m "$LOCK_DIR" 2>/dev/null) || echo 0)
+    now=$(date +%s)
+    if [ "$dir_mtime" != "0" ] && [ $((now - dir_mtime)) -lt 5 ]; then
+      return 1
+    fi
     return 0
   fi
   read -r pid ts < "$LOCK_DIR_OWNER" 2>/dev/null || true
