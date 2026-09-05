@@ -93,9 +93,12 @@ func IsolationGuard(p IsolationParams) HookResult {
 		return blockMainTreeWrite(rel, "this worktree is registered as a quest but resolves to the main working tree")
 	}
 	if p.SessionID != "" && p.LeadSessionID != "" {
+		marker := "lead marker in the fellowship data directory"
+		if p.DataDirName != "" {
+			marker = p.DataDirName + "/lead"
+		}
 		return blockMainTreeWrite(rel, fmt.Sprintf(
-			"this session is not the lead session recorded by \"fellowship state init\" (remove %s/%s to stop matching on the lead session)",
-			p.DataDirName, "lead"))
+			"this session is not the lead recorded by \"fellowship state init\" — if it is, delete the %s", marker))
 	}
 	return HookResult{}
 }

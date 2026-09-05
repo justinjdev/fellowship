@@ -15,6 +15,18 @@
 		<h2 class="version-heading"><a href="{base}/changelog#unreleased">Unreleased</a></h2>
 		<ul class="changes">
 			<li>
+				<strong>The lead is no longer locked out of the main tree</strong> &mdash; <code>worktree-guard</code> blocked every <code>Edit</code>/<code>Write</code> in the main working tree while a fellowship was active, including the lead's own. <code>fellowship state init</code> now records the lead's Claude Code session in a <code>lead</code> marker inside the data directory, and the guard allows that session, blocks a quest worktree that resolves to the main root, blocks a session known not to be the lead, and allows anything it cannot identify.
+			</li>
+			<li>
+				<strong><code>dataDir</code> moves the store too</strong> &mdash; the fellowship database was always created in <code>.fellowship/</code> even when <code>dataDir</code> named a different directory, so the store and everything that reads it lived in different places. The store now follows the configured data directory.
+			</li>
+			<li>
+				<strong><code>hold</code>/<code>unhold</code> report an unregistered <code>--dir</code></strong> &mdash; instead of guessing the quest from the directory's name, which could hold a different quest that happened to share it.
+			</li>
+			<li>
+				<strong>One gate state machine</strong> &mdash; approve, reject, submit and reset are single functions used by <code>gate approve|reject</code>, company batch approval, the auto-approve path and the resets. Auto-approved gates now clear the gate id and record the approval and phase transition in the tome and herald exactly as a lead approval does; a held quest can no longer submit a gate; and <code>fellowship init</code> and <code>state clean-worktrees</code> reset the lembas/metadata flags along with the gate flags.
+			</li>
+			<li>
 				<strong>Fail-closed hook dispatch</strong> — Gate hooks (<code>gate-guard</code>, <code>gate-submit</code>, <code>gate-prereq</code>, <code>completion-guard</code>, <code>metadata-track</code>, <code>file-track</code>) now run through <code>plugin/hooks/scripts/fellowship.sh</code> instead of exec'ing the binary directly; if the binary is missing and can't be installed, they block (exit 2) instead of silently allowing the tool call through. <code>worktree-guard</code> keeps its fail-open backstop posture. The <code>file-track</code> hook is now wired into <code>hooks.json</code>, and <code>SessionStart</code> installs the binary on <code>clear</code> and <code>compact</code> in addition to <code>startup</code>/<code>resume</code>.
 			</li>
 			<li>
