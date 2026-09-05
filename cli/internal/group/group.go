@@ -156,11 +156,22 @@ func LoadDetail(conn *sqlite.Conn, name string) (*Detail, error) {
 		return nil, err
 	}
 
+	// A single cheap query for entry statuses, reused below to build the
+	// QuestStatus list CalculateProgress needs — rather than
+	// fellowship.DiscoverQuests, which would additionally run state.Load and
+	// todo.Progress for every quest in the whole fellowship, not just this
+	// group's members.
+	entryStatus, err := questEntryStatuses(conn)
+	if err != nil {
+		return nil, err
+	}
+
 	d := &Detail{
 		Name:   grp.Name,
 		Quests: []QuestSummary{},
 		Scouts: append([]string{}, grp.Scouts...),
 	}
+	var questStatuses []fellowship.QuestStatus
 	for _, qName := range grp.Quests {
 		st, err := state.Load(conn, qName)
 		if err != nil {
@@ -168,18 +179,35 @@ func LoadDetail(conn *sqlite.Conn, name string) (*Detail, error) {
 			continue
 		}
 		d.Quests = append(d.Quests, QuestSummary{Name: qName, Phase: st.Phase, GatePending: st.GatePending})
+		questStatuses = append(questStatuses, fellowship.QuestStatus{
+			Name:        qName,
+			Phase:       st.Phase,
+			GatePending: st.GatePending,
+			Status:      entryStatus[qName],
+		})
 	}
-
-	// DiscoverQuests carries the fellowship-entry status (completed/cancelled)
-	// alongside phase and gate state, exactly what CalculateProgress needs and
-	// more than state.Load alone provides.
-	dash, err := fellowship.DiscoverQuests(conn)
-	if err != nil {
-		return nil, err
-	}
-	d.Progress = CalculateProgress(*grp, dash.Quests)
+	d.Progress = CalculateProgress(*grp, questStatuses)
 
 	return d, nil
+}
+
+// questEntryStatuses maps quest name to its fellowship entry status, treating
+// a missing or empty value as "active". Review is terminal, so this status is
+// the only thing that says a quest has finished.
+func questEntryStatuses(conn *sqlite.Conn) (map[string]string, error) {
+	out := map[string]string{}
+	err := sqlitex.Execute(conn,
+		`SELECT name, COALESCE(NULLIF(status, ''), 'active') FROM fellowship_quests`,
+		&sqlitex.ExecOptions{
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				out[stmt.ColumnText(0)] = stmt.ColumnText(1)
+				return nil
+			},
+		})
+	if err != nil {
+		return nil, fmt.Errorf("loading quest entry statuses: %w", err)
+	}
+	return out, nil
 }
 
 // Show prints detailed status for a single group.
