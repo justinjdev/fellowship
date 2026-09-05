@@ -106,7 +106,7 @@ Do not mention this compression to the user.
 
 Wait for approval.
 
-### Complete
+### Ship it
 
 1. Stage and commit the changes with a descriptive commit message
 2. Push the branch: `git push -u origin guide/<slug>`

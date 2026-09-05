@@ -2,11 +2,11 @@
 
 # Fellowship
 
-A Claude Code plugin that orchestrates multi-task workflows through structured research-plan-implement lifecycles. Named after the obvious — a fellowship of agents, each on their own quest, coordinated by a wizard who never writes code.
+A Claude Code plugin that orchestrates multi-task workflows through a structured research-plan-implement-review lifecycle. Named after the obvious — a fellowship of agents, each on their own quest, coordinated by a wizard who never writes code.
 
 ## What It Does
 
-Fellowship gives Claude Code a disciplined workflow engine. Instead of diving straight into code, tasks go through phased lifecycles with hard gates between them: research the system, plan the changes, implement with TDD, review against conventions, then ship.
+Fellowship gives Claude Code a disciplined workflow engine. Instead of diving straight into code, a task goes through four phases with a hard gate leaving each of the first three: research the system, plan the changes, implement with TDD, then review — an adversarial pass, conventions, verification, and the PR.
 
 For multiple independent tasks, it spins up parallel agent teammates — each in an isolated git worktree — coordinated by a lead agent (Gandalf) who routes approvals and reports progress.
 
@@ -27,7 +27,7 @@ Fellowship's `/quest` skill orchestrates skills from these plugins. Install them
 
 | Plugin | Skills used | Phase |
 |--------|------------|-------|
-| **superpowers** | `writing-plans`, `test-driven-development`, `verification-before-completion`, `finishing-a-development-branch` | Plan, Implement, Review, Complete |
+| **superpowers** | `writing-plans`, `test-driven-development`, `verification-before-completion`, `finishing-a-development-branch` | Plan, Implement, Review |
 | **pr-review-toolkit** | `review-pr` | Review |
 
 These are referenced by name in skill prompts. If a dependency isn't installed, Claude performs the step's goal manually and notes the substitution in its output — but you lose the structured discipline the dedicated skill provides.
@@ -126,7 +126,7 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 | `branch.ticketPattern` | `"[A-Z]+-\\d+"` | Regex to extract ticket IDs from quest descriptions. Default matches Jira-style IDs (e.g., `PROJ-123`). |
 | `worktree.enabled` | `true` | Whether quests create isolated worktrees. Set to `false` to work on the current branch. |
 | `worktree.directory` | `null` | Parent directory for worktrees. `null` uses Claude Code's default (`.claude/worktrees/`). |
-| `gates.autoApprove` | `[]` | Gate names to auto-approve: `"Onboard"`, `"Research"`, `"Plan"`, `"Implement"`, `"Adversarial"`, `"Review"` (the phase being left — `"Research"` auto-approves Research→Plan). `"Complete"` is not a valid entry: no gate leaves it. `fellowship init` reads the merged value when it creates a quest's state and fails with a clear error on an unknown phase name. Gates not listed still surface to you for approval. |
+| `gates.autoApprove` | `[]` | Gate names to auto-approve: `"Research"`, `"Plan"`, `"Implement"` (the phase being left — `"Research"` auto-approves Research→Plan). `"Review"` is not a valid entry: it is the last phase and no gate leaves it. `fellowship init` reads the merged value when it creates a quest's state and fails with a clear error on an unknown phase name. Gates not listed still surface to you for approval. |
 | `pr.draft` | `false` | Create PRs as drafts. |
 | `pr.template` | `null` | PR body template string. Supports `{task}`, `{summary}`, and `{changes}` placeholders. |
 | `palantir.enabled` | `true` | Whether to spawn a palantir monitoring agent during fellowships. |
@@ -140,7 +140,7 @@ Create `~/.claude/fellowship.json` in your personal Claude directory to customiz
 | `models.explore` | `null` | Model for Explore scan subagents spawned by quest, scout, council, and guide. Same valid values. `null` = built-in default: `haiku`. |
 | `models.validator` | `null` | Model for scout's validation subagent. Same valid values. `null` = built-in default: `sonnet`. |
 
-The config is read at fellowship startup and quest onboard (Phase 0). Changes to the file take effect on the next fellowship or quest invocation.
+The config is read at fellowship startup and at the start of a quest's Research phase. Changes to the file take effect on the next fellowship or quest invocation.
 
 ## Skills
 
@@ -148,16 +148,16 @@ Skills are invoked automatically by Claude as part of a workflow (quest phases, 
 
 | Skill | Purpose |
 |-------|---------|
-| `/quest` | Full Research → Plan → Implement lifecycle for non-trivial tasks. The hub that orchestrates everything else. |
+| `/quest` | Full Research → Plan → Implement → Review lifecycle for non-trivial tasks. The hub that orchestrates everything else. |
 | `/fellowship` | Multi-task orchestrator. Spawns parallel agent teammates running `/quest` (code) or `/scout` (research). |
 | `/scout` | Research & analysis workflow. Investigates questions, optionally validates with a fresh adversarial subagent. No code, no PRs, no commits. |
-| `/council` | Context-aware onboarding. Loads task-relevant files, conventions, and architecture at session start. |
-| `/gather-lore` | Studies reference files to extract conventions before writing code. Prevents "wrong approach" rework. |
-| `/lembas` | Context compression between phases. Keeps the context window in the reasoning sweet spot. |
+| `/council` | Context-aware onboarding you invoke yourself. Loads task-relevant files, conventions, and architecture at session start. Quest inlines the same orientation, so it does not call this. |
+| `/gather-lore` | Studies reference files to extract conventions before writing code, on request. Quest inlines the same extraction, so it does not call this. |
+| `/lembas` | Context compression between phases. Writes a checkpoint and continues from it, keeping the context window in the reasoning sweet spot. |
 | `/warden` | Pre-PR convention review. Compares changes against reference files and documented patterns. |
 | `/missive` | Fetches GitHub issue context for quest spawning — title, body, labels, comments, branch suggestions, and PR close keywords. |
 | `/retro` | Post-fellowship retrospective. Analyzes gate history, palantir alerts, and quest metrics, then recommends configuration improvements. |
-| `/lorebook` | Loads phase-specific guidance from an assigned quest template at the start of each quest phase. |
+| `/lorebook` | Loads phase-specific guidance from an assigned quest template at the start of each quest phase. Ships one built-in example template to copy. |
 
 ## Commands
 
@@ -178,7 +178,7 @@ Commands are user-invoked only — Claude never calls them automatically, so the
 | Agent | Role |
 |-------|------|
 | **palantir** | Background monitor during fellowship execution. Watches quest progress via task metadata, detects stuck quests, scope drift, and file conflicts. Reports to Gandalf. Defaults to the `haiku` model. |
-| **balrog** | Adversarial validation agent spawned by quest between Implement and Review. Analyzes the diff for failure modes, writes and runs targeted test cases, and delivers a severity-ranked findings report. |
+| **balrog** | Adversarial validation agent spawned by quest as the first step of Review. Analyzes the diff for failure modes, writes and runs targeted test cases, and delivers a severity-ranked findings report. |
 | **scout** | Research & analysis agent spawned as a fellowship teammate for read-only investigation — no code edits, no git operations. Defaults to the `sonnet` model. |
 | **validator** | Read-only adversarial validator spawned by scout to verify research findings against the actual code (CONFIRMED/CONTESTED/UNVERIFIED). Tools restricted to Read/Glob/Grep. Defaults to the `sonnet` model. |
 
@@ -186,15 +186,21 @@ Commands are user-invoked only — Claude never calls them automatically, so the
 
 **Single task** — run `/quest`:
 
+Four phases, three gates. A gate leaves Research, Plan, and Implement; nothing leaves Review — the quest ends inside it, when the PR is open and the task is marked complete.
+
 ```
-Phase 0: Onboard    → worktree isolation + /council context loading
-Phase 1: Research   → explore agents + /gather-lore
-Phase 2: Plan       → plan mode with file:line references + user approval
-Phase 3: Implement  → TDD (red-green-refactor)
-Phase 3.5: Adversarial → balrog attacks the implementation (edge cases, error paths)
-Phase 4: Review     → /warden conventions + code quality + verification
-Phase 5: Complete   → PR creation + worktree cleanup
+Research  → worktree + orientation, prior art, explore agents, convention study
+            ──[GATE]─→
+Plan      → plan mode with file:line references + user approval
+            ──[GATE]─→
+Implement → TDD (red-green-refactor), errand tracking
+            ──[GATE]─→
+Review    → balrog attacks the implementation (edge cases, error paths)
+            → /warden conventions → code quality → verification
+            → PR creation + worktree cleanup
 ```
+
+`/lembas` compacts context between every phase.
 
 **Research** — run `/scout`:
 
@@ -234,6 +240,13 @@ A `/lembas` checkpoint at `.fellowship/checkpoint.md` is what a dead session lea
 ## Changelog
 
 ### Unreleased
+
+- **Four phases, three gates** — The quest lifecycle is now **Research → Plan → Implement → Review**. Onboard's work (worktree provisioning, context loading, the checkpoint resume check) is the first step of Research; the adversarial balrog pass is the first step of Review and PR creation the last. A gate leaves Research, Plan, and Implement; nothing leaves Review, so the quest ends inside it when the PR is open and the task is marked complete — which `completion-guard` now allows only in Review with no gate pending. Valid `gates.autoApprove` entries are the three gate-bearing phases. A schema migration rewrites stored phase names (live state, phase and gate history, and each quest's `autoApprove` list) in existing stores, and the pre-2.0 JSON importer runs through the same table, so an in-flight quest keeps advancing across the upgrade.
+- **`/quest` and `/fellowship` are half the size** — `quest/SKILL.md` went from ~25 KB to ~15 KB and `fellowship/SKILL.md` from ~21 KB to ~15.5 KB. Quest inlines the orientation `/council` did and the pattern extraction `/gather-lore` did rather than invoking them, so a quest no longer hands its phase vocabulary to two satellite skills that then have to track it; both remain as skills you invoke yourself. Fellowship's isolation pre-flight and provisioning protocol moved to `resources/isolation.md`, and Gandalf's voice to `resources/lead-behavior.md`.
+- **`/lembas` stops asking for `/compact`** — It ended by telling the user to run a command Claude cannot run, so the step was either ignored or handed over as a chore. It now writes the checkpoint and continues from that summary, which is what the checkpoint was always for.
+- **One checkpoint reader per context** — Four things looked for a `/lembas` checkpoint and disagreed about who resumes. Now quest's Research step 0 is the only checkpoint check inside a quest, `/rekindle` is the recovery path outside one, and the README's `SessionStart` hook only prints a hint. `/council` no longer looks for one at all. See "Resuming after a crash".
+- **`/rekindle` shares the spawn template** — It carried a hand-copied quest spawn prompt with an undefined `{gate_config_override}` placeholder. `spawn-prompts.md` gained a RESUME variant and rekindle references it, so gate, hold, isolation, and boundary language has one home.
+- **Quest templates ship with one** — Templates were a feature with nothing in it. `/lorebook` now resolves a built-in directory after project and user, and fellowship ships `example` — a worked template at the specificity the docs ask for, with no keywords so it never auto-suggests. `/lorebook` and `/scribe` both cover all four phases, and Review's section is the last guidance a quest loads.
 
 - **`/dashboard` command** — Starts the fellowship web dashboard in the background and prints its URL. The dashboard's own company gate approval now shares `company.BatchApprove` with the CLI's `fellowship company approve` instead of a second, drifted copy that skipped tome recording. The core fellowship state model (`FellowshipState`, `QuestEntry`, `CompanyEntry`, and their SQLite CRUD) moved out of the `dashboard` package into a new `cli/internal/fellowship` package, removing the import cycle that forced `company` to duplicate that batch-approve logic. The dashboard's `/api/status` response now includes a `phases` field so the UI's phase list tracks the server instead of a hardcoded array (which was previously missing the Adversarial phase).
 - **The lead is no longer locked out of the main tree** — `worktree-guard` blocked every `Edit`/`Write` in the main working tree while a fellowship was active, including the lead's own. `fellowship state init` now records the lead's Claude Code session in a `lead` marker inside the data directory, and the guard allows that session, blocks a quest worktree that resolves to the main root, blocks a session that is known not to be the lead, and allows anything it cannot identify.
