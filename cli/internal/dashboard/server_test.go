@@ -12,6 +12,7 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/fellowship"
+	"github.com/justinjdev/fellowship/cli/internal/history"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -155,6 +156,77 @@ func TestAPIGateReject(t *testing.T) {
 	}
 	if qs.GateID != nil {
 		t.Errorf("GateID = %v, want nil", qs.GateID)
+	}
+}
+
+// handleGateApprove/handleGateReject share gate.RecordApproval/RecordRejection
+// with `fellowship gate approve|reject` and group.BatchApprove, so a gate
+// decision made through the dashboard must also produce tome (history) rows,
+// not just events — a hand-rolled mutation that skipped tome recording used
+// to leave the quest's gate/phase history empty.
+func TestAPIGateApprove_RecordsHistory(t *testing.T) {
+	d, worktreeDir := setupTestDB(t)
+	srv := NewServer(d, 5)
+
+	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
+	req := httptest.NewRequest("POST", "/api/gate/approve", body)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var gates []history.GateEvent
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		gates, err = history.LoadGates(conn, "quest-login")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var found bool
+	for _, g := range gates {
+		if g.Phase == "Plan" && g.Action == "approved" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected an 'approved' gate history row for Plan, got %+v", gates)
+	}
+}
+
+func TestAPIGateReject_RecordsHistory(t *testing.T) {
+	d, worktreeDir := setupTestDB(t)
+	srv := NewServer(d, 5)
+
+	body := strings.NewReader(fmt.Sprintf(`{"dir":%q}`, worktreeDir))
+	req := httptest.NewRequest("POST", "/api/gate/reject", body)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var gates []history.GateEvent
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		gates, err = history.LoadGates(conn, "quest-login")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var found bool
+	for _, g := range gates {
+		if g.Phase == "Plan" && g.Action == "rejected" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a 'rejected' gate history row for Plan, got %+v", gates)
 	}
 }
 

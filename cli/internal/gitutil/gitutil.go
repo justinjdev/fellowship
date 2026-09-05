@@ -103,9 +103,17 @@ func MainRepoRoot(dir string) (string, error) {
 		return "", fmt.Errorf("git rev-parse --git-common-dir: %w", err)
 	}
 	gitCommon := strings.TrimSpace(out)
-	// --git-common-dir may answer with a path relative to dir.
+	// --git-common-dir may answer with a path relative to dir, so dir itself
+	// must be absolute before joining — otherwise the result stays relative
+	// to whatever the caller's working directory happens to be, and every
+	// caller that compares or stores this value (quest lookup, worktree
+	// dedup, checkDir) would need to know to canonicalize it first.
 	if !filepath.IsAbs(gitCommon) {
-		gitCommon = filepath.Join(dir, gitCommon)
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			return "", fmt.Errorf("resolving %q: %w", dir, err)
+		}
+		gitCommon = filepath.Join(absDir, gitCommon)
 	}
 	// The main repo root is the parent of the shared .git directory.
 	return filepath.Dir(filepath.Clean(gitCommon)), nil

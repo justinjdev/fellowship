@@ -179,21 +179,48 @@ func writeAutopsy(t *testing.T, dir string, name string) {
 	os.WriteFile(filepath.Join(autopsyDir, name), data, 0o644)
 }
 
-func TestMigrateJSON(t *testing.T) {
-	// Override execCommand so we don't need real git
-	origExecCommand := execCommand
-	defer func() { execCommand = origExecCommand }()
-
-	tmpDir := t.TempDir()
-	mainDataDir := filepath.Join(tmpDir, ".fellowship")
-	wtDir := filepath.Join(tmpDir, "worktree-q1")
-	wtDataDir := filepath.Join(wtDir, ".fellowship")
-
-	// Set up git worktree mock: return main + worktree
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		out := "worktree " + tmpDir + "\n\nworktree " + wtDir + "\n\n"
-		return exec.Command("echo", "-n", out)
+// initGitRepoWithWorktree creates a real git repo (discoverJSONFiles now
+// shells out to gitutil.ListWorktrees, same as every other worktree
+// listing in the CLI) with one linked worktree, and returns both paths.
+func initGitRepoWithWorktree(t *testing.T, worktreeName string) (mainRepo, worktree string) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
 	}
+	root := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		root = resolved
+	}
+	run := func(dir string, args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com",
+		)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+	}
+	run(root, "init", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("t\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(root, "add", "README.md")
+	run(root, "commit", "-qm", "init")
+
+	wt := filepath.Join(filepath.Dir(root), worktreeName)
+	run(root, "worktree", "add", "-q", "-b", worktreeName, wt)
+	if resolved, err := filepath.EvalSymlinks(wt); err == nil {
+		wt = resolved
+	}
+	return root, wt
+}
+
+func TestMigrateJSON(t *testing.T) {
+	tmpDir, wtDir := initGitRepoWithWorktree(t, "worktree-q1")
+	mainDataDir := filepath.Join(tmpDir, ".fellowship")
+	wtDataDir := filepath.Join(wtDir, ".fellowship")
 
 	// Write all 7 fixture types:
 	// Main .fellowship/: fellowship-state.json, bulletin.jsonl, autopsies/*.json
@@ -512,13 +539,7 @@ func TestMigrateJSON(t *testing.T) {
 }
 
 func TestMigrateJSON_NoFiles(t *testing.T) {
-	origExecCommand := execCommand
-	defer func() { execCommand = origExecCommand }()
-
-	tmpDir := t.TempDir()
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		return exec.Command("echo", "-n", "worktree "+tmpDir+"\n\n")
-	}
+	tmpDir, _ := initGitRepoWithWorktree(t, "worktree-empty")
 
 	d := OpenTest(t)
 	err := MigrateJSON(d, tmpDir)

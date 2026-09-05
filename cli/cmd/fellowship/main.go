@@ -296,7 +296,6 @@ pending, in_progress, done, blocked, skipped.
   todo init              Initialize todos for a quest
     --quest NAME         Quest name
     --dir DIR            Worktree directory (default: current directory)
-    --task "DESC"        Task description
   todo list              Show all todos with status
     --quest NAME         Quest name
     --dir DIR            Worktree directory (default: current directory)

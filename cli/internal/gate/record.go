@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"zombiezen.com/go/sqlite"
+	"zombiezen.com/go/sqlite/sqlitex"
 
 	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/history"
@@ -28,10 +29,12 @@ func RecordApproval(conn *sqlite.Conn, questName, prev, next, detail string) err
 	if err := history.RecordGate(conn, questName, prev, "approved", detail); err != nil {
 		return fmt.Errorf("recording gate approval for %s: %w", questName, err)
 	}
-	if err := history.RecordPhase(conn, questName, prev, 0); err != nil {
+	nowTime := time.Now().UTC()
+	duration := phaseDurationSeconds(conn, questName, nowTime)
+	if err := history.RecordPhase(conn, questName, prev, duration); err != nil {
 		return fmt.Errorf("recording phase %s for %s: %w", prev, questName, err)
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := nowTime.Format(time.RFC3339)
 	if err := events.Record(conn, events.Event{
 		Timestamp: now, Quest: questName, Type: events.GateApproved,
 		Phase: prev, Detail: fmt.Sprintf("Gate approved for %s", prev),
@@ -45,6 +48,55 @@ func RecordApproval(conn *sqlite.Conn, questName, prev, next, detail string) err
 		return fmt.Errorf("announcing phase transition for %s: %w", questName, err)
 	}
 	return nil
+}
+
+// phaseDurationSeconds reports how long the quest spent in the phase it is
+// leaving, measured from the previous phase's completed_at, or from the
+// quest's creation if this is its first phase completion. It returns 0
+// rather than fail the approval when a starting point can't be determined
+// (no history yet and no readable created_at) or comes back after now.
+func phaseDurationSeconds(conn *sqlite.Conn, questName string, now time.Time) int {
+	start, err := phaseStartTime(conn, questName)
+	if err != nil {
+		return 0
+	}
+	d := now.Sub(start)
+	if d < 0 {
+		return 0
+	}
+	return int(d.Seconds())
+}
+
+// phaseStartTime returns when the quest entered the phase it is now
+// leaving: the most recent quest_phases.completed_at, or quest_state.created_at
+// if no phase has completed yet. state.State doesn't expose created_at (no
+// caller needed it before this one), so it's read directly here rather than
+// growing that struct for a single field one package uses.
+func phaseStartTime(conn *sqlite.Conn, questName string) (time.Time, error) {
+	phases, err := history.LoadPhases(conn, questName)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if len(phases) > 0 {
+		return time.Parse(time.RFC3339, phases[len(phases)-1].CompletedAt)
+	}
+
+	var createdAt string
+	if err := sqlitex.Execute(conn,
+		`SELECT created_at FROM quest_state WHERE quest_name = :name`,
+		&sqlitex.ExecOptions{
+			Named: map[string]any{":name": questName},
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				createdAt = stmt.ColumnText(0)
+				return nil
+			},
+		}); err != nil {
+		return time.Time{}, err
+	}
+	if createdAt == "" {
+		return time.Time{}, fmt.Errorf("gate: no created_at for quest %s", questName)
+	}
+	return time.Parse(time.RFC3339, createdAt)
 }
 
 // RecordRejection writes the history entry and event for a rejected gate.

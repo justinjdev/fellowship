@@ -164,6 +164,20 @@ func initGitRepo(t *testing.T) string {
 	return root
 }
 
+// runGitIn runs a git command in dir, failing the test on error.
+func runGitIn(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com",
+		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com",
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+}
+
 // registerQuest records a quest in fellowship state, as `state add-quest` does.
 func registerQuest(t *testing.T, d *db.DB, name, worktree string) {
 	t.Helper()
@@ -259,42 +273,84 @@ func TestCheckDir(t *testing.T) {
 	repo := initGitRepo(t)
 	other := initGitRepo(t)
 
+	worktree := filepath.Join(filepath.Dir(repo), "checkdir-worktree")
+	runGitIn(t, repo, "worktree", "add", "-q", "-b", "checkdir-wt", worktree)
+	if resolved, err := filepath.EvalSymlinks(worktree); err == nil {
+		worktree = resolved
+	}
+
+	if err := os.MkdirAll(filepath.Join(repo, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chdir(repo); err != nil {
-		t.Fatal(err)
-	}
 	t.Cleanup(func() { os.Chdir(cwd) })
 
-	tests := []struct {
+	// checkDir resolves both --dir and the process's own working directory
+	// through gitutil.MainRepoRoot and compares the results, so a relative
+	// --dir (".", "sub", "../x") must resolve to the same absolute root as
+	// an equivalent absolute path — from a main checkout and from a linked
+	// worktree alike.
+	runFrom := func(t *testing.T, chdirTo string, tests []struct {
 		name    string
 		dir     string
 		wantErr string
-	}{
-		{name: "empty dir is a no-op"},
-		{name: "same repo", dir: repo},
-		{name: "subdirectory of the same repo", dir: filepath.Join(repo, ".git")},
-		{name: "different repo", dir: other, wantErr: "different repository"},
-		{name: "missing directory", dir: filepath.Join(repo, "nope"), wantErr: "is not a directory"},
-		{name: "file instead of directory", dir: filepath.Join(repo, "README.md"), wantErr: "is not a directory"},
+	}) {
+		t.Helper()
+		if err := os.Chdir(chdirTo); err != nil {
+			t.Fatal(err)
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				err := checkDir(tt.dir)
+				if tt.wantErr == "" {
+					if err != nil {
+						t.Fatalf("checkDir(%q) = %v, want nil", tt.dir, err)
+					}
+					return
+				}
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("checkDir(%q) = %v, want error containing %q", tt.dir, err, tt.wantErr)
+				}
+			})
+		}
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := checkDir(tt.dir)
-			if tt.wantErr == "" {
-				if err != nil {
-					t.Fatalf("checkDir(%q) = %v, want nil", tt.dir, err)
-				}
-				return
-			}
-			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("checkDir(%q) = %v, want error containing %q", tt.dir, err, tt.wantErr)
-			}
+	t.Run("from main checkout", func(t *testing.T) {
+		runFrom(t, repo, []struct {
+			name    string
+			dir     string
+			wantErr string
+		}{
+			{name: "empty dir is a no-op"},
+			{name: "same repo", dir: repo},
+			{name: "subdirectory of the same repo", dir: filepath.Join(repo, ".git")},
+			{name: "different repo", dir: other, wantErr: "different repository"},
+			{name: "missing directory", dir: filepath.Join(repo, "nope"), wantErr: "is not a directory"},
+			{name: "file instead of directory", dir: filepath.Join(repo, "README.md"), wantErr: "is not a directory"},
+			{name: "relative dot", dir: "."},
+			{name: "relative subdirectory", dir: "sub"},
+			{name: "relative dotdot to a different repo", dir: filepath.Join("..", filepath.Base(other)), wantErr: "different repository"},
+			{name: "relative dotdot to the linked worktree", dir: filepath.Join("..", filepath.Base(worktree))},
 		})
-	}
+	})
+
+	t.Run("from linked worktree", func(t *testing.T) {
+		runFrom(t, worktree, []struct {
+			name    string
+			dir     string
+			wantErr string
+		}{
+			{name: "same worktree", dir: worktree},
+			{name: "different repo", dir: other, wantErr: "different repository"},
+			{name: "relative dot", dir: "."},
+			{name: "relative dotdot to the main checkout", dir: filepath.Join("..", filepath.Base(repo))},
+			{name: "relative dotdot to a different repo", dir: filepath.Join("..", filepath.Base(other)), wantErr: "different repository"},
+		})
+	})
 }
 
 // hold/unhold used to fall back to the directory's basename when no quest was

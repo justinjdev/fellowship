@@ -7,16 +7,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"zombiezen.com/go/sqlite/sqlitex"
-)
 
-// execCommand is the function used to create exec.Cmd. Tests can override it.
-var execCommand = exec.Command
+	"github.com/justinjdev/fellowship/cli/internal/gitutil"
+)
 
 // JSON structs for parsing legacy files.
 
@@ -220,9 +218,12 @@ func discoverJSONFiles(mainRepo string) ([]migrationFile, error) {
 	result = append(result, scanDataDir(mainDataDir, "main")...)
 
 	// Discover worktrees
-	worktrees, err := listWorktreePaths(mainRepo)
+	worktrees, err := gitutil.ListWorktrees(mainRepo)
 	if err != nil {
 		return nil, err
+	}
+	if len(worktrees) == 0 {
+		worktrees = []string{mainRepo}
 	}
 	for _, wt := range worktrees {
 		// Skip the main repo itself
@@ -740,26 +741,6 @@ func parseJSONL[T any](data []byte) ([]T, error) {
 		return nil, err
 	}
 	return result, nil
-}
-
-// listWorktreePaths parses `git worktree list --porcelain` output.
-func listWorktreePaths(mainRepo string) ([]string, error) {
-	cmd := execCommand("git", "worktree", "list", "--porcelain")
-	cmd.Dir = mainRepo
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("git worktree list: %w", err)
-	}
-	var paths []string
-	for _, line := range strings.Split(string(out), "\n") {
-		if strings.HasPrefix(line, "worktree ") {
-			paths = append(paths, strings.TrimPrefix(line, "worktree "))
-		}
-	}
-	if len(paths) == 0 {
-		return []string{mainRepo}, nil
-	}
-	return paths, nil
 }
 
 // removeEmptyDir removes a directory only if it's empty.

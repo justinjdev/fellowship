@@ -272,6 +272,39 @@ func upsertQuest(conn *sqlite.Conn, q QuestEntry) error {
 	// Store the resolved path: hooks look quests up by the git top-level, which
 	// is always absolute and symlink-free.
 	q.Worktree = state.CanonicalWorktree(q.Worktree)
+
+	// fellowship_quests.worktree carries a UNIQUE index (schema v2), so
+	// re-registering a worktree under a new or renamed quest would otherwise
+	// fail the INSERT with a constraint violation the ON CONFLICT(name)
+	// clause doesn't cover (that only dedupes on name). If another row
+	// already holds this worktree, clear its worktree first so the upsert
+	// below can proceed — the previous holder keeps its quest row, just
+	// without a worktree, and re-registering under the same name is just an
+	// update in place with nothing to clear.
+	if q.Worktree != "" {
+		var previousHolder string
+		if err := sqlitex.Execute(conn,
+			`SELECT name FROM fellowship_quests WHERE worktree = :wt AND name != :name`,
+			&sqlitex.ExecOptions{
+				Named: map[string]any{":wt": q.Worktree, ":name": q.Name},
+				ResultFunc: func(stmt *sqlite.Stmt) error {
+					previousHolder = stmt.ColumnText(0)
+					return nil
+				},
+			}); err != nil {
+			return fmt.Errorf("dashboard: checking worktree conflict for %s: %w", q.Name, err)
+		}
+		if previousHolder != "" {
+			if err := sqlitex.Execute(conn,
+				`UPDATE fellowship_quests SET worktree = '' WHERE name = :name`,
+				&sqlitex.ExecOptions{Named: map[string]any{":name": previousHolder}}); err != nil {
+				return fmt.Errorf("dashboard: clearing worktree from %s: %w", previousHolder, err)
+			}
+			fmt.Printf("Note: worktree %q was registered to quest %q; reassigning it to %q\n",
+				q.Worktree, previousHolder, q.Name)
+		}
+	}
+
 	return sqlitex.Execute(conn,
 		`INSERT INTO fellowship_quests (name, task_description, worktree, branch, task_id, status)
 		 VALUES (:name, :desc, :wt, :branch, :task_id, :status)
@@ -515,13 +548,8 @@ func DiscoverQuests(conn *sqlite.Conn) (*DashboardStatus, error) {
 		qs, loadErr := loadQuestStatusFromDB(conn, q.Name, q.Worktree)
 		if loadErr != nil {
 			// Quest state not in DB — show completed/cancelled as synthetic entries
-			if entryStatus == "completed" || entryStatus == "cancelled" {
-				status.Quests = append(status.Quests, QuestStatus{
-					Name:     q.Name,
-					Worktree: q.Worktree,
-					Phase:    state.TerminalPhase,
-					Status:   entryStatus,
-				})
+			if synth, ok := TerminalQuestStatus(q.Name, q.Worktree, entryStatus); ok {
+				status.Quests = append(status.Quests, synth)
 			}
 			continue
 		}
@@ -550,4 +578,25 @@ func loadQuestStatusFromDB(conn *sqlite.Conn, name, worktree string) (*QuestStat
 		TodosDone:       done,
 		TodosTotal:      total,
 	}, nil
+}
+
+// TerminalQuestStatus builds the synthetic QuestStatus callers fall back to
+// when a quest has no quest_state row (e.g. history-only or pre-phase-
+// machinery entries) but its fellowship entry status is terminal. ok is
+// false — and the QuestStatus zero — when entryStatus isn't "completed" or
+// "cancelled", meaning no synthetic entry should be recorded.
+//
+// Both DiscoverQuests and group.LoadDetail hit this case and must agree on
+// it, since CalculateProgress relies on the same terminal-phase convention
+// to count these quests toward group progress.
+func TerminalQuestStatus(name, worktree, entryStatus string) (QuestStatus, bool) {
+	if entryStatus != "completed" && entryStatus != "cancelled" {
+		return QuestStatus{}, false
+	}
+	return QuestStatus{
+		Name:     name,
+		Worktree: worktree,
+		Phase:    state.TerminalPhase,
+		Status:   entryStatus,
+	}, true
 }
