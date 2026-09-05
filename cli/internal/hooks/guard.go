@@ -14,7 +14,23 @@ type HookResult struct {
 	Message string
 }
 
-func GateGuard(s *state.State, input *HookInput) HookResult {
+// GuardParams carries the session-level facts gate-guard needs beyond the
+// quest row itself. Resolving them costs a git call and a store read, so the
+// caller does it once and hands the result to the pure decision function.
+type GuardParams struct {
+	// LeadSessionID is the session id recorded for the fellowship's lead, or
+	// "" when no lead was recorded. Only the lead may move a quest's phase.
+	LeadSessionID string
+}
+
+// IsLeadSession reports whether a hook payload's session id identifies the
+// fellowship's lead. Both ids must be known: an empty id on either side means
+// "unidentifiable", never "the lead".
+func IsLeadSession(sessionID, leadSessionID string) bool {
+	return sessionID != "" && sessionID == leadSessionID
+}
+
+func GateGuard(s *state.State, input *HookInput, p GuardParams) HookResult {
 	if s.Held {
 		msg := "Quest is held — paused by the lead."
 		if s.HeldReason != nil {
@@ -31,6 +47,20 @@ func GateGuard(s *state.State, input *HookInput) HookResult {
 		return HookResult{
 			Block:   true,
 			Message: "Gate pending — waiting for lead approval. Do not take any action until the lead approves your gate.",
+		}
+	}
+
+	// `fellowship init --phase X` / `--plan-skip` rewrites the phase of an
+	// existing quest row, which walks a quest past every gate it has not
+	// passed. Only the lead may move a phase (runInit enforces the same rule),
+	// so the Bash form is refused here before it ever reaches the CLI.
+	if requested, ok := InitPhaseRequest(input.ToolInput.Command); ok &&
+		requested != s.Phase && !IsLeadSession(input.SessionID, p.LeadSessionID) {
+		return HookResult{
+			Block: true,
+			Message: fmt.Sprintf(
+				"Only the lead may move a quest's phase: \"fellowship init\" with --phase/--plan-skip would take this quest from %s to %s without a gate. Submit this phase's gate and wait for the lead instead.",
+				s.Phase, requested),
 		}
 	}
 
@@ -133,6 +163,54 @@ func isLegacyWorktreePath(path string) bool {
 		strings.HasSuffix(normalized, "/.claude/worktrees") ||
 		strings.Contains(normalized, "/.claude/worktrees/")
 }
+
+// InitPhaseRequest reports the phase a Bash command asks `fellowship init` to
+// put the quest in, and whether the command asks for a phase at all.
+//
+// Unlike the escape allowlist this scans the whole command line rather than
+// only its first word: "cd wt && fellowship init --phase Implement" is the same
+// attempt as the bare form, and a detector that only looked at fields[0] would
+// wave the chained one through. --plan-skip implies Implement, exactly as
+// runInit resolves it.
+func InitPhaseRequest(command string) (string, bool) {
+	fields := strings.Fields(command)
+	for i := 0; i+1 < len(fields); i++ {
+		bin := strings.Trim(fields[i], `"'`)
+		if bin != "fellowship" && !strings.HasSuffix(bin, "/fellowship") {
+			continue
+		}
+		if fields[i+1] != "init" {
+			continue
+		}
+		phase, planSkip := "", false
+		for j := i + 2; j < len(fields); j++ {
+			arg := strings.Trim(fields[j], `"'`)
+			switch {
+			case arg == "--plan-skip" || arg == "-plan-skip":
+				planSkip = true
+			case arg == "--phase" || arg == "-phase":
+				if j+1 < len(fields) {
+					phase = strings.Trim(fields[j+1], `"'`)
+				}
+			case strings.HasPrefix(arg, "--phase="):
+				phase = strings.Trim(strings.TrimPrefix(arg, "--phase="), `"'`)
+			case strings.HasPrefix(arg, "-phase="):
+				phase = strings.Trim(strings.TrimPrefix(arg, "-phase="), `"'`)
+			}
+		}
+		if phase == "" && planSkip {
+			phase = PlanSkipPhase
+		}
+		if phase != "" {
+			return phase, true
+		}
+	}
+	return "", false
+}
+
+// PlanSkipPhase is the phase `fellowship init --plan-skip` starts a quest in:
+// the plan already exists, so Research and Plan are recorded as skipped.
+const PlanSkipPhase = "Implement"
 
 // isFellowshipEscapeCommand returns true for fellowship CLI commands that are
 // safe to execute even when gate_pending is true.

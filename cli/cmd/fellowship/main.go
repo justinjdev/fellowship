@@ -68,7 +68,7 @@ func main() {
 		}
 		os.Exit(runGate(d, os.Args[2:]))
 	case "init":
-		os.Exit(runInit(d))
+		os.Exit(runInit(d, os.Args[2:]))
 	case "status":
 		os.Exit(runStatus(d, os.Args[2:]))
 	case "group":

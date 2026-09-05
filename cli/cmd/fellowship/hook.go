@@ -133,7 +133,9 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			if err != nil {
 				return err
 			}
-			result = hooks.GateGuard(s, input)
+			result = hooks.GateGuard(s, input, hooks.GuardParams{
+				LeadSessionID: hookLeadSessionID(cwd),
+			})
 			return nil
 		}); err != nil {
 			return hookDBExit(err)
@@ -327,6 +329,18 @@ func hookDBExit(err error) int {
 	}
 	fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 	return 2
+}
+
+// hookLeadSessionID resolves the session id recorded for the fellowship's lead
+// in the repo containing cwd. Any failure to resolve it reads as "unknown",
+// which every guard treats as "the writer cannot be identified" rather than as
+// a licence to act.
+func hookLeadSessionID(cwd string) string {
+	mainRoot, err := gitutil.MainRepoRoot(cwd)
+	if err != nil {
+		return ""
+	}
+	return state.LeadSessionID(mainRoot, datadir.Resolve(mainRoot))
 }
 
 // unregisteredQuestWorktree reports whether cwd sits in a git worktree that is

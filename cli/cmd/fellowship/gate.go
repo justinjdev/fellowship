@@ -19,6 +19,7 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/gate"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
 	"github.com/justinjdev/fellowship/cli/internal/history"
+	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
@@ -284,14 +285,14 @@ func resolveHoldQuest(d *db.DB, dir string) (string, error) {
 	return questName, nil
 }
 
-func runInit(d *db.DB) int {
+func runInit(d *db.DB, args []string) int {
 	ctx := context.Background()
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	phase := fs.String("phase", "", "Initial phase (default: Research)")
 	planSkip := fs.Bool("plan-skip", false, "Record Research/Plan as skipped in history")
 	questName := fs.String("quest", "", "Quest name (default: the name registered for this worktree)")
 	initDir := fs.String("dir", "", "Worktree or repo root (default: auto-detect via git)")
-	fs.Parse(os.Args[2:])
+	fs.Parse(args)
 
 	if err := checkDir(*initDir); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -345,6 +346,17 @@ func runInit(d *db.DB) int {
 		autoApprove = []string{}
 	}
 
+	// Who is running this? On a quest row that already exists, --phase and
+	// --plan-skip are a phase move, and a phase move is a gate decision: it can
+	// take a quest from Research straight to Implement without any gate ever
+	// being submitted, and gate-guard waves it through because nothing is
+	// pending. Only the lead may do that. On a row being created for the first
+	// time the flags are ordinary bootstrap and anyone may pass them.
+	callerIsLead, leadKnown := initCallerIsLead(root)
+	// Whether --plan-skip's history entry is written: only alongside a phase
+	// move that actually happened.
+	recordSkipped := true
+
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
 		// Try to load existing state to reset it.
 		existing, loadErr := state.Load(conn, qn)
@@ -352,12 +364,29 @@ func runInit(d *db.DB) int {
 			return fmt.Errorf("loading quest state: %w", loadErr)
 		}
 		if loadErr == nil {
+			movePhase := true
+			if *phase != "" && *phase != existing.Phase && !callerIsLead {
+				if leadKnown {
+					return fmt.Errorf("only the lead may change the phase of an existing quest (%s is in %s, --phase asked for %s); submit this phase's gate and let the lead approve it",
+						qn, existing.Phase, *phase)
+				}
+				// The lead cannot be identified, so this caller cannot be
+				// called a teammate either. Refuse the move, keep going: a
+				// reset of the gate flags is always safe.
+				fmt.Fprintf(os.Stderr, "fellowship: warning: ignoring --phase/--plan-skip on the existing quest %q — its phase (%s) only moves through a gate\n", qn, existing.Phase)
+				movePhase = false
+			}
 			// Reset existing state: the gate and prerequisite flags go back to
-			// their starting values, the phase is kept unless --phase moves it.
+			// their starting values, the phase is kept unless the lead's
+			// --phase moves it.
 			state.Reset(existing)
-			if *phase != "" {
+			if movePhase && *phase != "" {
 				existing.Phase = *phase
 			}
+			// --plan-skip only ever records history alongside a phase move, so
+			// a refused move must not leave the history claiming the phases
+			// were skipped.
+			recordSkipped = movePhase
 			existing.AutoApproveGates = autoApprove
 			if err := state.Upsert(conn, existing); err != nil {
 				return err
@@ -376,7 +405,7 @@ func runInit(d *db.DB) int {
 			fmt.Printf("Quest state created (quest: %s, phase: %s)\n", qn, initPhase)
 		}
 
-		if *planSkip {
+		if *planSkip && recordSkipped {
 			if err := history.RecordSkippedPhases(conn, qn, []string{"Research", "Plan"}, "pre-existing plan"); err != nil {
 				return err
 			}
@@ -389,6 +418,24 @@ func runInit(d *db.DB) int {
 	}
 
 	return 0
+}
+
+// initCallerIsLead answers, for the repo containing dir, whether the session
+// running this command is the fellowship's recorded lead, and whether a lead is
+// recorded at all. It is the same identity check the worktree-guard makes at
+// hook time: the session id `fellowship state init` recorded against the id
+// Claude Code exports to the commands it runs.
+//
+// leadKnown is what separates "you are not the lead" (a teammate — refuse) from
+// "nobody knows who the lead is" (an old fellowship, or a plain shell — refuse
+// the phase move, but do not accuse anyone).
+func initCallerIsLead(dir string) (callerIsLead, leadKnown bool) {
+	mainRoot := dir
+	if mr, err := gitutil.MainRepoRoot(dir); err == nil {
+		mainRoot = mr
+	}
+	lead := state.LeadSessionID(mainRoot, datadir.Resolve(mainRoot))
+	return hooks.IsLeadSession(state.CurrentSessionID(), lead), lead != ""
 }
 
 // resolveInitQuestName picks the quest name `fellowship init` records: the
