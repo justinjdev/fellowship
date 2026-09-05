@@ -10,7 +10,7 @@ import (
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 
-	"github.com/justinjdev/fellowship/cli/internal/dashboard"
+	"github.com/justinjdev/fellowship/cli/internal/fellowship"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/tome"
@@ -36,13 +36,13 @@ var phaseRank = func() map[string]int {
 }()
 
 // CalculateProgress computes aggregate progress for a company given quest statuses.
-func CalculateProgress(company dashboard.CompanyEntry, quests []dashboard.QuestStatus) CompanyProgress {
+func CalculateProgress(company fellowship.CompanyEntry, quests []fellowship.QuestStatus) CompanyProgress {
 	progress := CompanyProgress{
 		Name:  company.Name,
 		Total: len(company.Quests) + len(company.Scouts),
 	}
 
-	questByName := make(map[string]dashboard.QuestStatus)
+	questByName := make(map[string]fellowship.QuestStatus)
 	for _, q := range quests {
 		questByName[q.Name] = q
 	}
@@ -68,7 +68,7 @@ func CalculateProgress(company dashboard.CompanyEntry, quests []dashboard.QuestS
 
 // BatchApprove approves all pending gates within a company. It returns the names
 // of quests that were approved and any errors encountered (non-fatal).
-func BatchApprove(conn *sqlite.Conn, company dashboard.CompanyEntry) (approved []string, errs []error) {
+func BatchApprove(conn *sqlite.Conn, company fellowship.CompanyEntry) (approved []string, errs []error) {
 	for _, qName := range company.Quests {
 		st, err := state.Load(conn, qName)
 		if err != nil {
@@ -121,7 +121,7 @@ func BatchApprove(conn *sqlite.Conn, company dashboard.CompanyEntry) (approved [
 
 // List prints a summary of all companies in the fellowship state.
 func List(conn *sqlite.Conn) error {
-	companies, err := dashboard.ListCompanies(conn)
+	companies, err := fellowship.ListCompanies(conn)
 	if err != nil {
 		return err
 	}
@@ -211,7 +211,7 @@ func Approve(conn *sqlite.Conn, name string) error {
 }
 
 // FindCompanyForQuest returns the company name a quest belongs to, or "" if ungrouped.
-func FindCompanyForQuest(companies []dashboard.CompanyEntry, questName string) string {
+func FindCompanyForQuest(companies []fellowship.CompanyEntry, questName string) string {
 	for _, c := range companies {
 		for _, q := range c.Quests {
 			if q == questName {
@@ -236,13 +236,13 @@ func LoadAndMarshalProgress(conn *sqlite.Conn, name string) ([]byte, error) {
 	}
 
 	// Build quest statuses from DB
-	var quests []dashboard.QuestStatus
+	var quests []fellowship.QuestStatus
 	for _, qName := range company.Quests {
 		st, err := state.Load(conn, qName)
 		if err != nil {
 			continue
 		}
-		quests = append(quests, dashboard.QuestStatus{
+		quests = append(quests, fellowship.QuestStatus{
 			Name:        qName,
 			Phase:       st.Phase,
 			GatePending: st.GatePending,
@@ -254,9 +254,9 @@ func LoadAndMarshalProgress(conn *sqlite.Conn, name string) ([]byte, error) {
 }
 
 // findCompany looks up a company by name from the DB.
-func findCompany(conn *sqlite.Conn, name string) (*dashboard.CompanyEntry, error) {
+func findCompany(conn *sqlite.Conn, name string) (*fellowship.CompanyEntry, error) {
 	var found bool
-	entry := &dashboard.CompanyEntry{
+	entry := &fellowship.CompanyEntry{
 		Quests: []string{},
 		Scouts: []string{},
 	}

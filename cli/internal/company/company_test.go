@@ -5,21 +5,21 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/fellowship"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 	"github.com/justinjdev/fellowship/cli/internal/tome"
 )
 
 func TestCalculateProgress_MixedPhases(t *testing.T) {
-	company := dashboard.CompanyEntry{
+	company := fellowship.CompanyEntry{
 		Name:   "API Work",
 		Quests: []string{"quest-endpoint", "quest-tests", "quest-docs"},
 		Scouts: []string{"scout-review"},
 	}
 
-	quests := []dashboard.QuestStatus{
+	quests := []fellowship.QuestStatus{
 		{Name: "quest-endpoint", Phase: "Implement", GatePending: false},
 		{Name: "quest-tests", Phase: "Complete", GatePending: false},
 		{Name: "quest-docs", Phase: "Research", GatePending: true},
@@ -47,11 +47,11 @@ func TestCalculateProgress_MixedPhases(t *testing.T) {
 }
 
 func TestCalculateProgress_AllComplete(t *testing.T) {
-	company := dashboard.CompanyEntry{
+	company := fellowship.CompanyEntry{
 		Name:   "done-company",
 		Quests: []string{"q1", "q2"},
 	}
-	quests := []dashboard.QuestStatus{
+	quests := []fellowship.QuestStatus{
 		{Name: "q1", Phase: "Complete"},
 		{Name: "q2", Phase: "Complete"},
 	}
@@ -67,11 +67,11 @@ func TestCalculateProgress_AllComplete(t *testing.T) {
 }
 
 func TestCalculateProgress_MissingQuests(t *testing.T) {
-	company := dashboard.CompanyEntry{
+	company := fellowship.CompanyEntry{
 		Name:   "sparse",
 		Quests: []string{"exists", "missing"},
 	}
-	quests := []dashboard.QuestStatus{
+	quests := []fellowship.QuestStatus{
 		{Name: "exists", Phase: "Plan"},
 	}
 
@@ -89,16 +89,16 @@ func TestCalculateProgress_MissingQuests(t *testing.T) {
 func TestBatchApprove_MultipleQuests(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
-		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
 			return err
 		}
-		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q2", Worktree: "/tmp/wt2"}); err != nil {
+		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q2", Worktree: "/tmp/wt2"}); err != nil {
 			return err
 		}
-		if err := dashboard.AddCompany(conn, "batch-test", []string{"q1", "q2"}, nil); err != nil {
+		if err := fellowship.AddCompany(conn, "batch-test", []string{"q1", "q2"}, nil); err != nil {
 			return err
 		}
 
@@ -117,7 +117,7 @@ func TestBatchApprove_MultipleQuests(t *testing.T) {
 			return err
 		}
 
-		company := dashboard.CompanyEntry{
+		company := fellowship.CompanyEntry{
 			Name:   "batch-test",
 			Quests: []string{"q1", "q2"},
 		}
@@ -159,10 +159,10 @@ func TestBatchApprove_MultipleQuests(t *testing.T) {
 func TestBatchApprove_NoPendingGates(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
-		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt"}); err != nil {
+		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q1", Worktree: "/tmp/wt"}); err != nil {
 			return err
 		}
 
@@ -174,7 +174,7 @@ func TestBatchApprove_NoPendingGates(t *testing.T) {
 			return err
 		}
 
-		company := dashboard.CompanyEntry{
+		company := fellowship.CompanyEntry{
 			Name:   "no-gates",
 			Quests: []string{"q1"},
 		}
@@ -196,15 +196,15 @@ func TestBatchApprove_NoPendingGates(t *testing.T) {
 func TestBatchApprove_MissingQuestState(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
 		// q1 has no quest_state row
-		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt"}); err != nil {
+		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q1", Worktree: "/tmp/wt"}); err != nil {
 			return err
 		}
 
-		company := dashboard.CompanyEntry{
+		company := fellowship.CompanyEntry{
 			Name:   "missing-state",
 			Quests: []string{"q1", "q2"}, // q2 doesn't even exist in fellowship_quests
 		}
@@ -225,7 +225,7 @@ func TestBatchApprove_MissingQuestState(t *testing.T) {
 }
 
 func TestFindCompanyForQuest(t *testing.T) {
-	companies := []dashboard.CompanyEntry{
+	companies := []fellowship.CompanyEntry{
 		{Name: "API", Quests: []string{"q-api", "q-tests"}},
 		{Name: "Docs", Quests: []string{"q-docs"}},
 	}
@@ -257,10 +257,10 @@ func TestProgressSummary(t *testing.T) {
 func TestBatchApprove_HeraldLogging(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
-		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
 			return err
 		}
 
@@ -272,7 +272,7 @@ func TestBatchApprove_HeraldLogging(t *testing.T) {
 			return err
 		}
 
-		company := dashboard.CompanyEntry{
+		company := fellowship.CompanyEntry{
 			Name:   "herald-test",
 			Quests: []string{"q1"},
 		}
@@ -315,10 +315,10 @@ func TestBatchApprove_HeraldLogging(t *testing.T) {
 func TestBatchApprove_TomeRecording(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
-		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
 			return err
 		}
 
@@ -330,7 +330,7 @@ func TestBatchApprove_TomeRecording(t *testing.T) {
 			return err
 		}
 
-		company := dashboard.CompanyEntry{
+		company := fellowship.CompanyEntry{
 			Name:   "tome-test",
 			Quests: []string{"q1"},
 		}
@@ -373,7 +373,7 @@ func TestBatchApprove_TomeRecording(t *testing.T) {
 func TestList_NoCompanies(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
 		// No companies — should print "No companies defined."
@@ -390,13 +390,13 @@ func TestList_NoCompanies(t *testing.T) {
 func TestList_WithCompanies(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
-		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
 			return err
 		}
-		if err := dashboard.AddCompany(conn, "team-alpha", []string{"q1"}, nil); err != nil {
+		if err := fellowship.AddCompany(conn, "team-alpha", []string{"q1"}, nil); err != nil {
 			return err
 		}
 
@@ -413,7 +413,7 @@ func TestList_WithCompanies(t *testing.T) {
 func TestShow_CompanyNotFound(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
 		err := Show(conn, "nonexistent")
@@ -429,13 +429,13 @@ func TestShow_CompanyNotFound(t *testing.T) {
 func TestShow_WithQuestState(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
-		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
 			return err
 		}
-		if err := dashboard.AddCompany(conn, "team-alpha", []string{"q1"}, []string{}); err != nil {
+		if err := fellowship.AddCompany(conn, "team-alpha", []string{"q1"}, []string{}); err != nil {
 			return err
 		}
 
@@ -460,7 +460,7 @@ func TestShow_WithQuestState(t *testing.T) {
 func TestApprove_CompanyNotFound(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
 		err := Approve(conn, "nonexistent")
@@ -476,13 +476,13 @@ func TestApprove_CompanyNotFound(t *testing.T) {
 func TestApprove_WithPendingGates(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
-		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
 			return err
 		}
-		if err := dashboard.AddCompany(conn, "team-alpha", []string{"q1"}, nil); err != nil {
+		if err := fellowship.AddCompany(conn, "team-alpha", []string{"q1"}, nil); err != nil {
 			return err
 		}
 
@@ -516,16 +516,16 @@ func TestApprove_WithPendingGates(t *testing.T) {
 func TestLoadAndMarshalProgress(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
-		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
+		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
 			return err
 		}
-		if err := dashboard.AddQuest(conn, dashboard.QuestEntry{Name: "q2", Worktree: "/tmp/wt2"}); err != nil {
+		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q2", Worktree: "/tmp/wt2"}); err != nil {
 			return err
 		}
-		if err := dashboard.AddCompany(conn, "team-alpha", []string{"q1", "q2"}, nil); err != nil {
+		if err := fellowship.AddCompany(conn, "team-alpha", []string{"q1", "q2"}, nil); err != nil {
 			return err
 		}
 
@@ -567,7 +567,7 @@ func TestLoadAndMarshalProgress(t *testing.T) {
 func TestLoadAndMarshalProgress_NotFound(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		if err := dashboard.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
 		_, err := LoadAndMarshalProgress(conn, "nonexistent")

@@ -25,6 +25,7 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/eagles"
 	"github.com/justinjdev/fellowship/cli/internal/errand"
+	"github.com/justinjdev/fellowship/cli/internal/fellowship"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
@@ -673,7 +674,7 @@ func unregisteredQuestWorktree(ctx context.Context, d *db.DB, cwd, gitRoot strin
 	}
 	initialized := false
 	d.WithConn(ctx, func(conn *db.Conn) error {
-		if _, err := dashboard.LoadFellowship(conn); err == nil {
+		if _, err := fellowship.LoadFellowship(conn); err == nil {
 			initialized = true
 		}
 		return nil
@@ -700,7 +701,7 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 	// Inert unless a fellowship is actually running in the main repo's store.
 	active := false
 	d.WithConn(ctx, func(conn *db.Conn) error {
-		fs, err := dashboard.LoadFellowship(conn)
+		fs, err := fellowship.LoadFellowship(conn)
 		if err != nil {
 			return nil
 		}
@@ -742,9 +743,9 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 // quest worktree on disk is the signal that teammates may currently be running
 // and the guard should be armed. A finished (or never-started) fellowship whose
 // row lingers has no live worktree and reads as inert.
-func fellowshipRunning(fs *dashboard.FellowshipState) bool {
+func fellowshipRunning(fs *fellowship.FellowshipState) bool {
 	for _, q := range fs.Quests {
-		switch dashboard.QuestEntryStatus(q) {
+		switch fellowship.QuestEntryStatus(q) {
 		case "completed", "cancelled":
 			continue
 		}
@@ -1936,7 +1937,7 @@ func runStateInit(d *db.DB, args []string) int {
 
 	// Check for existing fellowship to warn about overwrite.
 	d.WithConn(ctx, func(conn *db.Conn) error {
-		if existing, err := dashboard.LoadFellowship(conn); err == nil {
+		if existing, err := fellowship.LoadFellowship(conn); err == nil {
 			fmt.Fprintf(os.Stderr, "fellowship: warning: overwriting existing fellowship (name=%q, quests=%d)\n",
 				existing.Name, len(existing.Quests))
 		}
@@ -1944,7 +1945,7 @@ func runStateInit(d *db.DB, args []string) int {
 	})
 
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
-		return dashboard.InitFellowship(conn, *name, root, *baseBranch)
+		return fellowship.InitFellowship(conn, *name, root, *baseBranch)
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
@@ -2002,7 +2003,7 @@ func runStateAddQuest(d *db.DB, args []string) int {
 	}
 
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
-		return dashboard.AddQuest(conn, dashboard.QuestEntry{
+		return fellowship.AddQuest(conn, fellowship.QuestEntry{
 			Name:            *name,
 			TaskDescription: *task,
 			Worktree:        *worktree,
@@ -2037,7 +2038,7 @@ func runStateAddScout(d *db.DB, args []string) int {
 	}
 
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
-		return dashboard.AddScout(conn, dashboard.ScoutEntry{
+		return fellowship.AddScout(conn, fellowship.ScoutEntry{
 			Name:     *name,
 			Question: *question,
 			TaskID:   *taskID,
@@ -2079,7 +2080,7 @@ func runStateAddCompany(d *db.DB, args []string) int {
 	}
 
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
-		return dashboard.AddCompany(conn, *name, questList, scoutList)
+		return fellowship.AddCompany(conn, *name, questList, scoutList)
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
@@ -2129,7 +2130,7 @@ func runStateUpdateQuest(d *db.DB, args []string) int {
 	}
 
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
-		return dashboard.UpdateQuest(conn, *name, updates)
+		return fellowship.UpdateQuest(conn, *name, updates)
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
@@ -2149,10 +2150,10 @@ func runStateShow(d *db.DB, args []string) int {
 		return 1
 	}
 
-	var s *dashboard.FellowshipState
+	var s *fellowship.FellowshipState
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		var err error
-		s, err = dashboard.LoadFellowship(conn)
+		s, err = fellowship.LoadFellowship(conn)
 		return err
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)

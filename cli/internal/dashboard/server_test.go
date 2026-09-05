@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/fellowship"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
@@ -20,10 +21,10 @@ func setupTestDB(t *testing.T) (*db.DB, string) {
 	worktreeDir := "/tmp/test-worktrees/quest-login"
 
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := InitFellowship(conn, "test-fellowship", "/tmp/repo", "main"); err != nil {
+		if err := fellowship.InitFellowship(conn, "test-fellowship", "/tmp/repo", "main"); err != nil {
 			return err
 		}
-		if err := AddQuest(conn, QuestEntry{
+		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{
 			Name:     "quest-login",
 			Worktree: worktreeDir,
 			TaskID:   "t1",
@@ -66,7 +67,7 @@ func TestAPIStatus(t *testing.T) {
 		t.Errorf("Content-Type = %q, want %q", contentType, "application/json")
 	}
 
-	var status DashboardStatus
+	var status fellowship.DashboardStatus
 	if err := json.NewDecoder(w.Body).Decode(&status); err != nil {
 		t.Fatalf("decoding response: %v", err)
 	}
@@ -76,6 +77,9 @@ func TestAPIStatus(t *testing.T) {
 	}
 	if status.PollInterval != 5 {
 		t.Errorf("PollInterval = %d, want 5", status.PollInterval)
+	}
+	if len(status.Phases) == 0 {
+		t.Error("Phases = [], want non-empty phase list")
 	}
 	if len(status.Quests) != 1 {
 		t.Fatalf("len(Quests) = %d, want 1", len(status.Quests))
@@ -109,7 +113,7 @@ func TestAPIGateApprove(t *testing.T) {
 		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
 	}
 
-	var qs QuestStatus
+	var qs fellowship.QuestStatus
 	if err := json.NewDecoder(w.Body).Decode(&qs); err != nil {
 		t.Fatalf("decoding response: %v", err)
 	}
@@ -138,7 +142,7 @@ func TestAPIGateReject(t *testing.T) {
 		t.Fatalf("status code = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
 	}
 
-	var qs QuestStatus
+	var qs fellowship.QuestStatus
 	if err := json.NewDecoder(w.Body).Decode(&qs); err != nil {
 		t.Fatalf("decoding response: %v", err)
 	}

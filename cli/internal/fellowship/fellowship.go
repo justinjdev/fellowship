@@ -1,4 +1,4 @@
-package dashboard
+package fellowship
 
 import (
 	"fmt"
@@ -71,6 +71,7 @@ type DashboardStatus struct {
 	Scouts       []ScoutEntry   `json:"scouts"`
 	Companies    []CompanyEntry `json:"companies"`
 	PollInterval int            `json:"poll_interval"`
+	Phases       []string       `json:"phases,omitempty"`
 }
 
 // InitFellowship inserts the singleton fellowship row (id=1).
