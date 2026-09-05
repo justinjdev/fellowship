@@ -170,6 +170,16 @@ func LeadSessionID(conn *sqlite.Conn, root, dataDirName string) string {
 			return lead.SessionID
 		}
 	}
+	// The legacy marker is only ever read from an ABSOLUTE main-repo root. With
+	// an unresolved root ("" — a hook whose `git rev-parse` timed out)
+	// LeadMarkerPath yields a relative path, which resolves against the
+	// process's working directory: inside a hook that is the teammate's own
+	// worktree, where the data directory is exempt from the write guards. A
+	// teammate could drop <its worktree>/.fellowship/lead naming its own
+	// session and be read as the lead. Unknown root reads as "lead unknown".
+	if !filepath.IsAbs(root) {
+		return ""
+	}
 	m, err := ReadLeadMarker(root, dataDirName)
 	if err != nil {
 		return ""

@@ -367,6 +367,7 @@ func runInit(d *db.DB, args []string) int {
 			return fmt.Errorf("loading quest state: %w", loadErr)
 		}
 		if loadErr == nil {
+			previousPhase := existing.Phase
 			movePhase := true
 			if *phase != "" && *phase != existing.Phase && !callerIsLead {
 				if leadKnown {
@@ -388,8 +389,12 @@ func runInit(d *db.DB, args []string) int {
 			}
 			// --plan-skip only ever records history alongside a phase move, so
 			// a refused move must not leave the history claiming the phases
-			// were skipped.
-			recordSkipped = movePhase
+			// were skipped — and neither must a move that never happened.
+			// RecordSkippedPhases inserts unconditionally, so re-running
+			// `init --plan-skip` on a quest already sitting in Implement (a
+			// plan-driven respawn) otherwise appends a second Research/Plan
+			// "skipped" pair to the history every time.
+			recordSkipped = movePhase && *phase != "" && *phase != previousPhase
 			existing.AutoApproveGates = autoApprove
 			// Record which session is working this quest. It is what lets
 			// `state init --claim-lead` refuse a session that is already a

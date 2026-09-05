@@ -80,15 +80,21 @@ func LeadOnlyCommand(command string) (LeadOnlyInvocation, bool) {
 
 // InitPhaseRequest reports the phase a Bash command asks `fellowship init` to
 // put the quest in, and whether the command asks for a phase at all. It is
-// LeadOnlyCommand narrowed to the phase move — the check gate-guard makes
+// LeadOnlyCommands narrowed to the phase move — the check gate-guard makes
 // against the quest's *current* phase, since re-running init for the phase the
 // quest is already in moves nothing.
+//
+// It scans every invocation on the line, not just the first lead-only one: an
+// earlier `fellowship state ...` on the same line is a different violation, and
+// stopping at it would report "no phase asked for" while
+// `fellowship state show && fellowship init --phase Implement` asks for one.
 func InitPhaseRequest(command string) (string, bool) {
-	inv, ok := LeadOnlyCommand(command)
-	if !ok || inv.Subcommand != "init" {
-		return "", false
+	for _, inv := range LeadOnlyCommands(command) {
+		if inv.Subcommand == "init" {
+			return inv.Detail, true
+		}
 	}
-	return inv.Detail, true
+	return "", false
 }
 
 // initPhaseFrom reads the phase out of the arguments following `init`.
