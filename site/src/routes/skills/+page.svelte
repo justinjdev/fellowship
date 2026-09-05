@@ -61,6 +61,11 @@
 			details: 'Walks through your project to extract conventions into CLAUDE.md. Run once when setting up Fellowship in a new codebase. Examines your code structure, testing patterns, naming conventions, and documents them for future quests.'
 		},
 		{
+			name: '/dashboard',
+			summary: 'Live web dashboard for the current fellowship.',
+			details: 'Starts a local HTTP server (default http://localhost:3000) in the background and prints its URL. Shows every quest\'s phase and pending gates, scouts, companies (with one-click "Approve All"), the recent event stream, the bulletin board, and eagles health — with gate approve/reject directly from the page.'
+		},
+		{
 			name: '/red-book',
 			summary: 'Post-PR convention capture.',
 			details: 'After a PR review, extracts conventions from reviewer comments and adds them to CLAUDE.md. Closes the convention learning loop — reviewer feedback becomes documented patterns that future quests will follow.'

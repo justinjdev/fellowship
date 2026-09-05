@@ -164,6 +164,7 @@ Commands are user-invoked only — Claude never calls them automatically, so the
 | Command | Purpose |
 |---------|---------|
 | `/chronicle` | One-time codebase bootstrapping. Walks through your project to extract conventions into CLAUDE.md. |
+| `/dashboard` | Starts the live web dashboard for the current fellowship — quest/scout progress, gate approvals, event history — in the background, and prints the URL. |
 | `/guide` | Interactive, learn-by-doing walkthrough of fellowship using a real task on your codebase. |
 | `/red-book` | Post-PR convention capture. Extracts conventions from reviewer comments and adds them to CLAUDE.md. |
 | `/rekindle` | Recovers a fellowship after a session crash — scans worktrees and state files, then re-spawns Gandalf with recovered context. |
@@ -220,6 +221,7 @@ Gandalf (the coordinator) spawns quest and scout teammates. Quests run in isolat
 
 ### Unreleased
 
+- **`/dashboard` command** — Starts the fellowship web dashboard in the background and prints its URL. The dashboard's own company gate approval now shares `company.BatchApprove` with the CLI's `fellowship company approve` instead of a second, drifted copy that skipped tome recording. The core fellowship state model (`FellowshipState`, `QuestEntry`, `CompanyEntry`, and their SQLite CRUD) moved out of the `dashboard` package into a new `cli/internal/fellowship` package, removing the import cycle that forced `company` to duplicate that batch-approve logic. The dashboard's `/api/status` response now includes a `phases` field so the UI's phase list tracks the server instead of a hardcoded array (which was previously missing the Adversarial phase).
 - **Fail-closed hook dispatch** — Gate hooks (`gate-guard`, `gate-submit`, `gate-prereq`, `completion-guard`, `metadata-track`, `file-track`) now run through `plugin/hooks/scripts/fellowship.sh` instead of exec'ing the binary directly; if the binary is missing and can't be installed, they block (exit 2) instead of silently allowing the tool call through a shell "command not found". `worktree-guard` keeps its fail-open backstop posture. The `file-track` hook is now wired into `hooks.json` (it existed in the CLI but wasn't invoked), and `SessionStart` now installs the binary on `clear` and `compact` in addition to `startup`/`resume`.
 - **Verified downloads** — `ensure-binary.sh` verifies the downloaded tarball against the release's `checksums.txt` (`sha256sum`/`shasum`) before installing, assembles the binary in a scratch directory and moves it into place atomically, and holds a simple lock so concurrent sessions don't race the same install.
 - **CI** — added `gofmt -l .`, `go vet ./...`, `go test -race ./...`, `shellcheck` on the hook scripts, a check that every path in `.claude-plugin/plugin.json` exists, and a `site/` build job.
