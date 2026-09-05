@@ -10,8 +10,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/fellowship"
+	"github.com/justinjdev/fellowship/cli/internal/gitutil"
+	"github.com/justinjdev/fellowship/cli/internal/hooks"
 	"github.com/justinjdev/fellowship/cli/internal/install"
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
@@ -48,10 +51,11 @@ func runStateInit(d *db.DB, args []string) int {
 	name := fs.String("name", "", "Fellowship name (required)")
 	baseBranch := fs.String("base-branch", "", "Base branch for quest worktrees (Gandalf detects automatically; use this to override)")
 	skipHookInstall := fs.Bool("skip-hook-install", false, "Do not register the worktree-guard hook in .claude/settings.local.json")
+	claimLead := fs.Bool("claim-lead", false, "Record this session as the fellowship's lead (without --name, changes nothing else)")
 	fs.Parse(args)
 
-	if *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship state init --name <name> [--base-branch BRANCH] [--skip-hook-install]")
+	if *name == "" && !*claimLead {
+		fmt.Fprintln(os.Stderr, "usage: fellowship state init --name <name> [--base-branch BRANCH] [--skip-hook-install]\n       fellowship state init --claim-lead")
 		return 1
 	}
 
@@ -61,6 +65,14 @@ func runStateInit(d *db.DB, args []string) int {
 	// top-level instead put them in whatever worktree the command was run
 	// from, where no hook would ever look for them.
 	root := mainRepoRootOrCwd()
+
+	// --claim-lead on its own re-records the lead and touches nothing else. It
+	// is the way out of the degraded case: the lead's session id changed (a new
+	// session in the main tree rather than a resumed one), so worktree-guard
+	// now reads the lead as a mis-placed teammate and refuses its writes.
+	if *name == "" {
+		return claimLeadSession(d, root)
+	}
 
 	// Check for existing fellowship to warn about overwrite.
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
@@ -94,6 +106,7 @@ func runStateInit(d *db.DB, args []string) int {
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: warning: could not record the lead session: %v\n", err)
 	}
+	warnNoSessionID()
 
 	// Register the worktree-guard hook in the project's .claude/settings.local.json.
 	// Teammate sessions do NOT inherit plugin hooks, so this settings file is
@@ -105,6 +118,72 @@ func runStateInit(d *db.DB, args []string) int {
 		installWorktreeGuardHook(root)
 	}
 	return 0
+}
+
+// claimLeadSession re-records the running session as the fellowship's lead,
+// changing nothing else. `fellowship state init --claim-lead`.
+func claimLeadSession(d *db.DB, root string) int {
+	session := state.CurrentSessionID()
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		return state.RecordLead(conn, root, session)
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
+		return 1
+	}
+	if session == "" {
+		warnNoSessionID()
+		fmt.Println("Recorded this session as the lead, with no session id to identify it by.")
+		return 0
+	}
+	fmt.Printf("Recorded session %s as the fellowship's lead.\n", session)
+	return 0
+}
+
+// warnNoSessionID says so when the lead was recorded without an id to identify
+// it by. Claude Code exports CLAUDE_CODE_SESSION_ID to the commands it runs;
+// without it (a plain shell, an older Claude Code) the lead is anonymous, and
+// worktree-guard falls back to its narrower rule — the one that cannot tell the
+// lead from a teammate dropped into the main tree.
+func warnNoSessionID() {
+	if state.CurrentSessionID() != "" {
+		return
+	}
+	fmt.Fprintln(os.Stderr, "fellowship: warning: no CLAUDE_CODE_SESSION_ID in the environment — the lead was recorded without a session id, so worktree-guard cannot tell this session apart from a mis-placed teammate. Re-run \"fellowship state init --claim-lead\" from a Claude Code session to record one.")
+}
+
+// noticeLeadMismatch prints one line when a command runs in the MAIN working
+// tree from a session that is not the fellowship's recorded lead.
+//
+// That is the degraded case worth naming out loud: the guard will refuse this
+// session's source writes in the main tree, and the fix — re-recording the lead
+// — is not something anyone would guess. Hooks are exempt (they decide, they do
+// not advise) and so are the commands that would fix it.
+func noticeLeadMismatch(d *db.DB, cwd string, args []string) {
+	if len(args) == 0 || args[0] == "hook" || storeCreatingCommand(args) {
+		return
+	}
+	session := state.CurrentSessionID()
+	if session == "" {
+		return
+	}
+	mainRoot, err := gitutil.MainRepoRoot(cwd)
+	if err != nil {
+		return
+	}
+	if hooks.CanonicalPath(gitRootFrom(cwd)) != hooks.CanonicalPath(mainRoot) {
+		return // not in the main tree; this is a teammate's worktree
+	}
+	lead := ""
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		lead = state.LeadSessionID(conn, mainRoot, datadir.Resolve(mainRoot))
+		return nil
+	}); err != nil {
+		return
+	}
+	if lead == "" || lead == session {
+		return
+	}
+	fmt.Fprintln(os.Stderr, "fellowship: this session is not the fellowship's recorded lead, so worktree-guard will refuse its source writes in the main tree. If this session IS the lead, re-record it with \"fellowship state init --claim-lead\".")
 }
 
 // installWorktreeGuardHook merges the worktree-guard hook into the project's

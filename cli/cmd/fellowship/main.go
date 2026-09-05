@@ -54,6 +54,10 @@ func main() {
 	}
 	defer d.Close()
 
+	// One line, once, when this session is not the recorded lead but is
+	// standing where only the lead may write.
+	noticeLeadMismatch(d, cwd, os.Args[1:])
+
 	switch os.Args[1] {
 	case "hook":
 		if len(os.Args) < 3 {
@@ -276,6 +280,7 @@ Fellowship state:
     --name NAME           Fellowship name (required)
     --base-branch BRANCH  Base branch for quest worktrees (default: auto-detected)
     --skip-hook-install   Skip registering the worktree-guard hook in settings.local.json
+    --claim-lead          Record this session as the lead (alone: changes nothing else)
   state add-quest         Add a quest entry to fellowship state
     --name NAME           Quest name (required)
     --task "DESC"         Task description (required)
