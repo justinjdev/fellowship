@@ -180,12 +180,8 @@ func LoadDetail(conn *sqlite.Conn, name string) (*Detail, error) {
 			// (e.g. a history-only completed/cancelled entry) — still count
 			// it toward progress using the terminal phase, same as
 			// fellowship.DiscoverQuests did.
-			if es := entryStatus[qName]; es == "completed" || es == "cancelled" {
-				questStatuses = append(questStatuses, fellowship.QuestStatus{
-					Name:   qName,
-					Phase:  state.TerminalPhase,
-					Status: es,
-				})
+			if synth, ok := fellowship.TerminalQuestStatus(qName, "", entryStatus[qName]); ok {
+				questStatuses = append(questStatuses, synth)
 			}
 			continue
 		}

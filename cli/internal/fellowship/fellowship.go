@@ -548,13 +548,8 @@ func DiscoverQuests(conn *sqlite.Conn) (*DashboardStatus, error) {
 		qs, loadErr := loadQuestStatusFromDB(conn, q.Name, q.Worktree)
 		if loadErr != nil {
 			// Quest state not in DB — show completed/cancelled as synthetic entries
-			if entryStatus == "completed" || entryStatus == "cancelled" {
-				status.Quests = append(status.Quests, QuestStatus{
-					Name:     q.Name,
-					Worktree: q.Worktree,
-					Phase:    state.TerminalPhase,
-					Status:   entryStatus,
-				})
+			if synth, ok := TerminalQuestStatus(q.Name, q.Worktree, entryStatus); ok {
+				status.Quests = append(status.Quests, synth)
 			}
 			continue
 		}
@@ -583,4 +578,25 @@ func loadQuestStatusFromDB(conn *sqlite.Conn, name, worktree string) (*QuestStat
 		TodosDone:       done,
 		TodosTotal:      total,
 	}, nil
+}
+
+// TerminalQuestStatus builds the synthetic QuestStatus callers fall back to
+// when a quest has no quest_state row (e.g. history-only or pre-phase-
+// machinery entries) but its fellowship entry status is terminal. ok is
+// false — and the QuestStatus zero — when entryStatus isn't "completed" or
+// "cancelled", meaning no synthetic entry should be recorded.
+//
+// Both DiscoverQuests and group.LoadDetail hit this case and must agree on
+// it, since CalculateProgress relies on the same terminal-phase convention
+// to count these quests toward group progress.
+func TerminalQuestStatus(name, worktree, entryStatus string) (QuestStatus, bool) {
+	if entryStatus != "completed" && entryStatus != "cancelled" {
+		return QuestStatus{}, false
+	}
+	return QuestStatus{
+		Name:     name,
+		Worktree: worktree,
+		Phase:    state.TerminalPhase,
+		Status:   entryStatus,
+	}, true
 }
