@@ -1,4 +1,4 @@
-package errand
+package todo
 
 import (
 	"fmt"
@@ -8,36 +8,36 @@ import (
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-type ErrandStatus string
+type TodoStatus string
 
 const (
-	Pending    ErrandStatus = "pending"
-	InProgress ErrandStatus = "in_progress"
-	Done       ErrandStatus = "done"
-	Blocked    ErrandStatus = "blocked"
-	Skipped    ErrandStatus = "skipped"
+	Pending    TodoStatus = "pending"
+	InProgress TodoStatus = "in_progress"
+	Done       TodoStatus = "done"
+	Blocked    TodoStatus = "blocked"
+	Skipped    TodoStatus = "skipped"
 )
 
-type Errand struct {
-	ID          string       `json:"id"`
-	Description string       `json:"description"`
-	Status      ErrandStatus `json:"status"`
-	Phase       string       `json:"phase,omitempty"`
-	DependsOn   []string     `json:"depends_on,omitempty"`
-	CreatedAt   string       `json:"created_at"`
-	UpdatedAt   string       `json:"updated_at"`
+type Todo struct {
+	ID          string     `json:"id"`
+	Description string     `json:"description"`
+	Status      TodoStatus `json:"status"`
+	Phase       string     `json:"phase,omitempty"`
+	DependsOn   []string   `json:"depends_on,omitempty"`
+	CreatedAt   string     `json:"created_at"`
+	UpdatedAt   string     `json:"updated_at"`
 }
 
-type QuestErrandList struct {
-	QuestName string   `json:"quest_name"`
-	Task      string   `json:"task"`
-	Items     []Errand `json:"items"`
+type QuestTodoList struct {
+	QuestName string `json:"quest_name"`
+	Task      string `json:"task"`
+	Items     []Todo `json:"items"`
 }
 
-// allStatuses lists every accepted errand status, in the order shown to users.
-var allStatuses = []ErrandStatus{Pending, InProgress, Done, Blocked, Skipped}
+// allStatuses lists every accepted todo status, in the order shown to users.
+var allStatuses = []TodoStatus{Pending, InProgress, Done, Blocked, Skipped}
 
-// Statuses returns the accepted errand status names.
+// Statuses returns the accepted todo status names.
 func Statuses() []string {
 	out := make([]string, len(allStatuses))
 	for i, st := range allStatuses {
@@ -46,8 +46,8 @@ func Statuses() []string {
 	return out
 }
 
-// ValidStatus checks whether a string is a valid ErrandStatus.
-func ValidStatus(s string) (ErrandStatus, bool) {
+// ValidStatus checks whether a string is a valid TodoStatus.
+func ValidStatus(s string) (TodoStatus, bool) {
 	for _, st := range allStatuses {
 		if string(st) == s {
 			return st, true
@@ -56,17 +56,17 @@ func ValidStatus(s string) (ErrandStatus, bool) {
 	return "", false
 }
 
-// Init creates the initial errand list metadata for a quest.
-// This is a no-op for DB-backed storage since errands reference quest_state via FK.
+// Init creates the initial todo list metadata for a quest.
+// This is a no-op for DB-backed storage since todos reference quest_state via FK.
 func Init(conn *sqlite.Conn, quest, task string) error {
-	// errands are stored per-row with quest_name FK; nothing to initialize.
+	// todos are stored per-row with quest_name FK; nothing to initialize.
 	_ = conn
 	_ = quest
 	_ = task
 	return nil
 }
 
-// Add inserts a new errand and returns its generated ID (w-NNN).
+// Add inserts a new todo and returns its generated ID (w-NNN).
 func Add(conn *sqlite.Conn, quest, desc, phase string) (string, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
@@ -82,7 +82,7 @@ func Add(conn *sqlite.Conn, quest, desc, phase string) (string, error) {
 			},
 		})
 	if err != nil {
-		return "", fmt.Errorf("errand: next id: %w", err)
+		return "", fmt.Errorf("todo: next id: %w", err)
 	}
 
 	id := fmt.Sprintf("w-%03d", nextNum)
@@ -101,14 +101,14 @@ func Add(conn *sqlite.Conn, quest, desc, phase string) (string, error) {
 			},
 		})
 	if err != nil {
-		return "", fmt.Errorf("errand: add: %w", err)
+		return "", fmt.Errorf("todo: add: %w", err)
 	}
 
 	return id, nil
 }
 
-// UpdateStatus changes the status of an errand.
-func UpdateStatus(conn *sqlite.Conn, quest, id string, status ErrandStatus) error {
+// UpdateStatus changes the status of a todo.
+func UpdateStatus(conn *sqlite.Conn, quest, id string, status TodoStatus) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	err := sqlitex.Execute(conn,
@@ -123,28 +123,28 @@ func UpdateStatus(conn *sqlite.Conn, quest, id string, status ErrandStatus) erro
 			},
 		})
 	if err != nil {
-		return fmt.Errorf("errand: update status: %w", err)
+		return fmt.Errorf("todo: update status: %w", err)
 	}
 
 	if conn.Changes() == 0 {
-		return fmt.Errorf("errand %q not found in quest %q", id, quest)
+		return fmt.Errorf("todo %q not found in quest %q", id, quest)
 	}
 	return nil
 }
 
-// List returns all errands for a quest, ordered by ID.
-func List(conn *sqlite.Conn, quest string) ([]Errand, error) {
-	var items []Errand
+// List returns all todos for a quest, ordered by ID.
+func List(conn *sqlite.Conn, quest string) ([]Todo, error) {
+	var items []Todo
 	err := sqlitex.Execute(conn,
 		`SELECT id, description, status, phase, created_at, updated_at
 		 FROM errands WHERE quest_name = :quest ORDER BY id`,
 		&sqlitex.ExecOptions{
 			Named: map[string]any{":quest": quest},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
-				e := Errand{
+				e := Todo{
 					ID:          stmt.ColumnText(0),
 					Description: stmt.ColumnText(1),
-					Status:      ErrandStatus(stmt.ColumnText(2)),
+					Status:      TodoStatus(stmt.ColumnText(2)),
 					Phase:       stmt.ColumnText(3),
 					CreatedAt:   stmt.ColumnText(4),
 					UpdatedAt:   stmt.ColumnText(5),
@@ -154,10 +154,10 @@ func List(conn *sqlite.Conn, quest string) ([]Errand, error) {
 			},
 		})
 	if err != nil {
-		return nil, fmt.Errorf("errand: list: %w", err)
+		return nil, fmt.Errorf("todo: list: %w", err)
 	}
 
-	// Load dependencies for each errand.
+	// Load dependencies for each todo.
 	for i := range items {
 		deps, err := loadDeps(conn, quest, items[i].ID)
 		if err != nil {
@@ -169,7 +169,7 @@ func List(conn *sqlite.Conn, quest string) ([]Errand, error) {
 	return items, nil
 }
 
-// Progress returns the count of done errands and total errands for a quest.
+// Progress returns the count of done todos and total todos for a quest.
 func Progress(conn *sqlite.Conn, quest string) (done, total int, err error) {
 	err = sqlitex.Execute(conn,
 		`SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done
@@ -183,14 +183,14 @@ func Progress(conn *sqlite.Conn, quest string) (done, total int, err error) {
 			},
 		})
 	if err != nil {
-		err = fmt.Errorf("errand: progress: %w", err)
+		err = fmt.Errorf("todo: progress: %w", err)
 	}
 	return
 }
 
-// PendingErrands returns errands that are pending or blocked but whose
+// PendingTodos returns todos that are pending or blocked but whose
 // dependencies are all done.
-func PendingErrands(conn *sqlite.Conn, quest string) ([]Errand, error) {
+func PendingTodos(conn *sqlite.Conn, quest string) ([]Todo, error) {
 	items, err := List(conn, quest)
 	if err != nil {
 		return nil, err
@@ -203,7 +203,7 @@ func PendingErrands(conn *sqlite.Conn, quest string) ([]Errand, error) {
 		}
 	}
 
-	var result []Errand
+	var result []Todo
 	for _, item := range items {
 		if item.Status != Pending && item.Status != Blocked {
 			continue
@@ -222,20 +222,20 @@ func PendingErrands(conn *sqlite.Conn, quest string) ([]Errand, error) {
 	return result, nil
 }
 
-// loadDeps returns the dependency IDs for an errand.
-func loadDeps(conn *sqlite.Conn, quest, errandID string) ([]string, error) {
+// loadDeps returns the dependency IDs for a todo.
+func loadDeps(conn *sqlite.Conn, quest, todoID string) ([]string, error) {
 	var deps []string
 	err := sqlitex.Execute(conn,
 		`SELECT depends_on FROM errand_deps WHERE quest_name = :quest AND errand_id = :id`,
 		&sqlitex.ExecOptions{
-			Named: map[string]any{":quest": quest, ":id": errandID},
+			Named: map[string]any{":quest": quest, ":id": todoID},
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				deps = append(deps, stmt.ColumnText(0))
 				return nil
 			},
 		})
 	if err != nil {
-		return nil, fmt.Errorf("errand: load deps: %w", err)
+		return nil, fmt.Errorf("todo: load deps: %w", err)
 	}
 	return deps, nil
 }

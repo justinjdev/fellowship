@@ -76,6 +76,7 @@ var baseSchema = []string{
 	)`,
 
 	// Errands (replaces quest-errands.json)
+	// table: errands, errand_deps -> package todo (cli/internal/todo)
 	`CREATE TABLE IF NOT EXISTS errands (
 		id          TEXT NOT NULL,
 		quest_name  TEXT NOT NULL REFERENCES quest_state(quest_name),

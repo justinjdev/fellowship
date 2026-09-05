@@ -14,10 +14,10 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/company"
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/eagles"
-	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/fellowship"
 	"github.com/justinjdev/fellowship/cli/internal/state"
+	"github.com/justinjdev/fellowship/cli/internal/todo"
 )
 
 type gateRequest struct {
@@ -339,7 +339,7 @@ func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var errands []errand.Errand
+	var errands []todo.Todo
 	err = s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		questName, findErr := state.FindQuest(conn, dir)
 		if findErr != nil {
@@ -349,7 +349,7 @@ func (s *Server) handleErrand(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 		var listErr error
-		errands, listErr = errand.List(conn, questName)
+		errands, listErr = todo.List(conn, questName)
 		return listErr
 	})
 	if err != nil {

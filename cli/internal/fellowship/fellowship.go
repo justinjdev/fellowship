@@ -7,8 +7,8 @@ import (
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 
-	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/state"
+	"github.com/justinjdev/fellowship/cli/internal/todo"
 )
 
 type CompanyEntry struct {
@@ -61,8 +61,8 @@ type QuestStatus struct {
 	GateID          *string `json:"gate_id"`
 	LembasCompleted bool    `json:"lembas_completed"`
 	MetadataUpdated bool    `json:"metadata_updated"`
-	ErrandsDone     int     `json:"errands_done"`
-	ErrandsTotal    int     `json:"errands_total"`
+	TodosDone       int     `json:"todos_done"`
+	TodosTotal      int     `json:"todos_total"`
 }
 
 type DashboardStatus struct {
@@ -537,7 +537,7 @@ func loadQuestStatusFromDB(conn *sqlite.Conn, name, worktree string) (*QuestStat
 	if err != nil {
 		return nil, err
 	}
-	done, total, _ := errand.Progress(conn, name)
+	done, total, _ := todo.Progress(conn, name)
 	return &QuestStatus{
 		Name:            name,
 		Worktree:        worktree,
@@ -546,7 +546,7 @@ func loadQuestStatusFromDB(conn *sqlite.Conn, name, worktree string) (*QuestStat
 		GateID:          s.GateID,
 		LembasCompleted: s.LembasCompleted,
 		MetadataUpdated: s.MetadataUpdated,
-		ErrandsDone:     done,
-		ErrandsTotal:    total,
+		TodosDone:       done,
+		TodosTotal:      total,
 	}, nil
 }

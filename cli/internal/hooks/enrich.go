@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/justinjdev/fellowship/cli/internal/errand"
 	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/history"
+	"github.com/justinjdev/fellowship/cli/internal/todo"
 	"zombiezen.com/go/sqlite"
 )
 
@@ -18,21 +18,21 @@ import (
 // and returns a formatted enrichment block to append to gate messages.
 // Returns empty string if no data sources are available.
 func GatherEnrichment(conn *sqlite.Conn, questName string, dir string) string {
-	errandStr := gatherErrandProgress(conn, questName)
+	todoStr := gatherTodoProgress(conn, questName)
 	filesStr := gatherFilesTouched(conn, questName)
 	diffStr := gatherDiffStats(dir)
 	durationStr := gatherPhaseDuration(conn, questName)
 
-	block := buildEnrichmentBlock(errandStr, filesStr, diffStr, durationStr)
+	block := buildEnrichmentBlock(todoStr, filesStr, diffStr, durationStr)
 	return block
 }
 
-func gatherErrandProgress(conn *sqlite.Conn, questName string) string {
-	done, total, err := errand.Progress(conn, questName)
+func gatherTodoProgress(conn *sqlite.Conn, questName string) string {
+	done, total, err := todo.Progress(conn, questName)
 	if err != nil || total == 0 {
 		return ""
 	}
-	return formatErrandProgress(done, total)
+	return formatTodoProgress(done, total)
 }
 
 func gatherFilesTouched(conn *sqlite.Conn, questName string) string {
@@ -77,9 +77,9 @@ func gatherPhaseDuration(conn *sqlite.Conn, questName string) string {
 	return ""
 }
 
-func formatErrandProgress(done, total int) string {
+func formatTodoProgress(done, total int) string {
 	if total == 0 {
-		return "no errands"
+		return "no todos"
 	}
 	return fmt.Sprintf("%d/%d done", done, total)
 }
@@ -118,10 +118,10 @@ func parseDiffStats(output string) string {
 	return fmt.Sprintf("+%s -%s across %s files", ins, del, files)
 }
 
-func buildEnrichmentBlock(errands, files, diff, duration string) string {
+func buildEnrichmentBlock(todos, files, diff, duration string) string {
 	var lines []string
-	if errands != "" {
-		lines = append(lines, fmt.Sprintf("- **Errands:** %s", errands))
+	if todos != "" {
+		lines = append(lines, fmt.Sprintf("- **Todos:** %s", todos))
 	}
 	if files != "" {
 		lines = append(lines, fmt.Sprintf("- **Files touched:** %s", files))

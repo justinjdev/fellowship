@@ -21,24 +21,24 @@ func TestGatherEnrichment_EmptyDB(t *testing.T) {
 	}
 }
 
-func TestFormatErrandProgress_WithErrands(t *testing.T) {
-	got := formatErrandProgress(3, 5)
+func TestFormatTodoProgress_WithTodos(t *testing.T) {
+	got := formatTodoProgress(3, 5)
 	if got != "3/5 done" {
 		t.Errorf("got %q, want %q", got, "3/5 done")
 	}
 }
 
-func TestFormatErrandProgress_AllDone(t *testing.T) {
-	got := formatErrandProgress(5, 5)
+func TestFormatTodoProgress_AllDone(t *testing.T) {
+	got := formatTodoProgress(5, 5)
 	if got != "5/5 done" {
 		t.Errorf("got %q, want %q", got, "5/5 done")
 	}
 }
 
-func TestFormatErrandProgress_None(t *testing.T) {
-	got := formatErrandProgress(0, 0)
-	if got != "no errands" {
-		t.Errorf("got %q, want %q", got, "no errands")
+func TestFormatTodoProgress_None(t *testing.T) {
+	got := formatTodoProgress(0, 0)
+	if got != "no todos" {
+		t.Errorf("got %q, want %q", got, "no todos")
 	}
 }
 
@@ -102,7 +102,7 @@ func TestBuildEnrichmentBlock(t *testing.T) {
 		t.Error("should contain header")
 	}
 	if !strings.Contains(block, "3/5 done") {
-		t.Error("should contain errand progress")
+		t.Error("should contain todo progress")
 	}
 	if !strings.Contains(block, "+10 -5") {
 		t.Error("should contain diff stats")
@@ -111,8 +111,8 @@ func TestBuildEnrichmentBlock(t *testing.T) {
 
 func TestBuildEnrichmentBlock_SkipsMissingFields(t *testing.T) {
 	block := buildEnrichmentBlock("", "none", "", "")
-	if strings.Contains(block, "Errands") {
-		t.Error("should skip empty errands line")
+	if strings.Contains(block, "Todos") {
+		t.Error("should skip empty todos line")
 	}
 	if strings.Contains(block, "Diff") {
 		t.Error("should skip empty diff line")
