@@ -8,11 +8,11 @@ import (
 	iofs "io/fs"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/fellowship"
+	"github.com/justinjdev/fellowship/cli/internal/gate"
 	"github.com/justinjdev/fellowship/cli/internal/group"
 	"github.com/justinjdev/fellowship/cli/internal/health"
 	"github.com/justinjdev/fellowship/cli/internal/notes"
@@ -98,7 +98,6 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var result fellowship.QuestStatus
-	var prevPhase string
 	err := s.db.WithTx(context.Background(), func(conn *db.Conn) error {
 		// Find the quest name for this worktree
 		questName, err := state.FindQuest(conn, req.Dir)
@@ -111,24 +110,18 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 
-		if !st.GatePending {
-			return fmt.Errorf("no gate pending")
-		}
-
-		prevPhase = st.Phase
-
-		nextPhase, err := state.NextPhase(st.Phase)
+		// Same transition the lead's `gate approve` and a group batch
+		// approval perform.
+		prevPhase, nextPhase, err := state.Approve(st)
 		if err != nil {
 			return err
 		}
 
-		st.GatePending = false
-		st.Phase = nextPhase
-		st.GateID = nil
-		st.LembasCompleted = false
-		st.MetadataUpdated = false
-
 		if err := state.Upsert(conn, st); err != nil {
+			return err
+		}
+
+		if err := gate.RecordApproval(conn, questName, prevPhase, nextPhase, ""); err != nil {
 			return err
 		}
 
@@ -144,27 +137,13 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		if err.Error() == "no gate pending" {
+		if err == state.ErrNoGatePending {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		} else {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
-
-	// Best-effort event announcements after tx commits.
-	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
-		now := time.Now().UTC().Format(time.RFC3339)
-		events.Record(conn, events.Event{
-			Timestamp: now, Quest: result.Name, Type: events.GateApproved,
-			Phase: prevPhase, Detail: fmt.Sprintf("Gate approved for %s", prevPhase),
-		})
-		events.Record(conn, events.Event{
-			Timestamp: now, Quest: result.Name, Type: events.PhaseTransition,
-			Phase: result.Phase, Detail: fmt.Sprintf("Phase advanced from %s to %s", prevPhase, result.Phase),
-		})
-		return nil
-	})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
@@ -197,14 +176,16 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 
-		if !st.GatePending {
-			return fmt.Errorf("no gate pending")
+		phase := st.Phase
+		if err := state.Reject(st); err != nil {
+			return err
 		}
 
-		st.GatePending = false
-		st.GateID = nil
-
 		if err := state.Upsert(conn, st); err != nil {
+			return err
+		}
+
+		if err := gate.RecordRejection(conn, questName, phase, ""); err != nil {
 			return err
 		}
 
@@ -220,23 +201,13 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		if err.Error() == "no gate pending" {
+		if err == state.ErrNoGatePending {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		} else {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
-
-	// Best-effort event announcement after tx commits.
-	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
-		events.Record(conn, events.Event{
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			Quest:     result.Name, Type: events.GateRejected,
-			Phase: result.Phase, Detail: fmt.Sprintf("Gate rejected for %s", result.Phase),
-		})
-		return nil
-	})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
