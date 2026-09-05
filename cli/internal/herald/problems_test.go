@@ -125,7 +125,13 @@ func TestZombieDetection(t *testing.T) {
 func TestZombieNotDetectedWhenComplete(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		insertQuestState(t, conn, "q1", "Complete", false, "")
+		// Review is terminal, so a finished quest is one whose fellowship
+		// entry says completed — not one in a phase past the others.
+		insertQuestState(t, conn, "q1", "Review", false, "")
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO fellowship_quests (name, status) VALUES ('q1', 'completed')`, nil); err != nil {
+			t.Fatal(err)
+		}
 
 		oldTime := time.Now().Add(-20 * time.Minute).UTC().Format(time.RFC3339)
 		if err := Announce(conn, Tiding{
@@ -143,7 +149,7 @@ func TestZombieNotDetectedWhenComplete(t *testing.T) {
 
 		for _, p := range problems {
 			if p.Type == "zombie" {
-				t.Errorf("unexpected zombie problem for Complete quest: %v", p)
+				t.Errorf("unexpected zombie problem for a completed quest: %v", p)
 			}
 		}
 		return nil

@@ -59,8 +59,8 @@ func GateSubmit(s *state.State, input *HookInput) SubmitResult {
 	nextPhase, err := state.NextPhase(s.Phase)
 	if err != nil {
 		msg := fmt.Sprintf("fellowship: %v — cannot submit gate", err)
-		if s.Phase == "Complete" {
-			msg = "Quest already complete — no further gates to submit."
+		if s.Phase == state.TerminalPhase {
+			msg = "Quest is in its final phase — no further gates to submit. Open the PR and mark the task complete."
 		}
 		return SubmitResult{Block: true, Message: msg}
 	}

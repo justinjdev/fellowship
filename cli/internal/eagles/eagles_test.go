@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"zombiezen.com/go/sqlite/sqlitex"
+
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
 	"github.com/justinjdev/fellowship/cli/internal/herald"
@@ -22,6 +24,23 @@ func seedQuest(t *testing.T, d *db.DB, s *state.State) {
 		return state.Upsert(conn, s)
 	}); err != nil {
 		t.Fatalf("seeding quest %s: %v", s.QuestName, err)
+	}
+}
+
+// seedFinished marks a quest's fellowship entry as finished. Review is the
+// terminal phase, so a quest is "done" by entry status, not by phase.
+func seedFinished(t *testing.T, d *db.DB, questName, status string) {
+	t.Helper()
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO fellowship_quests (name, status) VALUES (:name, :status)
+			 ON CONFLICT(name) DO UPDATE SET status = :status`,
+			&sqlitex.ExecOptions{Named: map[string]any{":name": questName, ":status": status}}); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("marking quest %s %s: %v", questName, status, err)
 	}
 }
 
@@ -285,8 +304,9 @@ func TestClassifyComplete(t *testing.T) {
 		QuestName: "quest-done",
 		TaskID:    "t6",
 		TeamName:  "team",
-		Phase:     "Complete",
+		Phase:     "Review",
 	})
+	seedFinished(t, d, "quest-done", "completed")
 
 	opts := Options{
 		GateThreshold: 10 * time.Minute,
@@ -319,7 +339,7 @@ func TestClassifyIdle(t *testing.T) {
 
 	seedQuest(t, d, &state.State{
 		QuestName: "",
-		Phase:     "Onboard",
+		Phase:     "Research",
 	})
 
 	opts := Options{
@@ -549,8 +569,9 @@ func TestSweepMultipleQuests(t *testing.T) {
 
 	seedQuest(t, d, &state.State{
 		QuestName: "quest-b",
-		Phase:     "Complete",
+		Phase:     "Review",
 	})
+	seedFinished(t, d, "quest-b", "completed")
 
 	gateID := fmt.Sprintf("gate-Plan-%d", now.Add(-20*time.Minute).Unix())
 	seedQuest(t, d, &state.State{

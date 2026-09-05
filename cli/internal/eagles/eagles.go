@@ -75,13 +75,20 @@ func Sweep(conn *db.Conn, opts Options) (*EaglesReport, error) {
 		return nil, fmt.Errorf("eagles: list quests: %w", err)
 	}
 
+	// Review is terminal, so a finished quest is not distinguishable by
+	// phase — the fellowship entry's status is what says the quest is done.
+	finished, err := finishedQuests(conn)
+	if err != nil {
+		return nil, fmt.Errorf("eagles: list finished quests: %w", err)
+	}
+
 	report := &EaglesReport{
 		Timestamp: opts.Now.UTC().Format(time.RFC3339),
 		Quests:    []QuestHealth{},
 	}
 
 	for _, s := range states {
-		qh := classifyQuest(conn, s, opts)
+		qh := classifyQuest(conn, s, finished[s.QuestName], opts)
 		if qh.Health != Working && qh.Health != Complete {
 			report.Problems++
 		}
@@ -132,16 +139,31 @@ func listAllQuests(conn *db.Conn) ([]*state.State, error) {
 	return states, nil
 }
 
+// finishedQuests returns the set of quest names whose fellowship entry is no
+// longer active — completed or cancelled work that needs no health chasing.
+func finishedQuests(conn *db.Conn) (map[string]bool, error) {
+	finished := map[string]bool{}
+	err := sqlitex.Execute(conn,
+		`SELECT name FROM fellowship_quests WHERE status IN ('completed', 'cancelled')`,
+		&sqlitex.ExecOptions{
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				finished[stmt.ColumnText(0)] = true
+				return nil
+			},
+		})
+	return finished, err
+}
+
 // classifyQuest examines a quest's state and herald tidings to determine health.
-func classifyQuest(conn *db.Conn, s *state.State, opts Options) QuestHealth {
+func classifyQuest(conn *db.Conn, s *state.State, finished bool, opts Options) QuestHealth {
 	qh := QuestHealth{
 		Name:   s.QuestName,
 		Phase:  s.Phase,
 		Action: "none",
 	}
 
-	// Complete quests are always healthy.
-	if s.Phase == "Complete" {
+	// Finished quests are always healthy.
+	if finished {
 		qh.Health = Complete
 		qh.LastActivity = lastActivity(conn, s)
 		return qh

@@ -27,7 +27,23 @@ type State struct {
 	HeldReason       *string  `json:"held_reason"`
 }
 
-var phaseOrder = []string{"Onboard", "Research", "Plan", "Implement", "Adversarial", "Review", "Complete"}
+// phaseOrder is the canonical quest lifecycle: four phases with a gate
+// leaving each of the first three. Review is terminal — no gate leaves it,
+// and the quest ends when the PR is opened and the task is marked complete
+// (enforced by the completion-guard hook).
+var phaseOrder = []string{"Research", "Plan", "Implement", "Review"}
+
+// TerminalPhase is the last phase in the lifecycle. No gate leaves it.
+const TerminalPhase = "Review"
+
+// GatePhases returns the phases a gate can leave — every phase but the
+// terminal one. These are the valid entries for gates.autoApprove.
+func GatePhases() []string {
+	gated := phaseOrder[:len(phaseOrder)-1]
+	out := make([]string, len(gated))
+	copy(out, gated)
+	return out
+}
 
 func NextPhase(current string) (string, error) {
 	for i, p := range phaseOrder {
@@ -41,8 +57,10 @@ func NextPhase(current string) (string, error) {
 	return "", fmt.Errorf("unknown phase: %s", current)
 }
 
+// IsEarlyPhase reports whether a phase forbids source writes. Research and
+// Plan are read-and-think phases; Implement and Review write code.
 func IsEarlyPhase(phase string) bool {
-	return phase == "Onboard" || phase == "Research" || phase == "Plan"
+	return phase == "Research" || phase == "Plan"
 }
 
 // Phases returns the ordered quest phase names.

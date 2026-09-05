@@ -287,8 +287,8 @@ func resolveHoldQuest(d *db.DB, dir string) (string, error) {
 func runInit(d *db.DB) int {
 	ctx := context.Background()
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
-	phase := fs.String("phase", "", "Initial phase (default: Onboard)")
-	planSkip := fs.Bool("plan-skip", false, "Record Onboard/Research/Plan as skipped in tome")
+	phase := fs.String("phase", "", "Initial phase (default: Research)")
+	planSkip := fs.Bool("plan-skip", false, "Record Research/Plan as skipped in tome")
 	questName := fs.String("quest", "", "Quest name (default: the name registered for this worktree)")
 	initDir := fs.String("dir", "", "Worktree or repo root (default: auto-detect via git)")
 	fs.Parse(os.Args[2:])
@@ -325,7 +325,7 @@ func runInit(d *db.DB) int {
 
 	qn := resolveInitQuestName(d, *questName, root)
 
-	initPhase := "Onboard"
+	initPhase := state.Phases()[0]
 	if *phase != "" {
 		initPhase = *phase
 	}
@@ -377,10 +377,10 @@ func runInit(d *db.DB) int {
 		}
 
 		if *planSkip {
-			if err := tome.RecordSkippedPhases(conn, qn, []string{"Onboard", "Research", "Plan"}, "pre-existing plan"); err != nil {
+			if err := tome.RecordSkippedPhases(conn, qn, []string{"Research", "Plan"}, "pre-existing plan"); err != nil {
 				return err
 			}
-			fmt.Println("Recorded Onboard/Research/Plan as skipped (pre-existing plan).")
+			fmt.Println("Recorded Research/Plan as skipped (pre-existing plan).")
 		}
 		return nil
 	}); err != nil {
@@ -405,17 +405,9 @@ func resolveInitQuestName(d *db.DB, flagName, root string) string {
 }
 
 // autoApprovablePhases lists the phases a gate can be auto-approved for: every
-// quest phase except Complete, which no gate leaves.
+// quest phase except the terminal one, which no gate leaves.
 func autoApprovablePhases() []string {
-	all := state.Phases()
-	out := make([]string, 0, len(all))
-	for _, p := range all {
-		if p == "Complete" {
-			continue
-		}
-		out = append(out, p)
-	}
-	return out
+	return state.GatePhases()
 }
 
 // validateAutoApproveGates rejects gates.autoApprove entries that do not name a

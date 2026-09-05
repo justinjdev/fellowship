@@ -213,10 +213,14 @@ func TestDetectProblems_Struggling(t *testing.T) {
 func TestDetectProblems_NoProblems(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		// Quest in Complete phase should not be checked
+		// A quest whose fellowship entry is completed should not be checked
 		if err := sqlitex.Execute(conn,
 			`INSERT INTO quest_state (quest_name, phase, gate_pending, created_at, updated_at)
-			 VALUES ('q1', 'Complete', 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`, nil); err != nil {
+			 VALUES ('q1', 'Review', 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`, nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := sqlitex.Execute(conn,
+			`INSERT INTO fellowship_quests (name, status) VALUES ('q1', 'completed')`, nil); err != nil {
 			t.Fatal(err)
 		}
 

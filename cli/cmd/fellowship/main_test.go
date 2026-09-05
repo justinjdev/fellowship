@@ -97,8 +97,9 @@ func TestValidateAutoApproveGates(t *testing.T) {
 	}{
 		{name: "nil is valid"},
 		{name: "empty is valid", gates: []string{}},
-		{name: "every gate-bearing phase", gates: []string{"Onboard", "Research", "Plan", "Implement", "Adversarial", "Review"}},
-		{name: "Complete is rejected", gates: []string{"Complete"}, wantErr: `invalid gates.autoApprove entry "Complete"`},
+		{name: "every gate-bearing phase", gates: []string{"Research", "Plan", "Implement"}},
+		{name: "the terminal phase is rejected", gates: []string{"Review"}, wantErr: `invalid gates.autoApprove entry "Review"`},
+		{name: "retired phase names are rejected", gates: []string{"Onboard"}, wantErr: `invalid gates.autoApprove entry "Onboard"`},
 		{name: "unknown phase is rejected", gates: []string{"Ship"}, wantErr: `invalid gates.autoApprove entry "Ship"`},
 		{name: "case must match", gates: []string{"research"}, wantErr: `invalid gates.autoApprove entry "research"`},
 		{name: "one bad entry fails the list", gates: []string{"Plan", "Deploy"}, wantErr: `invalid gates.autoApprove entry "Deploy"`},
@@ -123,12 +124,12 @@ func TestValidateAutoApproveGates(t *testing.T) {
 func TestAutoApprovablePhases(t *testing.T) {
 	got := autoApprovablePhases()
 	for _, p := range got {
-		if p == "Complete" {
-			t.Fatalf("autoApprovablePhases() = %q, must not contain Complete", got)
+		if p == state.TerminalPhase {
+			t.Fatalf("autoApprovablePhases() = %q, must not contain the terminal phase %q", got, state.TerminalPhase)
 		}
 	}
 	if len(got) != len(state.Phases())-1 {
-		t.Fatalf("autoApprovablePhases() = %q, want every phase but Complete (%q)", got, state.Phases())
+		t.Fatalf("autoApprovablePhases() = %q, want every phase but %q (%q)", got, state.TerminalPhase, state.Phases())
 	}
 }
 

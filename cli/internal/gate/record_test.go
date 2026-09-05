@@ -30,7 +30,7 @@ func TestRecordApproval(t *testing.T) {
 	d := newQuest(t, "Research")
 
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		return gate.RecordApproval(conn, "quest-1", "Implement", "Adversarial", "Batch approved for company c")
+		return gate.RecordApproval(conn, "quest-1", "Implement", "Review", "Batch approved for company c")
 	}); err != nil {
 		t.Fatalf("RecordApproval: %v", err)
 	}

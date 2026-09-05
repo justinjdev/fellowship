@@ -447,8 +447,8 @@ func migrateQuestState(conn *Conn, data []byte, s *migrationSummary) error {
 		heldReason = *qs.HeldReason
 	}
 	var autoApprove any
-	if len(qs.AutoApproveGates) > 0 {
-		b, _ := json.Marshal(qs.AutoApproveGates)
+	if gates := remapAutoApproveGates(qs.AutoApproveGates); len(gates) > 0 {
+		b, _ := json.Marshal(gates)
 		autoApprove = string(b)
 	}
 
@@ -464,7 +464,7 @@ func migrateQuestState(conn *Conn, data []byte, s *migrationSummary) error {
 				":name":         qs.QuestName,
 				":task_id":      qs.TaskID,
 				":team":         qs.TeamName,
-				":phase":        qs.Phase,
+				":phase":        RemapRetiredPhase(qs.Phase),
 				":gate_pending": boolInt(qs.GatePending),
 				":gate_id":      gateID,
 				":lembas":       boolInt(qs.LembasCompleted),
@@ -482,6 +482,23 @@ func migrateQuestState(conn *Conn, data []byte, s *migrationSummary) error {
 	return nil
 }
 
+// remapAutoApproveGates renames retired phases in a legacy gates.autoApprove
+// list and drops the ones that now map onto the terminal phase, which no gate
+// leaves. Duplicates that the rename creates are collapsed.
+func remapAutoApproveGates(gates []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, g := range gates {
+		mapped := RemapRetiredPhase(g)
+		if mapped == terminalPhase || seen[mapped] {
+			continue
+		}
+		seen[mapped] = true
+		out = append(out, mapped)
+	}
+	return out
+}
+
 func migrateQuestTome(conn *Conn, data []byte, s *migrationSummary) error {
 	var qt questTomeJSON
 	if err := json.Unmarshal(data, &qt); err != nil {
@@ -496,7 +513,7 @@ func migrateQuestTome(conn *Conn, data []byte, s *migrationSummary) error {
 			&sqlitex.ExecOptions{
 				Named: map[string]any{
 					":quest":        qt.QuestName,
-					":phase":        p.Phase,
+					":phase":        RemapRetiredPhase(p.Phase),
 					":completed_at": p.CompletedAt,
 					":dur":          p.DurationS,
 				},
@@ -513,7 +530,7 @@ func migrateQuestTome(conn *Conn, data []byte, s *migrationSummary) error {
 			&sqlitex.ExecOptions{
 				Named: map[string]any{
 					":quest":  qt.QuestName,
-					":phase":  g.Phase,
+					":phase":  RemapRetiredPhase(g.Phase),
 					":action": g.Action,
 					":ts":     g.Timestamp,
 					":reason": g.Reason,
@@ -609,7 +626,7 @@ func migrateHerald(conn *Conn, data []byte, s *migrationSummary) error {
 					":ts":     h.Timestamp,
 					":quest":  h.Quest,
 					":type":   h.Type,
-					":phase":  h.Phase,
+					":phase":  RemapRetiredPhase(h.Phase),
 					":detail": h.Detail,
 				},
 			}); err != nil {

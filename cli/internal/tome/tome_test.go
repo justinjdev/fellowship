@@ -98,10 +98,10 @@ func TestLoad(t *testing.T) {
 	seedQuest(t, d, "q1")
 
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := tome.RecordPhase(conn, "q1", "Onboard", 60); err != nil {
+		if err := tome.RecordPhase(conn, "q1", "Research", 60); err != nil {
 			t.Fatal(err)
 		}
-		if err := tome.RecordGate(conn, "q1", "Onboard", "approved", ""); err != nil {
+		if err := tome.RecordGate(conn, "q1", "Research", "approved", ""); err != nil {
 			t.Fatal(err)
 		}
 		if err := tome.RecordFiles(conn, "q1", []string{"a.go"}); err != nil {
@@ -162,7 +162,7 @@ func TestRecordSkippedPhases(t *testing.T) {
 	seedQuest(t, d, "q1")
 
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		if err := tome.RecordSkippedPhases(conn, "q1", []string{"Onboard", "Research", "Plan"}, "pre-existing plan"); err != nil {
+		if err := tome.RecordSkippedPhases(conn, "q1", []string{"Research", "Plan"}, "pre-existing plan"); err != nil {
 			t.Fatal(err)
 		}
 
@@ -170,19 +170,19 @@ func TestRecordSkippedPhases(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(phases) != 3 {
-			t.Fatalf("expected 3 phases, got %d", len(phases))
+		if len(phases) != 2 {
+			t.Fatalf("expected 2 phases, got %d", len(phases))
 		}
 
 		gates, err := tome.LoadGates(conn, "q1")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(gates) != 3 {
-			t.Fatalf("expected 3 gates, got %d", len(gates))
+		if len(gates) != 2 {
+			t.Fatalf("expected 2 gates, got %d", len(gates))
 		}
 
-		for i, phase := range []string{"Onboard", "Research", "Plan"} {
+		for i, phase := range []string{"Research", "Plan"} {
 			if gates[i].Phase != phase {
 				t.Errorf("gates[%d].Phase = %q, want %q", i, gates[i].Phase, phase)
 			}

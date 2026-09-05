@@ -32,7 +32,9 @@ type Problem struct {
 func DetectProblems(conn *db.Conn) ([]Problem, error) {
 	var problems []Problem
 
-	// Query all active quests (not Complete).
+	// Query all active quests. Review is terminal, so "still going" is the
+	// fellowship entry's status rather than a phase the quest has not
+	// reached yet; a quest with no entry row at all counts as active.
 	type questInfo struct {
 		questName   string
 		phase       string
@@ -42,7 +44,10 @@ func DetectProblems(conn *db.Conn) ([]Problem, error) {
 
 	var quests []questInfo
 	if err := sqlitex.Execute(conn,
-		`SELECT quest_name, phase, gate_pending, gate_id FROM quest_state WHERE phase != 'Complete'`,
+		`SELECT qs.quest_name, qs.phase, qs.gate_pending, qs.gate_id
+		 FROM quest_state qs
+		 LEFT JOIN fellowship_quests fq ON fq.name = qs.quest_name
+		 WHERE COALESCE(fq.status, 'active') NOT IN ('completed', 'cancelled')`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				quests = append(quests, questInfo{

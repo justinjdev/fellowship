@@ -50,7 +50,9 @@ func CalculateProgress(company fellowship.CompanyEntry, quests []fellowship.Ques
 		if !ok {
 			continue
 		}
-		if qs.Phase == "Complete" {
+		// Review is terminal but a quest sits in it while the PR is opened,
+		// so "done" is the fellowship entry's status, not a phase.
+		if qs.Status == "completed" {
 			progress.Completed++
 		}
 		if rank, ok := phaseRank[qs.Phase]; ok && rank >= phaseRank["Implement"] {
@@ -217,7 +219,11 @@ func LoadAndMarshalProgress(conn *sqlite.Conn, name string) ([]byte, error) {
 		return nil, err
 	}
 
-	// Build quest statuses from DB
+	// Build quest statuses from DB.
+	entryStatus, err := questEntryStatuses(conn)
+	if err != nil {
+		return nil, err
+	}
 	var quests []fellowship.QuestStatus
 	for _, qName := range company.Quests {
 		st, err := state.Load(conn, qName)
@@ -228,11 +234,31 @@ func LoadAndMarshalProgress(conn *sqlite.Conn, name string) ([]byte, error) {
 			Name:        qName,
 			Phase:       st.Phase,
 			GatePending: st.GatePending,
+			Status:      entryStatus[qName],
 		})
 	}
 
 	progress := CalculateProgress(*company, quests)
 	return json.Marshal(progress)
+}
+
+// questEntryStatuses maps quest name to its fellowship entry status, treating
+// a missing or empty value as "active". Review is terminal, so this status is
+// the only thing that says a quest has finished.
+func questEntryStatuses(conn *sqlite.Conn) (map[string]string, error) {
+	out := map[string]string{}
+	err := sqlitex.Execute(conn,
+		`SELECT name, COALESCE(NULLIF(status, ''), 'active') FROM fellowship_quests`,
+		&sqlitex.ExecOptions{
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				out[stmt.ColumnText(0)] = stmt.ColumnText(1)
+				return nil
+			},
+		})
+	if err != nil {
+		return nil, fmt.Errorf("loading quest entry statuses: %w", err)
+	}
+	return out, nil
 }
 
 // findCompany looks up a company by name from the DB.

@@ -42,7 +42,7 @@ func GateGuard(s *state.State, input *HookInput) HookResult {
 		if filePath != "" && !datadir.IsDataDirPath(filePath) {
 			return HookResult{
 				Block:   true,
-				Message: fmt.Sprintf("Phase '%s' does not allow file modifications outside %s/. Advance to Implement by submitting gates for each phase.", s.Phase, datadir.Name()),
+				Message: fmt.Sprintf("Phase '%s' does not allow file modifications outside %s/. Submit this phase's gate to advance toward Implement.", s.Phase, datadir.Name()),
 			}
 		}
 	}
