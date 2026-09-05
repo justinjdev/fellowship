@@ -97,6 +97,30 @@ func TestLeadOnlyCommand(t *testing.T) {
 			want:    LeadOnlyInvocation{Subcommand: "init", Detail: "Implement"},
 			wantOK:  true,
 		},
+		{
+			name:    "command substitution",
+			command: "$(fellowship state init --claim-lead)",
+			want:    LeadOnlyInvocation{Subcommand: "state", Detail: "init"},
+			wantOK:  true,
+		},
+		{
+			name:    "command substitution inside double quotes still runs",
+			command: `echo "$(fellowship state init --claim-lead)"`,
+			want:    LeadOnlyInvocation{Subcommand: "state", Detail: "init"},
+			wantOK:  true,
+		},
+		{
+			name:    "backtick substitution",
+			command: "echo `fellowship state init --claim-lead`",
+			want:    LeadOnlyInvocation{Subcommand: "state", Detail: "init"},
+			wantOK:  true,
+		},
+		{
+			name:    "bare subshell",
+			command: "cd /main; (fellowship state init --claim-lead)",
+			want:    LeadOnlyInvocation{Subcommand: "state", Detail: "init"},
+			wantOK:  true,
+		},
 
 		// --- not lead-only --------------------------------------------------
 		{name: "a plain init resets the gate flags and moves nothing", command: "fellowship init --dir /wt"},
@@ -117,6 +141,14 @@ func TestLeadOnlyCommand(t *testing.T) {
 		{
 			name:    "...nor a quoted sh -c that is itself only quoted text",
 			command: `git commit -m "sh -c 'fellowship state init'"`,
+		},
+		{
+			name:    "a conventional-commit scope is text, not a subshell",
+			command: `git commit -m "fix(hooks): fellowship state init is now refused"`,
+		},
+		{
+			name:    "...and a single-quoted run substitutes nothing",
+			command: `echo 'the $(fellowship state init) form is refused'`,
 		},
 	}
 

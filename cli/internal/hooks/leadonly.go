@@ -36,8 +36,10 @@ type LeadOnlyInvocation struct {
 //
 // The whole command is scanned, not just its first word, and the scan follows
 // the shapes a shell actually runs: operators (`&&`, `||`, `;`, `|`, `&`,
-// newlines) separate commands, `sh -c "..."` and `eval "..."` carry a command
-// inside an argument, and the binary may be named by any path. A command merely
+// newlines) separate commands, command substitution (`$(...)`, backticks) and
+// subshells run what is inside them — inside double quotes as well as outside —
+// `sh -c "..."` and `eval "..."` carry a command inside an argument, and the
+// binary may be named by any path. A command merely
 // NAMED inside a quoted argument (`git commit -m "fellowship state init"`) is
 // not an invocation and is left alone — that is why the scan tokenizes rather
 // than matching on the raw string.
@@ -194,11 +196,20 @@ func isDashCFlag(token string) bool {
 // operators a shell treats as command boundaries, ignoring any that appear
 // inside quotes. It is deliberately crude: the goal is that no invocation hides
 // behind an operator, not that the result is runnable.
+//
+// Command substitution is a boundary too, and it is the one that does NOT stop
+// at a double quote: `"$(fellowship state init)"` runs that command exactly as
+// the bare form does, so `$(`, a backtick, and a bare subshell `(` all end a
+// segment. A `(` that is neither preceded by `$` nor outside quotes is left
+// alone — a conventional-commit scope (`git commit -m "fix(hooks): ..."`) is
+// text, not a subshell — and a single-quoted run is literal all the way
+// through, since no substitution happens inside one.
 func shellSegments(command string) []string {
 	var (
 		segments []string
 		cur      strings.Builder
 		quote    rune
+		prev     rune
 	)
 	flush := func() {
 		if strings.TrimSpace(cur.String()) != "" {
@@ -207,7 +218,27 @@ func shellSegments(command string) []string {
 		cur.Reset()
 	}
 	for _, r := range command {
+		escaped := prev == '\\'
+		prev = r
+		if escaped {
+			// A backslash-escaped character is literal, and cannot itself
+			// escape the character after it.
+			cur.WriteRune(r)
+			prev = 0
+			continue
+		}
 		switch {
+		case quote == '\'':
+			cur.WriteRune(r)
+			if r == '\'' {
+				quote = 0
+			}
+		case r == '`':
+			flush()
+		case r == '(' && (quote == 0 || strings.HasSuffix(cur.String(), "$")):
+			flush()
+		case r == ')' && quote == 0:
+			flush()
 		case quote != 0:
 			cur.WriteRune(r)
 			if r == quote {

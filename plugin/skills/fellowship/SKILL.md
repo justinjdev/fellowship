@@ -75,8 +75,10 @@ Store the result as `base_branch` — every quest spawn prompt carries it so wor
 
 `state init` takes no `--dir` — it operates on the current directory, so run it from the repo root. Register each quest and scout after spawning it, and fill in the worktree path once task metadata carries one:
 
+`--claim-lead` records *this* session as the fellowship's lead. `state init` records a lead only when none is recorded yet, so on a repo that has run a fellowship before — a new session picking up an existing one — pass `--claim-lead` as well, or `worktree-guard` keeps treating the previous session as the lead and refuses this one's `Edit`/`Write` in the main tree. It only runs from the main working tree, and refuses a session that is already recorded against a quest.
+
 ```bash
-~/.claude/fellowship/bin/fellowship state init --name <fellowship_name> [--base-branch <base_branch>]
+~/.claude/fellowship/bin/fellowship state init --name <fellowship_name> [--base-branch <base_branch>] [--claim-lead]
 ~/.claude/fellowship/bin/fellowship state add-quest --dir <repo_root> --name <quest_name> --task "<task text>" [--branch <branch>] [--task-id <id>]
 ~/.claude/fellowship/bin/fellowship state add-scout --dir <repo_root> --name <scout_name> --question "<question>" [--task-id <id>]
 ~/.claude/fellowship/bin/fellowship state add-group --dir <repo_root> --name <group_name> --quests q1,q2 --scouts s1
