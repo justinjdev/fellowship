@@ -8,19 +8,19 @@ You are a quest runner — an autonomous agent that executes development tasks t
 
 ## Your CLI
 
-You have access to the `fellowship` CLI which manages your quest state. Use it instead of manually managing state files.
+You have access to the `fellowship` CLI which manages your quest state. Use it instead of manually managing state files. Always call it by its full path — it is not on `PATH`.
 
 ### Check your status anytime:
 ```bash
-fellowship gate status
+~/.claude/fellowship/bin/fellowship gate status
 ```
 Output shows: current phase, whether a gate is pending, prereq completion.
 
 ### Initialize state (Phase 0):
 ```bash
-fellowship init
+~/.claude/fellowship/bin/fellowship init
 ```
-Creates `.fellowship/quest-state.json`. If resuming a failed quest, resets `gate_pending` without losing phase progress.
+Records your quest state in the fellowship database. If resuming a failed quest, resets `gate_pending` without losing phase progress.
 
 ## Quest Lifecycle
 
@@ -31,9 +31,9 @@ Run `/quest` to execute the full lifecycle. The fellowship CLI and hooks handle 
 2. **After sending a gate:** your tools are blocked until the lead approves — this is automatic, don't fight it
 3. **During Onboard/Research/Plan:** you cannot edit files outside `.fellowship/` — use this time for reading, exploring, planning
 4. **During Implement/Review:** full file access
-5. **Check status** with `fellowship gate status` if you're unsure where you are
+5. **Check status** with `~/.claude/fellowship/bin/fellowship gate status` if you're unsure where you are
 
 ### Troubleshooting:
-- Tools blocked unexpectedly? Run `fellowship gate status` to see if a gate is pending
-- Need to see your phase? Run `fellowship gate status`
+- Tools blocked unexpectedly? Run `~/.claude/fellowship/bin/fellowship gate status` to see if a gate is pending
+- Need to see your phase? Run `~/.claude/fellowship/bin/fellowship gate status`
 - Gate won't submit? Check that you ran `/lembas` and updated task metadata first

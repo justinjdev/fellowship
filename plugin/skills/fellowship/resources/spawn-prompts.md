@@ -27,8 +27,8 @@ INSTRUCTIONS:
    Note: the fail-closed `worktree-guard` hook blocks source writes from the
    main tree — a block is PROOF you are mis-placed, not an obstacle to route
    around.
-3. Gate handling — gates are enforced by plugin hooks via a state file
-   (.fellowship/quest-state.json). The hooks structurally block your tools
+3. Gate handling — gates are enforced by plugin hooks reading quest state
+   from the fellowship database. The hooks structurally block your tools
    after gate submission. Here is how it works:
 
    Before EACH gate, you MUST:

@@ -7,7 +7,7 @@ When Palantir raises a file conflict alert (two quests modifying the same file),
 Hold the later quest immediately to prevent further divergence:
 
 ```bash
-fellowship hold --dir <later-quest-worktree> --reason "file conflict with <other-quest>: <file_path>"
+~/.claude/fellowship/bin/fellowship hold --dir <later-quest-worktree> --reason "file conflict with <other-quest>: <file_path>"
 ```
 
 This structurally blocks the held quest's Edit/Write/Bash/Agent/Skill/NotebookEdit tools via the gate-guard hook. The quest cannot proceed until unheld.
@@ -36,7 +36,7 @@ Pick one of three strategies based on the assessment:
 Unhold the paused quest:
 
 ```bash
-fellowship unhold --dir <quest-worktree>
+~/.claude/fellowship/bin/fellowship unhold --dir <quest-worktree>
 ```
 
 Send a message to the resumed quest via SendMessage with:

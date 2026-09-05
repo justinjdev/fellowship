@@ -114,7 +114,7 @@
 		{
 			key: 'gates.autoApprove',
 			default_val: '[]',
-			desc: 'Gate names to auto-approve: "Research", "Plan", "Implement", "Review", "Complete". Gates not listed still surface to you.'
+			desc: 'Gate names to auto-approve: "Onboard", "Research", "Plan", "Implement", "Adversarial", "Review" — the phase being left. "Complete" is not valid: no gate leaves it. Gates not listed still surface to you.'
 		},
 		{
 			key: 'pr.draft',

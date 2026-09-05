@@ -18,28 +18,31 @@ Analyzes a completed fellowship's history to surface patterns and interactively 
 
 ### Step 1: Locate Fellowship Data
 
-1. Find the git root directory
-2. Read `~/.claude/fellowship.json` to check for a custom `dataDir` setting. If absent, use the default data directory (`.fellowship/`).
-3. Read `fellowship-state.json` from the resolved data directory to enumerate all quest worktrees and their metadata
-4. If no fellowship state file exists, report "No fellowship state found — nothing to analyze" and stop
+1. Find the git root directory and run all commands below from it
+2. Enumerate the fellowship's quests and their metadata:
+   ```bash
+   ~/.claude/fellowship/bin/fellowship state show
+   ```
+   The output is JSON with `name`, `quests[]` (each with `name`, `worktree`, `branch`, `task_description`, `status`), `scouts[]`, and `companies[]`.
+3. If the command reports that no fellowship is initialized, report "No fellowship state found — nothing to analyze" and stop
 
 ### Step 2: Collect Data
 
-For each quest worktree listed in `fellowship-state.json`:
+Everything below reads the fellowship database via the CLI — there are no state files to open.
 
-1. **Gate events:** Read `quest-herald.jsonl` from the worktree's data directory via the Read tool. Each line is a JSON object with `timestamp`, `quest`, `type`, `phase`, and `detail` fields. Collect all entries of type `gate_approved`, `gate_rejected`, `gate_submitted`, and `phase_transition`.
+1. **Gate events:** Run `~/.claude/fellowship/bin/fellowship herald --limit 0 --json` for the whole fellowship (or `--quest <name>` for one quest). Each entry has `timestamp`, `quest`, `type`, `phase`, and `detail`. Collect all entries of type `gate_approved`, `gate_rejected`, `gate_submitted`, and `phase_transition`.
 
-2. **Quest state:** Read `quest-state.json` from the worktree's data directory. Record the final `phase`, `quest_name`, and whether the quest completed.
+2. **Quest state:** Run `~/.claude/fellowship/bin/fellowship gate status --dir <worktree>` for each quest. Record the final `phase` and whether the quest reached `Complete`.
 
-3. **Quest tome:** Read `quest-tome.json` from the worktree's data directory if it exists. Record gate history (approved/rejected counts per phase), phases completed with durations, and files touched.
+3. **Quest tome:** Run `~/.claude/fellowship/bin/fellowship tome show --quest <quest_name> --json`. Record gate history (approved/rejected counts per phase), phases completed with durations, and files touched.
 
 4. **Git metrics:** Run these Bash commands for each worktree:
    - `git -C {worktree} log --oneline | wc -l` — commit count
    - `git -C {worktree} diff --stat "$(git -C {worktree} rev-list --max-parents=0 HEAD | tail -n1)"..HEAD 2>/dev/null || echo "0 files changed"` — change summary
 
-5. **Palantir alerts:** Read `palantir-alerts.jsonl` from the resolved data directory at the git root if it exists. Each line is a JSON object with `timestamp`, `type` (stuck/drift/conflict/health/bulletin), and `detail`. Standard alerts include `quests`; bulletin alerts include `source_quest`, `target_quest`, `topic`, and `discovery` instead.
+5. **Palantir alerts:** The palantir records its alerts as tidings, so they come from the same herald output as step 1 — collect the entries whose `type` starts with `palantir_` (`palantir_stuck`, `palantir_drift`, `palantir_conflict`, `palantir_health`, `palantir_bulletin`). The `quest` field names the quest the alert is about and `detail` carries the alert text.
 
-6. **Autopsies:** Scan the `autopsies/` subdirectory within the resolved data directory. Each `.json` file is a structured failure record with `quest`, `phase`, `trigger`, `files`, `modules`, `what_failed`, and `resolution` fields. Collect all entries.
+6. **Autopsies:** Run `~/.claude/fellowship/bin/fellowship autopsy scan --all`. Each record has `quest`, `phase`, `trigger`, `files`, `modules`, `what_failed`, and `resolution` fields. Collect all entries.
 
 ### Step 3: Analyze
 
@@ -59,7 +62,7 @@ Compute the following from collected data:
 - Check tome gate history for any rejection reasons mentioning convention or warden issues
 
 **Palantir alert summary:**
-- Count by type (stuck, drift, conflict, health, bulletin)
+- Count by type (`palantir_stuck`, `palantir_drift`, `palantir_conflict`, `palantir_health`, `palantir_bulletin`)
 - Which quests were flagged most frequently
 
 **Autopsy patterns:**
