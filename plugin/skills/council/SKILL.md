@@ -1,6 +1,6 @@
 ---
 name: council
-description: Invoked automatically by quest's Phase 0 onboarding, or directly by the user via /council — not auto-triggered on every task. Loads focused, task-relevant context by reading CLAUDE.md, scanning for related files, and producing a structured Session Context block.
+description: Invoke only when the user runs /council. Quest inlines this orientation as its Research step 2 and does not call it. Loads focused, task-relevant context by reading CLAUDE.md, scanning for related files, and producing a structured Session Context block.
 ---
 
 # Council — Context-Aware Task Onboarding
@@ -11,22 +11,13 @@ Loads focused, task-relevant context at the start of any non-trivial work sessio
 
 ## When to Use
 
-- Starting any task that involves more than a quick fix
-- Beginning a new session on existing in-progress work
-- Invoked automatically as Phase 0 of `/quest`
+- The user runs `/council` — starting a task that involves more than a quick fix, or picking up in-progress work
+
+This skill is **not** a step of the quest lifecycle. Quest inlines the same orientation as its Research step 2 rather than invoking it, so the two cannot drift apart.
+
+Council does not look for a `/lembas` checkpoint. Exactly one place checks for one during a quest — quest's Research step 0 — and `/rekindle` is the recovery path outside a quest.
 
 ## Process
-
-### Step 0: Check for Existing Checkpoint
-
-Before doing anything else, check if `.fellowship/checkpoint.md` exists (in repo root). (`.fellowship/` is the default data directory; users can override it via `dataDir` in `~/.claude/fellowship.json`.)
-
-If it does:
-1. Read the checkpoint file
-2. Present the checkpoint summary to the user
-3. Ask: **"Found a checkpoint from [timestamp] on branch [branch]. Resume from where you left off, or start fresh?"**
-4. If resuming: load the checkpoint as the Session Context. Skip Steps 1-4 and go directly to Step 5 (confirm with user).
-5. If starting fresh: delete the checkpoint file and continue with Step 1.
 
 ### Step 1: Read Project Context
 
@@ -37,7 +28,7 @@ Read the root CLAUDE.md. Extract:
 
 If no CLAUDE.md exists, note: "Consider running `/chronicle` to set up project context."
 
-Also check for `~/.claude/fellowship.json` (the user's personal Claude directory). If it exists, read it and note any non-default settings. These will be included in the Session Context block under Architecture Notes so downstream skills (quest, lembas) are aware of the active configuration.
+Also check for `~/.claude/fellowship.json` (the user's personal Claude directory). If it exists, read it and note any non-default settings. These will be included in the Session Context block under Architecture Notes so downstream skills (lembas, warden) are aware of the active configuration.
 
 ### Step 2: Understand the Task
 
@@ -45,7 +36,7 @@ Ask one focused question:
 
 > "What are you working on? (One sentence describing the task and which area of the codebase it touches.)"
 
-If invoked by quest, the task description is passed in — skip the question.
+If the user already stated the task, skip the question.
 
 ### Step 3: Identify Package Scope
 
@@ -111,5 +102,5 @@ Revise based on feedback.
 ## Key Principles
 
 - **Targeted, not exhaustive.** 5-10 key files, not every file in the directory.
-- **Carry forward.** The Session Context block is referenced by lembas and quest throughout the session.
-- **Minimal questions, never stall.** One focused task question (Step 2) when the task wasn't already provided; Steps 0, 3, and 6 ask only when genuinely ambiguous. As a fellowship teammate there is no direct user — route blocking questions to the lead via SendMessage, and otherwise proceed with documented assumptions rather than waiting on confirmation.
+- **Carry forward.** The Session Context block is referenced by lembas throughout the session.
+- **Minimal questions, never stall.** One focused task question (Step 2) when the task wasn't already provided; Steps 3 and 6 ask only when genuinely ambiguous. As a fellowship teammate there is no direct user — route blocking questions to the lead via SendMessage, and otherwise proceed with documented assumptions rather than waiting on confirmation.
