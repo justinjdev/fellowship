@@ -28,6 +28,9 @@ func TestIsolationGuard_BlocksMainTreeSourceWrite(t *testing.T) {
 			SessionTopLevel:  "/repo",
 			ToolName:         tool,
 			FilePath:         "/repo/src/main.go",
+			// A session that is not the recorded lead.
+			SessionID:     "teammate-session",
+			LeadSessionID: "lead-session",
 		})
 		if !result.Block {
 			t.Errorf("main-tree source write via %s during active fellowship must block", tool)
@@ -83,9 +86,77 @@ func TestIsolationGuard_BlocksDefaultDataDirNameWhenCustomConfigured(t *testing.
 		ToolName:         "Write",
 		FilePath:         "/repo/.fellowship/notes.md",
 		DataDirName:      "queststate",
+		SessionID:        "teammate-session",
+		LeadSessionID:    "lead-session",
 	})
 	if !result.Block {
 		t.Error("stale .fellowship path should not be exempt when dataDir is customized")
+	}
+}
+
+// The main working tree is the lead's own workspace: its session must be able
+// to write there while quests are running.
+func TestIsolationGuard_AllowsLeadSession(t *testing.T) {
+	result := IsolationGuard(IsolationParams{
+		FellowshipActive: true,
+		MainRoot:         "/repo",
+		SessionTopLevel:  "/repo",
+		ToolName:         "Write",
+		FilePath:         "/repo/src/main.go",
+		SessionID:        "lead-session",
+		LeadSessionID:    "lead-session",
+	})
+	if result.Block {
+		t.Errorf("the lead's own session must not be blocked in the main tree, got: %s", result.Message)
+	}
+}
+
+// A quest registered against the main root is a positive mis-placement even
+// when no session id is available on either side.
+func TestIsolationGuard_BlocksQuestProvisionedInMainRoot(t *testing.T) {
+	result := IsolationGuard(IsolationParams{
+		FellowshipActive:         true,
+		MainRoot:                 "/repo",
+		SessionTopLevel:          "/repo",
+		ToolName:                 "Write",
+		FilePath:                 "/repo/src/main.go",
+		SessionIsRegisteredQuest: true,
+	})
+	if !result.Block {
+		t.Error("a quest worktree that resolves to the main root must be blocked")
+	}
+	if !strings.Contains(result.Message, "registered as a quest") {
+		t.Errorf("message should explain the detection, got: %s", result.Message)
+	}
+}
+
+// With no lead marker or no payload session id there is nothing to identify the
+// writer, and the guard is a fail-open backstop: it allows.
+func TestIsolationGuard_AllowsUnidentifiedWriter(t *testing.T) {
+	cases := []struct {
+		name          string
+		sessionID     string
+		leadSessionID string
+	}{
+		{name: "no ids at all"},
+		{name: "payload id but no marker", sessionID: "some-session"},
+		{name: "marker but no payload id", leadSessionID: "lead-session"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			result := IsolationGuard(IsolationParams{
+				FellowshipActive: true,
+				MainRoot:         "/repo",
+				SessionTopLevel:  "/repo",
+				ToolName:         "Write",
+				FilePath:         "/repo/src/main.go",
+				SessionID:        c.sessionID,
+				LeadSessionID:    c.leadSessionID,
+			})
+			if result.Block {
+				t.Errorf("an unidentifiable writer must be allowed, got: %s", result.Message)
+			}
+		})
 	}
 }
 

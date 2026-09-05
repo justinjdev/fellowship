@@ -707,16 +707,31 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 		return 0
 	}
 
+	sessionTop := hooks.CanonicalPath(gitRootFrom(cwd))
+
 	// Inert unless a fellowship is actually running in the main repo's store.
+	// The same read answers whether this session's top-level is registered as
+	// a quest worktree, which is what tells a quest provisioned into the main
+	// tree apart from the lead standing in it.
 	active := false
-	d.WithConn(ctx, func(conn *db.Conn) error {
+	sessionIsQuest := false
+	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		fs, err := dashboard.LoadFellowship(conn)
 		if err != nil {
 			return nil
 		}
 		active = fellowshipRunning(fs)
+		name, err := state.FindQuest(conn, sessionTop)
+		if err != nil {
+			return err
+		}
+		sessionIsQuest = name != ""
 		return nil
-	})
+	}); err != nil {
+		// Fail open, but say so: the guard is a backstop, not the gate.
+		fmt.Fprintf(os.Stderr, "fellowship: worktree-guard: %v — allowing\n", err)
+		return 0
+	}
 
 	filePath := input.ToolInput.FilePath
 	if filePath == "" {
@@ -729,13 +744,17 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 	// Canonicalize all paths so symlinked repo roots (e.g. macOS /tmp ->
 	// /private/tmp) don't defeat the main-root comparison. `git --show-toplevel`
 	// returns a resolved path; the cwd-derived main root does not.
+	dataDirName := datadir.Name()
 	result := hooks.IsolationGuard(hooks.IsolationParams{
-		FellowshipActive: active,
-		MainRoot:         hooks.CanonicalPath(mainRoot),
-		SessionTopLevel:  hooks.CanonicalPath(gitRootFrom(cwd)),
-		ToolName:         input.ToolName,
-		FilePath:         hooks.CanonicalPath(filePath),
-		DataDirName:      datadir.Name(),
+		FellowshipActive:         active,
+		MainRoot:                 hooks.CanonicalPath(mainRoot),
+		SessionTopLevel:          sessionTop,
+		ToolName:                 input.ToolName,
+		FilePath:                 hooks.CanonicalPath(filePath),
+		DataDirName:              dataDirName,
+		SessionID:                input.SessionID,
+		LeadSessionID:            state.LeadSessionID(mainRoot, dataDirName),
+		SessionIsRegisteredQuest: sessionIsQuest,
 	})
 	if result.Block {
 		fmt.Fprintln(os.Stderr, result.Message)
@@ -1926,6 +1945,15 @@ func runStateInit(d *db.DB, args []string) int {
 		return 1
 	}
 	fmt.Printf("Fellowship %q initialized\n", *name)
+
+	// Record which Claude Code session this is. The main working tree is the
+	// lead's own workspace, so worktree-guard needs to know which session may
+	// write there; nothing in the git topology distinguishes the lead from a
+	// teammate that was mis-placed into the main tree. Best-effort: without a
+	// marker the guard falls back to its narrower rule.
+	if err := state.WriteLeadMarker(root, datadir.Name(), state.CurrentSessionID()); err != nil {
+		fmt.Fprintf(os.Stderr, "fellowship: warning: could not record the lead session: %v\n", err)
+	}
 
 	// Register the worktree-guard hook in the project's .claude/settings.local.json.
 	// Teammate sessions do NOT inherit plugin hooks, so this settings file is

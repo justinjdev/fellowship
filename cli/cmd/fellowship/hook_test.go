@@ -335,3 +335,76 @@ func TestRunHookWith_RelativeRegisteredWorktree(t *testing.T) {
 		t.Errorf("gate should apply to a relatively-registered worktree: exit %d, want 2", got)
 	}
 }
+
+// --- worktree-guard lead detection ------------------------------------------
+
+// writeInput builds a PreToolUse payload for a Write of path in session sid.
+func writeInput(sid, path string) io.Reader {
+	return strings.NewReader(`{"session_id":` + quote(sid) +
+		`,"tool_name":"Write","tool_input":{"file_path":` + quote(path) + `}}`)
+}
+
+// The main working tree is the lead's own workspace. Before lead detection the
+// guard blocked every source write there during an active fellowship, which
+// locked the lead out of its own repo.
+func TestRunWorktreeGuard_LeadSession(t *testing.T) {
+	root := newMainRepo(t)
+	worktree := addWorktree(t, root, "quest-lead-alpha")
+	d := fellowshipWith(t, root, map[string]string{"quest-lead-alpha": worktree})
+	if err := state.WriteLeadMarker(root, ".fellowship", "lead-session"); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(root, "src", "main.go")
+
+	cases := []struct {
+		name      string
+		sessionID string
+		want      int
+	}{
+		{name: "the lead's own session may write in the main tree", sessionID: "lead-session", want: 0},
+		{name: "another session in the main tree is a mis-placed teammate", sessionID: "teammate-session", want: 2},
+		{name: "a payload with no session id is not identifiable", sessionID: "", want: 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := runWorktreeGuard(context.Background(), d, root, writeInput(c.sessionID, target))
+			if got != c.want {
+				t.Errorf("runWorktreeGuard = %d, want %d", got, c.want)
+			}
+		})
+	}
+}
+
+// The fallback signal, used when no session id is available on either side: a
+// quest registered against a path that resolves to the main root.
+func TestRunWorktreeGuard_QuestRegisteredInMainRoot(t *testing.T) {
+	root := newMainRepo(t)
+	// A live worktree so the fellowship reads as running, plus a quest
+	// mistakenly registered against the main root itself.
+	addWorktree(t, root, "quest-live-alpha")
+	d := fellowshipWith(t, root, map[string]string{
+		"quest-live-alpha": filepath.Join(filepath.Dir(root), "quest-live-alpha"),
+		"quest-misplaced":  root,
+	})
+	target := filepath.Join(root, "src", "main.go")
+
+	if got := runWorktreeGuard(context.Background(), d, root, writeInput("", target)); got != 2 {
+		t.Errorf("runWorktreeGuard = %d, want 2 (quest provisioned in the main tree)", got)
+	}
+}
+
+// The teammate case the guard exists for: a session inside its own worktree is
+// never blocked, whoever it is.
+func TestRunWorktreeGuard_AllowsWriteInsideWorktree(t *testing.T) {
+	root := newMainRepo(t)
+	worktree := addWorktree(t, root, "quest-inside-alpha")
+	d := fellowshipWith(t, root, map[string]string{"quest-inside-alpha": worktree})
+	if err := state.WriteLeadMarker(root, ".fellowship", "lead-session"); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(worktree, "src", "main.go")
+
+	if got := runWorktreeGuard(context.Background(), d, worktree, writeInput("teammate-session", target)); got != 0 {
+		t.Errorf("runWorktreeGuard = %d, want 0 (write inside the teammate's own worktree)", got)
+	}
+}
