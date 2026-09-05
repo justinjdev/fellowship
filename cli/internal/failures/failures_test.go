@@ -1,4 +1,4 @@
-package autopsy
+package failures
 
 import (
 	"context"
@@ -274,7 +274,7 @@ func TestScan_RequiresFilter(t *testing.T) {
 func TestScan_ExcludesExpired(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		// Insert an autopsy with an already-expired expires_at
+		// Insert a failure with an already-expired expires_at
 		if err := sqlitex.Execute(conn,
 			`INSERT INTO autopsies (timestamp, quest, trigger_type, what_failed, expires_at)
 			 VALUES (datetime('now', '-100 days'), 'old-quest', 'recovery', 'old failure', datetime('now', '-10 days'))`,
@@ -295,7 +295,7 @@ func TestScan_ExcludesExpired(t *testing.T) {
 			t.Fatalf("Scan failed: %v", err)
 		}
 		if len(matches) != 0 {
-			t.Errorf("expired autopsy should be excluded, got %d matches", len(matches))
+			t.Errorf("expired failure should be excluded, got %d matches", len(matches))
 		}
 		return nil
 	}); err != nil {
@@ -344,7 +344,7 @@ func TestInfer_FromRespawns(t *testing.T) {
 			t.Error("expected non-zero ID")
 		}
 
-		// Verify the autopsy
+		// Verify the failure
 		matches, err := Scan(conn, ScanOptions{Files: []string{"src/auth/login.go"}}, 90)
 		if err != nil {
 			t.Fatal(err)
@@ -464,7 +464,7 @@ func TestInfer_FromAbandonment(t *testing.T) {
 		// instead query directly
 		_ = matches
 
-		// Verify the autopsy was created by looking at the DB directly
+		// Verify the failure was created by looking at the DB directly
 		var trigger string
 		if err := sqlitex.Execute(conn,
 			`SELECT trigger_type FROM autopsies WHERE id = ?`,

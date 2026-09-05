@@ -167,6 +167,7 @@ var baseSchema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_bulletin_files ON bulletin_files(file_path)`,
 
 	// Autopsies (replaces autopsies/*.json)
+	// table: autopsies, autopsy_files, autopsy_modules, autopsy_tags -> package failures (cli/internal/failures)
 	`CREATE TABLE IF NOT EXISTS autopsies (
 		id          INTEGER PRIMARY KEY AUTOINCREMENT,
 		timestamp   TEXT NOT NULL,

@@ -9,9 +9,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/justinjdev/fellowship/cli/internal/autopsy"
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/failures"
 )
 
 func runAutopsy(d *db.DB, args []string) int {
@@ -39,18 +39,18 @@ func runAutopsyCreate(d *db.DB, args []string) int {
 		return 1
 	}
 
-	var input autopsy.CreateInput
+	var input failures.CreateInput
 	if err := json.NewDecoder(os.Stdin).Decode(&input); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: reading JSON from stdin: %v\n", err)
 		return 1
 	}
 
-	input.ExpiryDays = datadir.AutopsyExpiryDays(gitRootOrCwd(), autopsy.DefaultExpiryDays)
+	input.ExpiryDays = datadir.FailuresExpiryDays(gitRootOrCwd(), failures.DefaultExpiryDays)
 
 	var id int64
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
 		var err error
-		id, err = autopsy.Create(conn, &input)
+		id, err = failures.Create(conn, &input)
 		return err
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -75,7 +75,7 @@ func runAutopsyScan(d *db.DB, args []string) int {
 		return 1
 	}
 
-	opts := autopsy.ScanOptions{All: *all}
+	opts := failures.ScanOptions{All: *all}
 	if *files != "" {
 		opts.Files = strings.Split(*files, ",")
 	}
@@ -86,12 +86,12 @@ func runAutopsyScan(d *db.DB, args []string) int {
 		opts.Tags = strings.Split(*tags, ",")
 	}
 
-	expiryDays := datadir.AutopsyExpiryDays(gitRootOrCwd(), autopsy.DefaultExpiryDays)
+	expiryDays := datadir.FailuresExpiryDays(gitRootOrCwd(), failures.DefaultExpiryDays)
 
-	var matches []autopsy.Autopsy
+	var matches []failures.Failure
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		var err error
-		matches, err = autopsy.Scan(conn, opts, expiryDays)
+		matches, err = failures.Scan(conn, opts, expiryDays)
 		return err
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -127,7 +127,7 @@ func runAutopsyInfer(d *db.DB, args []string) int {
 	var id int64
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
 		var err error
-		id, err = autopsy.Infer(conn, questName)
+		id, err = failures.Infer(conn, questName)
 		return err
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)

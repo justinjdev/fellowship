@@ -1,4 +1,4 @@
-package autopsy
+package failures
 
 import (
 	"fmt"
@@ -11,11 +11,11 @@ import (
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-// DefaultExpiryDays is the default autopsy TTL when not configured.
+// DefaultExpiryDays is the default failure TTL when not configured.
 const DefaultExpiryDays = 90
 
-// Autopsy represents a structured failure record.
-type Autopsy struct {
+// Failure represents a structured failure record.
+type Failure struct {
 	ID         int64    `json:"id"`
 	Timestamp  string   `json:"ts"`
 	Quest      string   `json:"quest"`
@@ -46,12 +46,12 @@ type CreateInput struct {
 	ExpiryDays int `json:"-"`
 }
 
-// ScanOptions configures which autopsies to match.
+// ScanOptions configures which failures to match.
 type ScanOptions struct {
 	Files   []string
 	Modules []string
 	Tags    []string
-	// All returns every non-expired autopsy, ignoring the other filters.
+	// All returns every non-expired failure, ignoring the other filters.
 	All bool
 }
 
@@ -61,7 +61,7 @@ var validTriggers = map[string]bool{
 	"abandonment": true,
 }
 
-// Create validates input, inserts the autopsy and its related files/modules/tags into the DB,
+// Create validates input, inserts the failure and its related files/modules/tags into the DB,
 // and returns the row ID.
 func Create(conn *sqlite.Conn, input *CreateInput) (int64, error) {
 	if input == nil {
@@ -101,7 +101,7 @@ func Create(conn *sqlite.Conn, input *CreateInput) (int64, error) {
 			},
 		})
 	if err != nil {
-		return 0, fmt.Errorf("autopsy: insert: %w", err)
+		return 0, fmt.Errorf("failure: insert: %w", err)
 	}
 
 	id := conn.LastInsertRowID()
@@ -112,7 +112,7 @@ func Create(conn *sqlite.Conn, input *CreateInput) (int64, error) {
 			&sqlitex.ExecOptions{
 				Args: []any{id, f},
 			}); err != nil {
-			return 0, fmt.Errorf("autopsy: insert file: %w", err)
+			return 0, fmt.Errorf("failure: insert file: %w", err)
 		}
 	}
 
@@ -122,7 +122,7 @@ func Create(conn *sqlite.Conn, input *CreateInput) (int64, error) {
 			&sqlitex.ExecOptions{
 				Args: []any{id, m},
 			}); err != nil {
-			return 0, fmt.Errorf("autopsy: insert module: %w", err)
+			return 0, fmt.Errorf("failure: insert module: %w", err)
 		}
 	}
 
@@ -132,25 +132,25 @@ func Create(conn *sqlite.Conn, input *CreateInput) (int64, error) {
 			&sqlitex.ExecOptions{
 				Args: []any{id, tag},
 			}); err != nil {
-			return 0, fmt.Errorf("autopsy: insert tag: %w", err)
+			return 0, fmt.Errorf("failure: insert tag: %w", err)
 		}
 	}
 
 	return id, nil
 }
 
-// Scan queries autopsies from the DB, filtering by files/modules/tags and excluding expired entries.
-func Scan(conn *sqlite.Conn, opts ScanOptions, expiryDays int) ([]Autopsy, error) {
+// Scan queries failures from the DB, filtering by files/modules/tags and excluding expired entries.
+func Scan(conn *sqlite.Conn, opts ScanOptions, expiryDays int) ([]Failure, error) {
 	if !opts.All && len(opts.Files) == 0 && len(opts.Modules) == 0 && len(opts.Tags) == 0 {
 		return nil, fmt.Errorf("at least one of --files, --modules, --tags, or --all is required")
 	}
 
 	// Build a query that joins across the junction tables.
-	// We select all non-expired autopsies that match any of the filter criteria.
+	// We select all non-expired failures that match any of the filter criteria.
 	var conditions []string
 	var args []any
 
-	// --all matches every non-expired autopsy; other filters become redundant.
+	// --all matches every non-expired failure; other filters become redundant.
 	if opts.All {
 		conditions = append(conditions, "1")
 	}
@@ -170,7 +170,7 @@ func Scan(conn *sqlite.Conn, opts ScanOptions, expiryDays int) ([]Autopsy, error
 				fileCondParts = append(fileCondParts, "af.file_path LIKE ? ESCAPE '\\'")
 			}
 
-			// Query file is under a directory prefix in the autopsy
+			// Query file is under a directory prefix in the failure
 			if strings.HasSuffix(f, "/") {
 				escaped := strings.ReplaceAll(strings.ReplaceAll(f, "%", "\\%"), "_", "\\_")
 				args = append(args, escaped+"%")
@@ -213,11 +213,11 @@ func Scan(conn *sqlite.Conn, opts ScanOptions, expiryDays int) ([]Autopsy, error
 		 ORDER BY a.timestamp DESC`,
 		strings.Join(conditions, " OR "))
 
-	var autopsies []Autopsy
+	var failures []Failure
 	err := sqlitex.Execute(conn, query, &sqlitex.ExecOptions{
 		Args: args,
 		ResultFunc: func(stmt *sqlite.Stmt) error {
-			a := Autopsy{
+			a := Failure{
 				ID:         stmt.ColumnInt64(0),
 				Timestamp:  stmt.ColumnText(1),
 				Quest:      stmt.ColumnText(2),
@@ -228,29 +228,29 @@ func Scan(conn *sqlite.Conn, opts ScanOptions, expiryDays int) ([]Autopsy, error
 				Resolution: stmt.ColumnText(7),
 				ExpiresAt:  stmt.ColumnText(8),
 			}
-			autopsies = append(autopsies, a)
+			failures = append(failures, a)
 			return nil
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("autopsy: scan: %w", err)
+		return nil, fmt.Errorf("failure: scan: %w", err)
 	}
 
-	// Load files, modules, and tags for each autopsy
-	for i := range autopsies {
-		if err := loadAutopsyRelations(conn, &autopsies[i]); err != nil {
+	// Load files, modules, and tags for each failure
+	for i := range failures {
+		if err := loadFailureRelations(conn, &failures[i]); err != nil {
 			return nil, err
 		}
 	}
 
-	if autopsies == nil {
-		autopsies = []Autopsy{}
+	if failures == nil {
+		failures = []Failure{}
 	}
-	return autopsies, nil
+	return failures, nil
 }
 
-// loadAutopsyRelations populates Files, Modules, and Tags for an autopsy.
-func loadAutopsyRelations(conn *sqlite.Conn, a *Autopsy) error {
+// loadFailureRelations populates Files, Modules, and Tags for an failure.
+func loadFailureRelations(conn *sqlite.Conn, a *Failure) error {
 	// Files
 	a.Files = []string{}
 	if err := sqlitex.Execute(conn,
@@ -262,7 +262,7 @@ func loadAutopsyRelations(conn *sqlite.Conn, a *Autopsy) error {
 				return nil
 			},
 		}); err != nil {
-		return fmt.Errorf("autopsy: load files: %w", err)
+		return fmt.Errorf("failure: load files: %w", err)
 	}
 
 	// Modules
@@ -276,7 +276,7 @@ func loadAutopsyRelations(conn *sqlite.Conn, a *Autopsy) error {
 				return nil
 			},
 		}); err != nil {
-		return fmt.Errorf("autopsy: load modules: %w", err)
+		return fmt.Errorf("failure: load modules: %w", err)
 	}
 
 	// Tags
@@ -290,13 +290,13 @@ func loadAutopsyRelations(conn *sqlite.Conn, a *Autopsy) error {
 				return nil
 			},
 		}); err != nil {
-		return fmt.Errorf("autopsy: load tags: %w", err)
+		return fmt.Errorf("failure: load tags: %w", err)
 	}
 
 	return nil
 }
 
-// Infer reconstructs a best-effort autopsy from quest DB state.
+// Infer reconstructs a best-effort failure from quest DB state.
 // It queries fellowship_quests for respawns/status, quest_gates for rejections,
 // quest_phases for phase history, and quest_files for files touched.
 func Infer(conn *sqlite.Conn, questName string) (int64, error) {
@@ -318,7 +318,7 @@ func Infer(conn *sqlite.Conn, questName string) (int64, error) {
 			},
 		})
 	if err != nil {
-		return 0, fmt.Errorf("autopsy: query quest: %w", err)
+		return 0, fmt.Errorf("failure: query quest: %w", err)
 	}
 	if !found {
 		return 0, fmt.Errorf("quest %q not found", questName)
@@ -345,7 +345,7 @@ func Infer(conn *sqlite.Conn, questName string) (int64, error) {
 			},
 		})
 	if err != nil {
-		return 0, fmt.Errorf("autopsy: query phases: %w", err)
+		return 0, fmt.Errorf("failure: query phases: %w", err)
 	}
 
 	// Get files touched from quest_files
@@ -360,7 +360,7 @@ func Infer(conn *sqlite.Conn, questName string) (int64, error) {
 			},
 		})
 	if err != nil {
-		return 0, fmt.Errorf("autopsy: query files: %w", err)
+		return 0, fmt.Errorf("failure: query files: %w", err)
 	}
 	if files == nil {
 		files = []string{}
@@ -404,7 +404,7 @@ func inferTriggerFromDB(conn *sqlite.Conn, questName, status string, respawns in
 			},
 		})
 	if err != nil {
-		return "", "", fmt.Errorf("autopsy: query gates: %w", err)
+		return "", "", fmt.Errorf("failure: query gates: %w", err)
 	}
 	if rejectionPhase != "" {
 		detail := rejectionReason
