@@ -3,46 +3,36 @@
 
 	const phases = [
 		{
-			number: 0,
-			name: 'Onboard',
-			description: 'Creates an isolated git worktree. Loads task-relevant context via /council. Checks for lembas checkpoints from previous sessions.',
-			skill: '/council'
-		},
-		{
 			number: 1,
 			name: 'Research',
-			description: 'Explores the codebase with subagents. Studies reference implementations. Extracts conventions via /gather-lore.',
-			skill: '/gather-lore'
+			description:
+				'Provisions an isolated git worktree and picks up any checkpoint left by a previous session. Loads task-relevant context, scans past failures and sibling quests\u2019 discoveries, explores the codebase with subagents, and studies reference files for the conventions in play.',
+			skill: 'Explore agents',
+			gate: true
 		},
 		{
 			number: 2,
 			name: 'Plan',
-			description: 'Enters plan mode. Creates implementation plan with file:line references. Presents plan for your approval.',
-			skill: 'plan mode'
+			description:
+				'Enters plan mode. Creates an implementation plan with file:line references and a test strategy. Presents the plan for your approval.',
+			skill: 'plan mode, writing-plans',
+			gate: true
 		},
 		{
 			number: 3,
 			name: 'Implement',
-			description: 'TDD red-green-refactor. Writes failing test, implements, verifies. If stuck: commits partial work, documents blocker, returns to Plan.',
-			skill: 'test-driven-development'
-		},
-		{
-			number: 3.5,
-			name: 'Adversarial',
-			description: 'Spawns the balrog agent to attack the implementation: edge cases, error paths, targeted tests. Findings are fixed before review.',
-			skill: 'balrog'
+			description:
+				'TDD red-green-refactor against an errand checklist. Writes the failing test, implements, verifies, commits. If stuck: commits partial work, records an autopsy, and returns to Plan.',
+			skill: 'test-driven-development',
+			gate: true
 		},
 		{
 			number: 4,
 			name: 'Review',
-			description: 'Convention review via /warden. Code quality verification. Runs full test suite.',
-			skill: '/warden, verification-before-completion'
-		},
-		{
-			number: 5,
-			name: 'Complete',
-			description: 'Creates PR. Cleans up worktree. Reports completion.',
-			skill: 'finishing-a-development-branch'
+			description:
+				'The balrog agent attacks the implementation first \u2014 edge cases, error paths, targeted tests \u2014 and its findings are fixed. Then convention review via /warden, a code-quality review, and verification. Finally the PR, and the worktree is cleaned up. No gate leaves Review: the quest ends here.',
+			skill: '/warden, verification-before-completion, finishing-a-development-branch',
+			gate: false
 		}
 	];
 
@@ -79,7 +69,7 @@
 	<section class="section" id="quest">
 		<h2>Single Task &mdash; /quest</h2>
 		<p class="section-intro">
-			Run <code>/quest</code> for any non-trivial task. It walks through seven phases with hard gates between each.
+			Run <code>/quest</code> for any non-trivial task. Four phases, three gates &mdash; one leaving Research, Plan, and Implement. Nothing leaves Review; the quest ends inside it, when the PR is open.
 		</p>
 
 		<div class="timeline">
@@ -100,7 +90,7 @@
 					</div>
 				</div>
 
-				{#if i < phases.length - 1}
+				{#if phase.gate}
 					<div class="gate-indicator">
 						<div class="gate-track">
 							<div class="gate-line"></div>
@@ -153,12 +143,12 @@
 				<div class="branch quest-branch">
 					<div class="branch-line"></div>
 					<div class="branch-tag">Quest 1</div>
-					<div class="branch-detail">worktree &rarr; phases 0-5 &rarr; PR</div>
+					<div class="branch-detail">worktree &rarr; 4 phases &rarr; PR</div>
 				</div>
 				<div class="branch quest-branch">
 					<div class="branch-line"></div>
 					<div class="branch-tag">Quest 2</div>
-					<div class="branch-detail">worktree &rarr; phases 0-5 &rarr; PR</div>
+					<div class="branch-detail">worktree &rarr; 4 phases &rarr; PR</div>
 				</div>
 				<div class="branch scout-branch">
 					<div class="branch-line"></div>

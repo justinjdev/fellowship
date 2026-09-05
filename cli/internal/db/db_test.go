@@ -56,7 +56,7 @@ func TestWithTx_Rollback(t *testing.T) {
 	// Insert a row, then roll back
 	rollbackErr := fmt.Errorf("rollback")
 	err = d.WithTx(context.Background(), func(conn *Conn) error {
-		if err := sqlitex.Execute(conn, `INSERT INTO quest_state (quest_name, phase, created_at, updated_at) VALUES ('test', 'Onboard', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`, nil); err != nil {
+		if err := sqlitex.Execute(conn, `INSERT INTO quest_state (quest_name, phase, created_at, updated_at) VALUES ('test', 'Research', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`, nil); err != nil {
 			t.Fatal(err)
 		}
 		return rollbackErr
@@ -99,7 +99,7 @@ func TestWithTx_PanicRollsBackAndReleasesTheTransaction(t *testing.T) {
 			}
 		}()
 		_ = d.WithTx(context.Background(), func(conn *Conn) error {
-			if err := sqlitex.Execute(conn, `INSERT INTO quest_state (quest_name, phase, created_at, updated_at) VALUES ('panicky', 'Onboard', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`, nil); err != nil {
+			if err := sqlitex.Execute(conn, `INSERT INTO quest_state (quest_name, phase, created_at, updated_at) VALUES ('panicky', 'Research', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`, nil); err != nil {
 				t.Error(err)
 			}
 			panic("boom")

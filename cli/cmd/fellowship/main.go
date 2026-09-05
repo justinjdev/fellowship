@@ -191,7 +191,7 @@ Hook commands (called by Claude Code hooks, read stdin):
   hook gate-submit       Detect [GATE] messages, check prereqs, advance state
   hook gate-prereq       Track lembas skill invocation
   hook metadata-track    Track phase metadata updates
-  hook completion-guard  Block task completion unless phase is Complete
+  hook completion-guard  Block task completion unless phase is Review with no pending gate
   hook file-track        Record file touches in quest tome
   hook worktree-guard    Block source writes to the main tree during a fellowship
 
@@ -220,8 +220,8 @@ Agent/lead commands:
 Setup commands:
   init                   Initialize quest state in DB
     --dir PATH           Worktree or repo root (default: auto-detect via git)
-    --phase PHASE        Initial phase (default: Onboard)
-    --plan-skip          Record Onboard/Research/Plan as skipped in tome
+    --phase PHASE        Initial phase (default: Research)
+    --plan-skip          Record Research/Plan as skipped in tome
     --quest NAME         Quest name (default: the name registered for the
                          worktree, else its directory name)
                          Auto-approved gates are read from gates.autoApprove

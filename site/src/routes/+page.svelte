@@ -5,7 +5,7 @@
 	const features = [
 		{
 			title: 'Phased Lifecycle',
-			description: 'Every task flows through Research, Plan, Implement, Review, and Complete. Hard gates between phases prevent drift and keep reasoning sharp.'
+			description: 'Every task flows through Research, Plan, Implement, and Review. A hard gate leaves each of the first three, preventing drift and keeping reasoning sharp.'
 		},
 		{
 			title: 'Parallel Agents',
@@ -22,18 +22,16 @@
 	];
 
 	const phases = [
-		{ number: 0, name: 'Onboard', description: 'Worktree + context loading' },
-		{ number: 1, name: 'Research', description: 'Explore codebase + gather conventions' },
+		{ number: 1, name: 'Research', description: 'Worktree + context, explore codebase, gather conventions' },
 		{ number: 2, name: 'Plan', description: 'Architecture with file:line references' },
 		{ number: 3, name: 'Implement', description: 'TDD red-green-refactor' },
-		{ number: 4, name: 'Review', description: 'Convention check + verification' },
-		{ number: 5, name: 'Complete', description: 'PR creation + cleanup' }
+		{ number: 4, name: 'Review', description: 'Adversarial pass, conventions, verification, PR' }
 	];
 </script>
 
 <svelte:head>
 	<title>Fellowship &mdash; Multi-Agent Orchestration for Claude Code</title>
-	<meta name="description" content="A Claude Code plugin that orchestrates multi-task workflows through structured research-plan-implement lifecycles." />
+	<meta name="description" content="A Claude Code plugin that orchestrates multi-task workflows through a structured research-plan-implement-review lifecycle." />
 </svelte:head>
 
 <!-- Hero -->

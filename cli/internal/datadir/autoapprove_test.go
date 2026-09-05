@@ -35,8 +35,8 @@ func TestAutoApproveGates(t *testing.T) {
 		},
 		{
 			name: "user config only",
-			user: `{"gates":{"autoApprove":["Onboard"]}}`,
-			want: []string{"Onboard"},
+			user: `{"gates":{"autoApprove":["Research"]}}`,
+			want: []string{"Research"},
 		},
 		{
 			name:    "user config overrides project config",

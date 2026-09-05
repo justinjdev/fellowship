@@ -80,13 +80,13 @@
 					</div>
 				</div>
 				<p class="agent-desc">
-					Attacks the implementation before it reaches review. Analyzes the quest diff for
-					failure modes, writes targeted test cases using the project's existing test framework,
-					runs them, and delivers a severity-ranked findings report. Critical and High findings
-					block the Review gate until addressed.
+					Attacks the implementation before anything else reviews it. Analyzes the quest diff
+					for failure modes, writes targeted test cases using the project's existing test
+					framework, runs them, and delivers a severity-ranked findings report. Critical and
+					High findings must be fixed before the quest opens its PR.
 				</p>
 				<div class="agent-note">
-					Spawned by quest between Implement and Review. No gates, no commits — findings only.
+					Spawned by quest as the first step of its Review phase. No gates, no commits — findings only.
 				</div>
 			</div>
 

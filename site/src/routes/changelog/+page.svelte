@@ -15,6 +15,24 @@
 		<h2 class="version-heading"><a href="{base}/changelog#unreleased">Unreleased</a></h2>
 		<ul class="changes">
 			<li>
+				<strong>Four phases, three gates</strong> &mdash; The quest lifecycle is now <strong>Research &rarr; Plan &rarr; Implement &rarr; Review</strong>. Onboard's work (worktree provisioning, context loading, the checkpoint resume check) is the first step of Research; the adversarial balrog pass is the first step of Review and PR creation the last. A gate leaves Research, Plan, and Implement; nothing leaves Review, so the quest ends inside it when the PR is open and the task is marked complete &mdash; which <code>completion-guard</code> now allows only in Review with no gate pending. Valid <code>gates.autoApprove</code> entries are the three gate-bearing phases. A schema migration rewrites stored phase names (live state, phase and gate history, and each quest's <code>autoApprove</code> list) in existing stores, and the pre-2.0 JSON importer runs through the same table, so an in-flight quest keeps advancing across the upgrade.
+			</li>
+			<li>
+				<strong><code>/quest</code> and <code>/fellowship</code> are half the size</strong> &mdash; <code>quest/SKILL.md</code> went from ~25 KB to ~15 KB and <code>fellowship/SKILL.md</code> from ~21 KB to ~15.5 KB. Quest inlines the orientation <code>/council</code> did and the pattern extraction <code>/gather-lore</code> did rather than invoking them, so a quest no longer hands its phase vocabulary to two satellite skills that then have to track it; both remain as skills you invoke yourself. Fellowship's isolation pre-flight and provisioning protocol moved to <code>resources/isolation.md</code>, and Gandalf's voice to <code>resources/lead-behavior.md</code>.
+			</li>
+			<li>
+				<strong><code>/lembas</code> stops asking for <code>/compact</code></strong> &mdash; It ended by telling the user to run a command Claude cannot run, so the step was either ignored or handed over as a chore. It now writes the checkpoint and continues from that summary, which is what the checkpoint was always for.
+			</li>
+			<li>
+				<strong>One checkpoint reader per context</strong> &mdash; Four things looked for a <code>/lembas</code> checkpoint and disagreed about who resumes. Now quest's Research step 0 is the only checkpoint check inside a quest, <code>/rekindle</code> is the recovery path outside one, and the README's <code>SessionStart</code> hook only prints a hint. <code>/council</code> no longer looks for one at all.
+			</li>
+			<li>
+				<strong><code>/rekindle</code> shares the spawn template</strong> &mdash; It carried a hand-copied quest spawn prompt with an undefined <code>{'{gate_config_override}'}</code> placeholder. <code>spawn-prompts.md</code> gained a RESUME variant and rekindle references it, so gate, hold, isolation, and boundary language has one home.
+			</li>
+			<li>
+				<strong>Quest templates ship with one</strong> &mdash; Templates were a feature with nothing in it. <code>/lorebook</code> now resolves a built-in directory after project and user, and fellowship ships <code>example</code> &mdash; a worked template at the specificity the docs ask for, with no keywords so it never auto-suggests. <code>/lorebook</code> and <code>/scribe</code> both cover all four phases, and Review's section is the last guidance a quest loads.
+			</li>
+			<li>
 				<strong><code>/dashboard</code> command</strong> — Starts the fellowship web dashboard in the background and prints its URL. The dashboard's company gate approval now shares <code>company.BatchApprove</code> with the CLI's <code>fellowship company approve</code> instead of a second, drifted copy that skipped tome recording. The core fellowship state model (<code>FellowshipState</code>, <code>QuestEntry</code>, <code>CompanyEntry</code>, and their SQLite CRUD) moved out of the <code>dashboard</code> package into a new <code>cli/internal/fellowship</code> package, removing the import cycle that forced <code>company</code> to duplicate that batch-approve logic. The dashboard's <code>/api/status</code> response now includes a <code>phases</code> field so the UI's phase list tracks the server instead of a hardcoded array (which was previously missing the Adversarial phase).
 				<strong>The lead is no longer locked out of the main tree</strong> &mdash; <code>worktree-guard</code> blocked every <code>Edit</code>/<code>Write</code> in the main working tree while a fellowship was active, including the lead's own. <code>fellowship state init</code> now records the lead's Claude Code session in a <code>lead</code> marker inside the data directory, and the guard allows that session, blocks a quest worktree that resolves to the main root, blocks a session known not to be the lead, and allows anything it cannot identify.
 			</li>

@@ -518,7 +518,7 @@ func DiscoverQuests(conn *sqlite.Conn) (*DashboardStatus, error) {
 				status.Quests = append(status.Quests, QuestStatus{
 					Name:     q.Name,
 					Worktree: q.Worktree,
-					Phase:    "Complete",
+					Phase:    state.TerminalPhase,
 					Status:   entryStatus,
 				})
 			}

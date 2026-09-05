@@ -26,7 +26,7 @@ func TestGateGuard_BlocksWhenPending(t *testing.T) {
 }
 
 func TestGateGuard_BlocksEditDuringEarlyPhase(t *testing.T) {
-	for _, phase := range []string{"Onboard", "Research", "Plan"} {
+	for _, phase := range []string{"Research", "Plan"} {
 		s := &state.State{Phase: phase}
 		input := &HookInput{ToolInput: ToolInput{FilePath: "/repo/src/main.ts"}}
 		result := GateGuard(s, input)
@@ -49,7 +49,7 @@ func TestGateGuard_AllowsDataDirWriteDuringEarlyPhase(t *testing.T) {
 }
 
 func TestGateGuard_AllowsEditDuringLatePhase(t *testing.T) {
-	for _, phase := range []string{"Implement", "Adversarial", "Review", "Complete"} {
+	for _, phase := range []string{"Implement", "Review"} {
 		s := &state.State{Phase: phase}
 		input := &HookInput{ToolInput: ToolInput{FilePath: "/repo/src/main.ts"}}
 		result := GateGuard(s, input)

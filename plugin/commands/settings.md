@@ -86,7 +86,7 @@ This is the canonical schema for fellowship config files. Both `~/.claude/fellow
 | `branch.ticketPattern` | string | `"[A-Z]+-\\d+"` | Any valid regex |
 | `worktree.enabled` | boolean | `true` | `true`, `false` |
 | `worktree.directory` | string \| null | `null` | Absolute path to a directory |
-| `gates.autoApprove` | string[] | `[]` | `"Onboard"`, `"Research"`, `"Plan"`, `"Implement"`, `"Adversarial"`, `"Review"`. Names refer to the phase being left — e.g., `"Research"` auto-approves the Research→Plan transition. `"Complete"` is not a valid value (no transition leaves Complete). |
+| `gates.autoApprove` | string[] | `[]` | `"Research"`, `"Plan"`, `"Implement"`. Names refer to the phase being left — e.g., `"Research"` auto-approves the Research→Plan transition. `"Review"` is not a valid value: it is the last phase and no gate leaves it. |
 | `pr.draft` | boolean | `false` | `true`, `false` |
 | `pr.template` | string \| null | `null` | Template with `{task}`, `{summary}`, `{changes}` placeholders |
 | `palantir.enabled` | boolean | `true` | `true`, `false` |

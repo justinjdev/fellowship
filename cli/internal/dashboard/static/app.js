@@ -4,7 +4,7 @@
   // Fallback only: the server's /api/status response carries the
   // authoritative phase list (`phases`). This is used only if that
   // field is ever missing from an older server build.
-  const FALLBACK_PHASES = ["Onboard", "Research", "Plan", "Implement", "Adversarial", "Review", "Complete"];
+  const FALLBACK_PHASES = ["Research", "Plan", "Implement", "Review"];
 
   let PHASES = FALLBACK_PHASES;
   let prevStatus = null;

@@ -1,8 +1,10 @@
 package db
 
 import (
+	"encoding/json"
 	"errors"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -168,6 +170,175 @@ func TestEnsureSchema_UpgradesV1DedupesWorktrees(t *testing.T) {
 	defer d3.Close()
 	if migrationCalls != before {
 		t.Fatalf("migration ladder re-ran on an already-current store (%d -> %d)", before, migrationCalls)
+	}
+}
+
+// TestEnsureSchema_UpgradesV2RemapsRetiredPhases seeds a store at version 2
+// carrying the seven-phase lifecycle's names — a live quest in Adversarial,
+// history rows in Onboard and Complete, and a gates.autoApprove list naming
+// both a renamed and a retired-to-terminal phase — then opens it and checks
+// the ladder rewrote every one of them onto the four-phase lifecycle.
+func TestEnsureSchema_UpgradesV2RemapsRetiredPhases(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "fellowship.db")
+
+	d, err := OpenPath(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.WithConn(t.Context(), func(conn *Conn) error {
+		seed := []struct {
+			sql   string
+			named map[string]any
+		}{
+			{`INSERT INTO quest_state (quest_name, phase, auto_approve, created_at, updated_at)
+			  VALUES ('q-live', 'Adversarial', '["Onboard","Adversarial","Plan"]', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`, nil},
+			{`INSERT INTO quest_state (quest_name, phase, auto_approve, created_at, updated_at)
+			  VALUES ('q-done', 'Complete', '["Research"]', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`, nil},
+			{`INSERT INTO quest_phases (quest_name, phase, completed_at) VALUES ('q-live', 'Onboard', '2026-01-01T00:01:00Z')`, nil},
+			{`INSERT INTO quest_phases (quest_name, phase, completed_at) VALUES ('q-live', 'Implement', '2026-01-01T00:02:00Z')`, nil},
+			{`INSERT INTO quest_gates (quest_name, phase, action, timestamp) VALUES ('q-live', 'Onboard', 'approved', '2026-01-01T00:01:00Z')`, nil},
+			{`INSERT INTO quest_gates (quest_name, phase, action, timestamp) VALUES ('q-live', 'Adversarial', 'submitted', '2026-01-01T00:03:00Z')`, nil},
+		}
+		for _, s := range seed {
+			if err := sqlitex.Execute(conn, s.sql, &sqlitex.ExecOptions{Named: s.named}); err != nil {
+				return err
+			}
+		}
+		return sqlitex.ExecuteTransient(conn, "PRAGMA user_version = 2", nil)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	d2, err := OpenPath(path)
+	if err != nil {
+		t.Fatalf("reopen after seeding v2 with retired phase names: %v", err)
+	}
+	defer d2.Close()
+
+	if err := d2.WithConn(t.Context(), func(conn *Conn) error {
+		v, err := userVersion(conn)
+		if err != nil {
+			return err
+		}
+		if v != latestSchemaVersion() {
+			t.Fatalf("user_version after upgrade = %d, want %d", v, latestSchemaVersion())
+		}
+
+		phases := map[string]string{}
+		if err := sqlitex.Execute(conn, `SELECT quest_name, phase FROM quest_state`,
+			&sqlitex.ExecOptions{ResultFunc: func(stmt *sqlite.Stmt) error {
+				phases[stmt.ColumnText(0)] = stmt.ColumnText(1)
+				return nil
+			}}); err != nil {
+			return err
+		}
+		for quest, want := range map[string]string{"q-live": "Review", "q-done": "Review"} {
+			if phases[quest] != want {
+				t.Errorf("quest_state[%s].phase = %q, want %q", quest, phases[quest], want)
+			}
+		}
+
+		// History rows are remapped too, so the tome still ranks.
+		var history []string
+		if err := sqlitex.Execute(conn,
+			`SELECT phase FROM quest_phases ORDER BY id`,
+			&sqlitex.ExecOptions{ResultFunc: func(stmt *sqlite.Stmt) error {
+				history = append(history, stmt.ColumnText(0))
+				return nil
+			}}); err != nil {
+			return err
+		}
+		if got, want := strings.Join(history, ","), "Research,Implement"; got != want {
+			t.Errorf("quest_phases = %q, want %q", got, want)
+		}
+
+		var gates []string
+		if err := sqlitex.Execute(conn,
+			`SELECT phase FROM quest_gates ORDER BY id`,
+			&sqlitex.ExecOptions{ResultFunc: func(stmt *sqlite.Stmt) error {
+				gates = append(gates, stmt.ColumnText(0))
+				return nil
+			}}); err != nil {
+			return err
+		}
+		if got, want := strings.Join(gates, ","), "Research,Review"; got != want {
+			t.Errorf("quest_gates = %q, want %q", got, want)
+		}
+
+		// Onboard becomes Research; Adversarial names no gate-bearing phase
+		// any more, so it is dropped rather than pointed at Review.
+		autoApprove := map[string]string{}
+		if err := sqlitex.Execute(conn, `SELECT quest_name, auto_approve FROM quest_state`,
+			&sqlitex.ExecOptions{ResultFunc: func(stmt *sqlite.Stmt) error {
+				autoApprove[stmt.ColumnText(0)] = stmt.ColumnText(1)
+				return nil
+			}}); err != nil {
+			return err
+		}
+		var live []string
+		if err := json.Unmarshal([]byte(autoApprove["q-live"]), &live); err != nil {
+			t.Fatalf("q-live auto_approve is not JSON (%q): %v", autoApprove["q-live"], err)
+		}
+		sort.Strings(live)
+		if got, want := strings.Join(live, ","), "Plan,Research"; got != want {
+			t.Errorf("q-live auto_approve = %q, want %q", got, want)
+		}
+		// A list with nothing retired in it is left exactly as it was.
+		if autoApprove["q-done"] != `["Research"]` {
+			t.Errorf("q-done auto_approve = %q, want it untouched", autoApprove["q-done"])
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestRemapRetiredPhase covers the table both the ladder and the legacy JSON
+// importer read, including the pass-through for names that are already current.
+func TestRemapRetiredPhase(t *testing.T) {
+	for in, want := range map[string]string{
+		"Onboard":     "Research",
+		"Adversarial": "Review",
+		"Complete":    "Review",
+		"Research":    "Research",
+		"Plan":        "Plan",
+		"Implement":   "Implement",
+		"Review":      "Review",
+		"Nonsense":    "Nonsense",
+		"":            "",
+	} {
+		if got := RemapRetiredPhase(in); got != want {
+			t.Errorf("RemapRetiredPhase(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestRemapAutoApproveGates covers the legacy JSON importer's list rewrite:
+// renamed entries survive under their new name, entries that would name the
+// terminal phase are dropped, and a rename that collides with an entry already
+// present does not duplicate it.
+func TestRemapAutoApproveGates(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{name: "nil stays nil"},
+		{name: "renames Onboard", in: []string{"Onboard", "Plan"}, want: []string{"Research", "Plan"}},
+		{name: "drops terminal-phase entries", in: []string{"Adversarial", "Complete", "Review"}},
+		{name: "collapses a rename collision", in: []string{"Onboard", "Research"}, want: []string{"Research"}},
+		{name: "leaves a current list alone", in: []string{"Research", "Plan", "Implement"}, want: []string{"Research", "Plan", "Implement"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := remapAutoApproveGates(tt.in)
+			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
+				t.Errorf("remapAutoApproveGates(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }
 

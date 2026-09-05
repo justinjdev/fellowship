@@ -5,7 +5,7 @@
 		{
 			name: '/quest',
 			summary: 'Full Research → Plan → Implement lifecycle for non-trivial tasks.',
-			details: 'The hub skill that orchestrates everything. Takes a task description, creates an isolated worktree, and walks through seven phases: Onboard, Research, Plan, Implement, Adversarial (a balrog agent attacks the implementation), Review, Complete. In standard mode, each phase has a hard gate requiring approval before proceeding. Uses /council for context, /gather-lore for conventions, /lembas for context compression between phases, and /warden for pre-PR review. Supports plan-driven mode: provide a pre-existing plan file and the quest skips Research and Plan, jumping straight to Implement. Supports promoted mode: when a quest is promoted from a scout, Phase 1 enters validation mode — verifying and supplementing scout findings instead of researching from scratch. Includes a bulletin board for cross-quest knowledge sharing: quests scan the bulletin at Research start and post discoveries during Research and Implement. The bulletin is shared across all worktrees via the main repo root.'
+			details: 'The hub skill that orchestrates everything. Takes a task description and walks through four phases: Research, Plan, Implement, Review. A hard gate leaves each of the first three and needs approval; nothing leaves Review, where a balrog agent attacks the implementation, /warden checks conventions, the work is verified, and the PR is opened. Research provisions the isolated worktree, loads task context, and studies the reference files for conventions; /lembas compacts context between every phase. Supports plan-driven mode: provide a pre-existing plan file and the quest skips Research and Plan, starting at Implement with one gate. Supports promoted mode: a quest promoted from a scout validates and supplements the scout findings instead of researching from scratch. Includes a bulletin board for cross-quest knowledge sharing: quests scan it at the start of Research and post discoveries during Research and Implement, shared across all worktrees via the main repo root.'
 		},
 		{
 			name: '/fellowship',
@@ -20,17 +20,17 @@
 		{
 			name: '/council',
 			summary: 'Context-aware onboarding at session start.',
-			details: 'Loads task-relevant files, conventions, and architecture. Checks for lembas checkpoints from previous sessions and offers to resume. Scopes to the relevant package in monorepos. Run at the start of any session or quest.'
+			details: 'Loads task-relevant files, conventions, and architecture, scoped to the relevant package in monorepos. Invoke it yourself at the start of a session; quest inlines the same orientation as its Research step 2, so it does not call this. It does not look for checkpoints — quest and /rekindle handle resuming.'
 		},
 		{
 			name: '/gather-lore',
 			summary: 'Studies reference files to extract conventions.',
-			details: 'Analyzes your codebase to extract patterns before writing code. Examines existing implementations to understand naming conventions, file organization, testing patterns, and architectural decisions. Prevents ‘wrong approach’ rework by learning from what’s already there.'
+			details: 'Analyzes your codebase to extract patterns before writing code. Examines existing implementations to understand naming conventions, file organization, testing patterns, and architectural decisions. Prevents ‘wrong approach’ rework by learning from what’s already there. Quest inlines the same extraction as its Research step 4, so this is for when you want it on its own.'
 		},
 		{
 			name: '/lembas',
 			summary: 'Context compression between phases.',
-			details: 'Compacts the conversation context at phase transitions. Keeps the context window in the reasoning sweet spot by summarizing what’s been done and what needs to happen next. Invoked automatically at every phase transition during a quest.'
+			details: 'Writes a structured checkpoint at a phase transition and continues from that summary instead of the full history, keeping the context window in the reasoning sweet spot. The checkpoint at .fellowship/checkpoint.md is also what a crashed quest resumes from. Invoked at every phase transition during a quest, where the hooks verify it before a gate can be submitted.'
 		},
 		{
 			name: '/warden',
@@ -50,7 +50,7 @@
 		{
 			name: '/lorebook',
 			summary: 'Load phase-specific guidance from a quest template.',
-			details: 'Invoked at the start of each quest phase when your spawn prompt includes a TEMPLATE: assignment. Resolves the template file from project (.claude/fellowship-templates/) or user (~/.claude/fellowship-templates/) directories, reads the section matching the current phase, and applies the guidance as advisory context. Created via /scribe.'
+			details: 'Invoked at the start of each quest phase when your spawn prompt includes a TEMPLATE: assignment. Resolves the template from the project (.claude/fellowship-templates/), user (~/.claude/fellowship-templates/), or built-in directory, reads the section matching the current phase — one each for Research, Plan, Implement, and Review — and applies it as advisory context that never waives a gate. Fellowship ships one example template to copy; /scribe writes real ones.'
 		}
 	];
 
@@ -78,7 +78,7 @@
 		{
 			name: '/scribe',
 			summary: 'Create reusable quest templates from codebase conventions.',
-			details: 'Analyzes your project to create quest templates that encode project-specific knowledge — conventions Claude wouldn’t know, domain rules that aren’t in code, team workflows that matter. Templates provide phase-specific guidance loaded automatically by /lorebook during quests. Stored in .claude/fellowship-templates/ (project) or ~/.claude/fellowship-templates/ (personal).'
+			details: 'Analyzes your project to create quest templates that encode project-specific knowledge — conventions Claude wouldn’t know, domain rules that aren’t in code, team workflows that matter. A template carries one guidance section per quest phase (Research, Plan, Implement, Review), loaded by /lorebook as each phase starts. Stored in .claude/fellowship-templates/ (project) or ~/.claude/fellowship-templates/ (personal).'
 		},
 		{
 			name: '/guide',

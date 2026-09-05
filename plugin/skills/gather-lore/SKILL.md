@@ -1,6 +1,6 @@
 ---
 name: gather-lore
-description: Use when about to write code in an area with reference files documented in CLAUDE.md's Reference Files section. Studies those files to extract conventions and patterns, preventing wrong-approach review rework.
+description: Invoke only when the user runs /gather-lore. Quest inlines this pattern extraction as its Research step 4 and does not call it. Studies the reference files CLAUDE.md documents to extract conventions before code is written, preventing wrong-approach review rework.
 ---
 
 # Gather Lore — Study Patterns Before Writing Code
@@ -9,13 +9,13 @@ description: Use when about to write code in an area with reference files docume
 
 Studies existing code to extract the specific patterns and conventions in play. Run this during research — before planning or writing anything — in areas where conventions matter. The patterns you extract here flow into the plan and constrain implementation downstream.
 
-Code generation and deviation checking happen later in the workflow: implementation applies these patterns (quest Phase 3 / TDD), and warden verifies compliance (quest Phase 4).
+Code generation and deviation checking happen later: implementation applies these patterns (quest's Implement phase, via TDD) and warden verifies compliance (quest's Review phase).
 
 ## When to Use
 
-- Entering a part of the codebase you haven't worked in before
-- You've had PRs rejected for "wrong approach" in this area
-- The task touches patterns you're unsure about (DI, error handling, data access)
+- The user runs `/gather-lore` — entering an unfamiliar part of the codebase, working where PRs have been rejected for "wrong approach", or touching patterns you're unsure about (DI, error handling, data access)
+
+This skill is **not** a step of the quest lifecycle. Quest inlines the same extraction as its Research step 4 rather than invoking it.
 
 ## Process
 

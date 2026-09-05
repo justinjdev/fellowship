@@ -361,7 +361,7 @@ func TestDiscoverQuests_CompletedNoQuestState(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// No quest_state row — should appear as synthetic Complete entry
+		// No quest_state row — should appear as a synthetic terminal-phase entry
 		status, err := DiscoverQuests(conn)
 		if err != nil {
 			t.Fatalf("DiscoverQuests() error: %v", err)
@@ -370,8 +370,8 @@ func TestDiscoverQuests_CompletedNoQuestState(t *testing.T) {
 			t.Fatalf("len(Quests) = %d, want 1", len(status.Quests))
 		}
 		q := status.Quests[0]
-		if q.Phase != "Complete" {
-			t.Errorf("Quest.Phase = %q, want %q", q.Phase, "Complete")
+		if q.Phase != state.TerminalPhase {
+			t.Errorf("Quest.Phase = %q, want %q", q.Phase, state.TerminalPhase)
 		}
 		if q.Status != "completed" {
 			t.Errorf("Quest.Status = %q, want %q", q.Status, "completed")

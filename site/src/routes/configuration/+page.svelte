@@ -64,7 +64,7 @@
     "enabled": false
   },
   "gates": {
-    "autoApprove": ["Onboard", "Research", "Plan", "Implement", "Adversarial", "Review"]
+    "autoApprove": ["Research", "Plan", "Implement"]
   },
   "palantir": {
     "enabled": false
@@ -117,7 +117,7 @@
 		{
 			key: 'gates.autoApprove',
 			default_val: '[]',
-			desc: 'Gate names to auto-approve: "Onboard", "Research", "Plan", "Implement", "Adversarial", "Review" — the phase being left. "Complete" is not valid: no gate leaves it. Gates not listed still surface to you.'
+			desc: 'Gate names to auto-approve: "Research", "Plan", "Implement" — the phase being left. "Review" is not valid: it is the last phase and no gate leaves it. Gates not listed still surface to you.'
 		},
 		{
 			key: 'pr.draft',
@@ -185,17 +185,17 @@
 		{
 			title: 'Auto-approve research, custom branch pattern',
 			code: example1,
-			explanation: 'Auto-approves the Research gate so quests flow from Onboard straight through Research into Plan without pausing. Branch names include your name and Jira ticket.'
+			explanation: 'Auto-approves the Research gate so a quest flows from Research into Plan without pausing. Branch names include your name and Jira ticket.'
 		},
 		{
 			title: 'Team workflow with draft PRs',
 			code: example2,
-			explanation: 'Creates draft PRs with a custom template. Auto-approves Research and Plan gates for faster iteration \u2014 you still review at Implement, Adversarial, and Review.'
+			explanation: 'Creates draft PRs with a custom template. Auto-approves the Research and Plan gates for faster iteration \u2014 you still review at the Implement gate, the last one before the PR.'
 		},
 		{
 			title: 'No worktrees, minimal oversight',
 			code: example3,
-			explanation: 'Works on the current branch without worktree isolation. Auto-approves every gate (Complete has no gate; PR creation still happens in that phase). No palantir monitoring. Use for trusted, low-risk tasks.'
+			explanation: 'Works on the current branch without worktree isolation. Auto-approves all three gates, so a quest runs start to finish without pausing. No palantir monitoring. Use for trusted, low-risk tasks.'
 		}
 	];
 </script>

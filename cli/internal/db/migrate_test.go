@@ -305,7 +305,7 @@ func TestMigrateJSON(t *testing.T) {
 		// 6. Quest phases (from tome)
 		var phaseCount int
 		if err := sqlitex.Execute(conn,
-			`SELECT COUNT(*) FROM quest_phases WHERE quest_name = 'q1'`,
+			`SELECT COUNT(*) FROM quest_phases WHERE quest_name = 'q1' AND phase = 'Research'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					phaseCount = stmt.ColumnInt(0)
@@ -314,12 +314,15 @@ func TestMigrateJSON(t *testing.T) {
 			}); err != nil {
 			return err
 		}
-		assertEqual(t, "quest_phases.count", 1, phaseCount)
+		// The fixture records the phase under its pre-four-phase name; the
+		// importer remaps it on the way in, so nothing lands in the store
+		// naming a phase the lifecycle no longer has.
+		assertEqual(t, "quest_phases.count (Onboard remapped to Research)", 1, phaseCount)
 
 		// 7. Quest gates (from tome)
 		var gateCount int
 		if err := sqlitex.Execute(conn,
-			`SELECT COUNT(*) FROM quest_gates WHERE quest_name = 'q1'`,
+			`SELECT COUNT(*) FROM quest_gates WHERE quest_name = 'q1' AND phase = 'Research'`,
 			&sqlitex.ExecOptions{
 				ResultFunc: func(stmt *sqlite.Stmt) error {
 					gateCount = stmt.ColumnInt(0)
@@ -328,7 +331,7 @@ func TestMigrateJSON(t *testing.T) {
 			}); err != nil {
 			return err
 		}
-		assertEqual(t, "quest_gates.count", 1, gateCount)
+		assertEqual(t, "quest_gates.count (Onboard remapped to Research)", 1, gateCount)
 
 		// 8. Quest files (from tome)
 		var fileCount int

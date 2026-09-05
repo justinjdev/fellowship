@@ -1,6 +1,6 @@
 ---
 name: lembas
-description: Use between workflow phases or when context feels bloated. Compresses the current conversation into a structured summary capturing task, findings, files, state, and next steps. Invoke standalone or automatically between quest phases.
+description: Use between workflow phases or when context feels bloated. Writes a structured checkpoint capturing task, findings, files, state, and next steps, then continues from that summary instead of the full history. Invoke standalone or automatically between quest phases.
 ---
 
 # Lembas — Intentional Context Compression
@@ -26,7 +26,7 @@ Determine what just completed:
 - **Research:** Understanding the system, identifying files
 - **Plan:** Outlining steps, getting approval
 - **Implement:** Writing code, running tests
-- **Review:** Checking against conventions
+- **Review:** Adversarial review, conventions, verification, PR
 - **Ad hoc:** No formal phase — general work
 
 ### Step 2: Extract Essentials
@@ -97,11 +97,13 @@ Write the Compacted Context block to `.fellowship/checkpoint.md` (repo root) so 
 
 Add `.fellowship/*` to `.gitignore` but keep `.fellowship/config.json` trackable (`!.fellowship/config.json`) — checkpoints are developer-local ephemeral state, not shared via git. They only need to survive a session crash, not persist across machines.
 
-### Step 5: Trigger Built-in Compaction
+### Step 5: Continue From the Summary
 
-After persisting the checkpoint, instruct:
+The checkpoint is now the working context. From here on, reason from the Compacted Context block rather than the conversation that produced it: quote the block when you need a fact, and re-read a file rather than scrolling back for what it said. Do not ask the user to run `/compact` — you cannot run it, and the checkpoint is what carries the session forward either way.
 
-> "Checkpoint saved to `.fellowship/checkpoint.md`. Now run `/compact` to compress the conversation window. The Compacted Context block above will be preserved as the key context. If this session dies, the next session will find the checkpoint and offer to resume."
+Say what you kept, in one line, so the next phase starts from the block and not from memory:
+
+> "Checkpoint saved to `.fellowship/checkpoint.md` (phase: <phase>). Continuing from the summary above. If this session dies, quest's Research step 0 or `/rekindle` will pick it up."
 
 ## Key Principles
 
@@ -110,3 +112,4 @@ After persisting the checkpoint, instruct:
 - **Phase awareness.** What you keep depends on what's coming next, not what just happened.
 - **Frequency over perfection.** Compact often with a good-enough summary rather than rarely with a perfect one.
 - **Persist to survive.** Always write the checkpoint to `.fellowship/`. Sessions are ephemeral; the filesystem outlasts them. If context fills up or a session crashes, the checkpoint is the lifeline.
+- **Compaction is what you do next, not what you ask for.** Writing the block is only half of it; the other half is working from the block afterwards.

@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"strings"
 
 	"zombiezen.com/go/sqlite/sqlitex"
 )
@@ -56,6 +57,135 @@ var migrations = []migration{
 			return sqlitex.ExecuteTransient(conn, questWorktreeUniqueIndexSQL, nil)
 		},
 	},
+	{
+		version: 3,
+		up: func(conn *Conn) error {
+			// The quest lifecycle collapsed from seven phases to four:
+			// Research -> Plan -> Implement -> Review. Stores written by an
+			// older binary still name the retired phases, in the live
+			// quest_state.phase and in the quest_phases / quest_gates
+			// history, and every phase lookup (NextPhase, IsValidPhase,
+			// the company phase rank) reads an unknown name as "not a
+			// phase". Rewrite them in place so an in-flight quest keeps
+			// advancing and its history keeps ranking.
+			//
+			// This is a data migration only. The frozen v1 DDL gives
+			// quest_state.phase a default naming a retired phase, but no
+			// writer relies on it -- every insert supplies a phase -- so
+			// rebuilding the table to change a dead default would cost
+			// more than it is worth.
+			for _, table := range []string{"quest_state", "quest_phases", "quest_gates"} {
+				if err := sqlitex.ExecuteTransient(conn, remapPhaseSQL(table), nil); err != nil {
+					return fmt.Errorf("remap retired phases in %s: %w", table, err)
+				}
+			}
+			// gates.autoApprove is stored per quest as a JSON array naming
+			// the phase each auto-approved gate leaves. Retired names are
+			// remapped the same way, except those that now map onto the
+			// terminal phase: no gate leaves Review, so such an entry is
+			// dropped rather than turned into one that auto-approves a
+			// gate that cannot exist.
+			return sqlitex.ExecuteTransient(conn, remapAutoApproveSQL(), nil)
+		},
+	},
+}
+
+// retiredPhases maps each phase name removed by the four-phase lifecycle
+// onto its replacement, in the order they appeared in the old seven-phase
+// order. Onboard's work became the first step of Research; Adversarial and
+// Complete became the first and last steps of Review. This is the single
+// source of truth for the remap: migration 3 rewrites stored phases through
+// it, and MigrateJSON runs pre-2.0 JSON stores through it on the way in, so
+// a legacy import cannot smuggle a retired name past the ladder.
+var retiredPhases = []struct{ from, to string }{
+	{"Onboard", "Research"},
+	{"Adversarial", terminalPhase},
+	{"Complete", terminalPhase},
+}
+
+// terminalPhase is the last phase of the lifecycle, the one no gate leaves.
+// It duplicates state.TerminalPhase rather than importing it: the state
+// package's tests reach into db, and this package stays clear of that edge.
+const terminalPhase = "Review"
+
+// RemapRetiredPhase returns the current name for a phase, passing through
+// any name that is already current (or that was never a phase at all).
+func RemapRetiredPhase(phase string) string {
+	for _, r := range retiredPhases {
+		if r.from == phase {
+			return r.to
+		}
+	}
+	return phase
+}
+
+// remapPhaseSQL builds the UPDATE that rewrites retired phase names in a
+// table's phase column.
+func remapPhaseSQL(table string) string {
+	var cases, names strings.Builder
+	for i, r := range retiredPhases {
+		fmt.Fprintf(&cases, " WHEN '%s' THEN '%s'", r.from, r.to)
+		if i > 0 {
+			names.WriteString(", ")
+		}
+		fmt.Fprintf(&names, "'%s'", r.from)
+	}
+	return fmt.Sprintf(
+		`UPDATE %s SET phase = CASE phase%s ELSE phase END WHERE phase IN (%s)`,
+		table, cases.String(), names.String())
+}
+
+// remapAutoApproveSQL builds the UPDATE that rewrites the per-quest
+// gates.autoApprove JSON array, dropping entries that would name the
+// terminal phase (nothing leaves it, so no such gate exists).
+func remapAutoApproveSQL() string {
+	var cases strings.Builder
+	// Entries to drop: retired names that now mean the terminal phase, plus
+	// the terminal phase itself — a store written before Review became
+	// terminal could legitimately name it, and no gate leaves it now.
+	drop := []string{terminalPhase}
+	for _, r := range retiredPhases {
+		if r.to == terminalPhase {
+			drop = append(drop, r.from)
+			continue
+		}
+		fmt.Fprintf(&cases, " WHEN '%s' THEN '%s'", r.from, r.to)
+	}
+	// Rows worth touching at all: anything naming a dropped or renamed entry.
+	touched := append([]string{}, drop...)
+	for _, r := range retiredPhases {
+		if r.to != terminalPhase {
+			touched = append(touched, r.from)
+		}
+	}
+	var dropped, names strings.Builder
+	dropped.WriteString(quoteList(drop))
+	names.WriteString(quoteList(touched))
+	return fmt.Sprintf(`
+		UPDATE quest_state
+		SET auto_approve = (
+			SELECT json_group_array(g) FROM (
+				SELECT DISTINCT CASE json_each.value%s ELSE json_each.value END AS g
+				FROM json_each(quest_state.auto_approve)
+				WHERE json_each.value NOT IN (%s)
+			)
+		)
+		WHERE auto_approve IS NOT NULL AND auto_approve != ''
+		  AND json_valid(auto_approve)
+		  AND EXISTS (
+			SELECT 1 FROM json_each(quest_state.auto_approve)
+			WHERE json_each.value IN (%s)
+		  )`, cases.String(), dropped.String(), names.String())
+}
+
+// quoteList renders names as a SQL-quoted, comma-separated list. The values
+// are fixed phase identifiers from this file, never user input.
+func quoteList(names []string) string {
+	quoted := make([]string, len(names))
+	for i, n := range names {
+		quoted[i] = "'" + n + "'"
+	}
+	return strings.Join(quoted, ", ")
 }
 
 // migrationCalls counts how many times applyMigrations has actually run the

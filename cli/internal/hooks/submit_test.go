@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -105,12 +106,15 @@ func TestGateSubmit_DoesNotAutoApproveByDestination(t *testing.T) {
 	}
 }
 
-func TestGateSubmit_BlocksAtComplete(t *testing.T) {
-	s := &state.State{Phase: "Complete", LembasCompleted: true, MetadataUpdated: true}
+func TestGateSubmit_BlocksAtTerminalPhase(t *testing.T) {
+	s := &state.State{Phase: state.TerminalPhase, LembasCompleted: true, MetadataUpdated: true}
 	input := &HookInput{ToolInput: ToolInput{Content: "[GATE] done"}}
 	result := GateSubmit(s, input)
 	if !result.Block {
-		t.Error("should block gate at Complete phase")
+		t.Errorf("should block gate at the terminal phase %s", state.TerminalPhase)
+	}
+	if !strings.Contains(result.Message, "no further gates") {
+		t.Errorf("message should say no further gates remain, got %q", result.Message)
 	}
 }
 
@@ -125,12 +129,9 @@ func TestGateSubmit_BlocksUnknownPhase(t *testing.T) {
 
 func TestGateSubmit_AllPhaseTransitions(t *testing.T) {
 	transitions := []struct{ from, to string }{
-		{"Onboard", "Research"},
 		{"Research", "Plan"},
 		{"Plan", "Implement"},
-		{"Implement", "Adversarial"},
-		{"Adversarial", "Review"},
-		{"Review", "Complete"},
+		{"Implement", "Review"},
 	}
 	for _, tr := range transitions {
 		s := &state.State{Phase: tr.from, LembasCompleted: true, MetadataUpdated: true, AutoApproveGates: []string{tr.from}}
@@ -172,8 +173,8 @@ func TestGateSubmit_ReportsTransitionForPendingGate(t *testing.T) {
 	if result.AutoApproved {
 		t.Error("AutoApproved should be false without a matching autoApprove entry")
 	}
-	if result.PrevPhase != "Implement" || result.NextPhase != "Adversarial" {
-		t.Errorf("transition = %s -> %s, want Implement -> Adversarial", result.PrevPhase, result.NextPhase)
+	if result.PrevPhase != "Implement" || result.NextPhase != "Review" {
+		t.Errorf("transition = %s -> %s, want Implement -> Review", result.PrevPhase, result.NextPhase)
 	}
 }
 

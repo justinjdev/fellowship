@@ -159,12 +159,9 @@
 				</div>
 			</li>
 			<li>
-				<span class="phase-tag">Phase 0 &middot; Onboard</span>
-				Creates a git worktree and loads project context via <code>/council</code>.
-			</li>
-			<li>
 				<span class="phase-tag">Phase 1 &middot; Research</span>
-				Explores the codebase, gathers conventions and relevant prior art.
+				Creates a git worktree, loads project context, and explores the codebase for
+				conventions and relevant prior art.
 			</li>
 			<li>
 				<span class="phase-tag">Phase 2 &middot; Plan</span>
@@ -176,11 +173,8 @@
 			</li>
 			<li>
 				<span class="phase-tag">Phase 4 &middot; Review</span>
-				Convention check and verification pass.
-			</li>
-			<li>
-				<span class="phase-tag">Phase 5 &middot; Complete</span>
-				Creates a PR and cleans up the worktree.
+				An adversarial pass at the implementation, a convention check, verification,
+				then the PR and worktree cleanup. The quest ends here.
 			</li>
 		</ol>
 

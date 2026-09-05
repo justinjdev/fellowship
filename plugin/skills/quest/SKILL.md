@@ -1,71 +1,38 @@
 ---
 name: quest
-description: Use for multi-file or multi-step changes that need research and a plan — not single-file fixes under ~50 lines that follow an existing pattern (see Escape Hatch below). Orchestrates the Research-Plan-Implement cycle with compaction between phases, integrating council, lembas, gather-lore, and warden.
+description: Use for multi-file or multi-step changes that need research and a plan — not single-file fixes under ~50 lines that follow an existing pattern (see Escape Hatch below). Runs the Research → Plan → Implement → Review lifecycle with a hard gate leaving each of the first three phases and context compaction between them.
 ---
 
-# Quest — Research, Plan, Implement
+# Quest — Research, Plan, Implement, Review
 
-## Overview
-
-Orchestrates the full Research → Plan → Implement cycle with intentional compaction between phases. This is the hub skill that enforces context engineering discipline by invoking satellite skills at the right moments and maintaining hard gates between phases.
-
-## When to Use
-
-- Any task that involves more than a quick fix
-- When you want structured, disciplined progress through a complex change
-- When context management matters (large codebase, multi-file changes)
-
-## Phase Flow
+Four phases, three gates. A gate leaves Research, Plan, and Implement. Nothing
+leaves Review: the quest ends when the PR is open and the task is marked
+complete.
 
 ```
-Phase 0: Onboard ──→ EnterWorktree → /council
-     │
-     ▼
-Phase 1: Research ──→ Explore agents / /gather-lore
-     │                Goal: understand the system, identify files
-     ▼
-  /lembas
-     │
-     ▼
-Phase 2: Plan ──────→ Plan mode / writing-plans
-     │                Goal: explicit steps with file:line refs
-     ▼
-  /lembas
-     │
-     ▼
-Phase 3: Implement ──→ TDD (test-driven-development) + execute plan
-     │                 Goal: small verifiable changes via red-green-refactor
-     ▼
-  /lembas
-     │
-     ▼
-Phase 3.5: Adversarial → balrog agent (edge cases, error paths, adversarial inputs)
-     │                   Goal: find failure modes before review
-     ▼
-  /lembas
-     │
-     ▼
-Phase 4: Review ─────→ /warden → /pr-review-toolkit:review-pr
-     │                 → verification-before-completion
-     │                 Goal: conventions + code quality + verified passing
-     ▼
-  /lembas
-     │
-     ▼
-Phase 5: Complete ───→ finishing-a-development-branch
-                       Goal: squash/merge, PR creation, cleanup
+Research  ── orient, scan prior art, study the code ──[GATE]─→
+Plan      ── explicit steps with file:line refs ─────[GATE]─→
+Implement ── TDD, small commits, errand tracking ────[GATE]─→
+Review    ── balrog → warden → review-pr → verify → PR. No gate.
 ```
 
-## Process
+`/lembas` runs between every phase and is a hook-enforced prerequisite for
+each gate. `.fellowship/` below means the configured data directory —
+`dataDir` in `~/.claude/fellowship.json` overrides it and every `fellowship`
+command resolves it for you. Some steps invoke `superpowers` and
+`pr-review-toolkit` skills; if one is not installed, do the step's goal by
+hand rather than skipping it, and say so in your gate message.
 
-**External skill dependencies:** Several steps invoke skills from the `superpowers` and `pr-review-toolkit` plugins (TDD, verification, branch finishing, PR review). If an invocation fails because the plugin is not installed, do not silently skip the step — perform the step's goal manually (write the failing test first yourself, run the verification commands yourself, review the diff yourself) and note the substitution in your phase output or gate message.
+## Gates (fellowship teammates)
 
-### Fellowship Integration
+Gate state lives in the fellowship database, enforced by hooks; you never
+write it. Read it with `~/.claude/fellowship/bin/fellowship gate status`.
+At the end of Research, Plan, and Implement, in this order:
 
-When running as a fellowship teammate (indicated by the spawn prompt), the gate prerequisite order at the end of each phase is:
-1. Run `/lembas` to compress context (hooks verify this)
-2. Update task metadata: `TaskUpdate(taskId: "<your_task_id>", metadata: {"phase": "<current_phase>"})` (hooks verify this)
-3. Send `[GATE]` message to the lead via SendMessage using this template:
+1. Invoke `/lembas` (hooks verify this).
+2. `TaskUpdate(taskId: "<your_task_id>", metadata: {"phase": "<current_phase>"})`
+   (hooks verify this). Valid phase names: Research, Plan, Implement, Review.
+3. SendMessage the lead a `[GATE]` message:
 
 ```
 [GATE] <phase> complete
@@ -83,284 +50,267 @@ When running as a fellowship teammate (indicated by the spawn prompt), the gate 
 <what the next phase should focus on>
 ```
 
-Both steps 1 and 2 must complete before step 3 — the hooks will block gate submission otherwise. Valid phase names: Onboard, Research, Plan, Implement, Adversarial, Review, Complete.
+Steps 1 and 2 must both be done before step 3 or the hooks block the gate.
+Then end your turn and wait for the lead.
 
-### Gate State Machine
+The hooks also block Edit/Write outside `.fellowship/` during Research and
+Plan (Bash, Agent, Skill, and reads are always allowed); require `[GATE]` at
+the start of a line to detect a gate; block your tools between a submission
+and the lead's decision; refuse a second gate while one is pending; and refuse
+to mark the task completed unless the phase is Review with no gate pending.
 
-> **Note:** `.fellowship/` is the default data directory. Users can override it via `dataDir` in `~/.claude/fellowship.json`. All `fellowship` CLI commands resolve the correct directory automatically. When this document references `.fellowship/`, it means the configured data directory.
+## Phase 1: Research
 
-When running as a fellowship teammate, quest state stored in the fellowship database enforces gate discipline via plugin hooks. Read it any time with `~/.claude/fellowship/bin/fellowship gate status`. The hooks structurally prevent you from working after submitting a gate, skipping lembas, or skipping metadata updates. You do not need to manage this state — the hooks handle it automatically.
+Understand the system well enough to plan. Gather information; don't propose
+solutions yet.
 
-**What the hooks enforce:**
-- **Phase-aware file guard:** During Onboard, Research, and Plan phases, Edit/Write to files outside `.fellowship/` are blocked. You cannot modify production code until you reach the Implement phase by submitting gates. Bash, Agent, Skill, and reads are allowed in all phases.
-- Gate messages must start with `[GATE]` to be detected (e.g., `[GATE] Research complete\n- [x] ...`)
-- After you send a gate message, your Edit/Write/Bash/Agent/Skill tools are blocked until the lead approves
-- Before you can send a gate message, you must have run `/lembas` and updated task metadata with your current phase
-- You cannot send a second gate while one is pending
-- You cannot mark your task as completed unless your phase is `Complete`
+### Step 0 — resume check
 
-**State initialization** happens at Phase 0 (see below). If you are resuming a failed quest, existing state is preserved with `gate_pending` reset to `false`.
+This is the only place a quest looks for a checkpoint. If the spawn prompt has
+a `RESUME CONTEXT:` block, or `.fellowship/checkpoint.md` exists:
 
-### Phase 0: Onboard
+1. You are already in your worktree — skip step 1 below.
+2. `~/.claude/fellowship/bin/fellowship init --dir $(pwd)` clears
+   `gate_pending` and keeps the phase. If a gate was pending when the previous
+   session died the hooks block this — only the lead can clear it, so ask.
+3. `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})`.
+4. Read `.fellowship/checkpoint.md` as your starting context in place of step
+   2, and `fellowship tome show --dir $(pwd)` for your phases, gates, and
+   files touched.
+5. Resume at the phase `fellowship gate status` reports, going straight there
+   if it is past Research.
 
-#### Resume Mode
+With no checkpoint, restart the current phase from scratch.
 
-If the spawn prompt contains a `RESUME CONTEXT:` block, this is a recovered quest:
+### Step 1 — worktree and state
 
-1. **Skip worktree creation** — your worktree already exists and you're already in it
-2. **Reset quest state:** Run `~/.claude/fellowship/bin/fellowship init --dir $(pwd)` (you're already in the worktree) to clear `gate_pending` while preserving the current phase. If a gate was still pending when the previous session died, the hooks block this command — message the lead to clear it, since only the lead may clear a pending gate.
-3. **Update task metadata:** `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})` with the new task ID from the recovery spawn
-4. **Load checkpoint:** If `.fellowship/checkpoint.md` exists, read it as your initial context — this replaces `/council` orientation
-5. **Skip `/council`** — the checkpoint provides equivalent context from the previous session
-6. **Jump to current phase:** Begin executing from the phase reported by `~/.claude/fellowship/bin/fellowship gate status` (e.g., if phase is "Implement", skip Research and Plan, go directly to Implement)
+Skip this whole step on resume, and see Plan-driven mode below if the spawn
+prompt carries a `PRE-EXISTING PLAN:`.
 
-On respawn, your tome contains your full history — phases completed, gates passed/rejected, files touched. Read it with `~/.claude/fellowship/bin/fellowship tome show --dir $(pwd)` to orient faster than the checkpoint alone.
-
-If no checkpoint exists (stale classification), restart the current phase from scratch — run `/council` for orientation, then begin the phase normally.
-
-After resume setup, proceed to the gate for Phase 0 as normal (run /lembas, update metadata, send [GATE] message).
-
-#### Standard Onboard
-
-1. **Config:** Read both config layers if they exist — project `.fellowship/config.json` (repo root) and user `~/.claude/fellowship.json` — and merge as defaults → project → user (user wins; see `/settings` for the full schema). If neither file exists, all defaults apply.
-2. **Isolate:** Detect whether you're resuming an existing worktree: check if task metadata contains `worktree_path` (via `TaskGet`) and the path exists on disk. If so, you're already isolated — skip worktree creation. Otherwise, if `config.worktree.enabled` is true (default), create an isolated worktree:
-   - **Resolve branch name:** If the spawn prompt includes issue context from `/missive` with a suggested branch name, use that name directly (it already incorporates the issue number and title). Otherwise, determine the branch name using config:
-     1. If `branch.pattern` is set: substitute `{slug}`, `{ticket}`, `{author}` placeholders (see below).
-     2. Else: use `fellowship/{slug}`.
-   - **Placeholder resolution:**
-     - `{slug}`: slugify the task description (lowercase, hyphens for spaces, strip non-alphanumeric). If a ticket was extracted, derive slug from the remaining text after extraction.
-     - `{ticket}`: match `branch.ticketPattern` (default: `[A-Z]+-\d+`) against the task description. If matched, use the match. If not matched and the pattern contains `{ticket}`, ask the user to provide a ticket ID.
-     - `{author}`: use `branch.author` from config. If not set and the pattern contains `{author}`, ask the user to provide their name.
-   - **Create worktree (4-step sequence — all steps are REQUIRED):**
-     1. Determine the base ref: if the spawn prompt includes `Base branch:` in the CONTEXT section, use `git rev-parse <base_branch>` to get the SHA; otherwise run `git rev-parse HEAD`. Save the full SHA in your response text (not a shell variable — shell state does not persist between tool calls).
-     2. Call `EnterWorktree` with the resolved branch name. If `config.worktree.directory` is set, create the worktree there instead of the default location.
-     3. **Immediately** after entering the worktree — before ANY other action — run `git reset --hard <sha>` using the exact SHA from step 1. `EnterWorktree` bases off the default branch, not the current branch. This reset is what makes the worktree start from the correct point. Skip this and the worktree will be wrong.
-     4. **Verify CWD:** Run `pwd` and confirm the output contains your branch name or expected worktree path. When multiple quests spawn in parallel, a race condition can place your CWD in another quest's worktree. If `pwd` shows a different quest's worktree, run `cd <expected_worktree_path>` to correct it before proceeding. The expected path is the one printed by `EnterWorktree` (typically `.claude/worktrees/<branch_name>/`).
-3. **Quest state (fellowship only):** This MUST happen before any other tool calls (Skill, Bash, etc.) so that hooks can enforce gates from the start. Run:
+1. **Config.** Read `.fellowship/config.json` (repo root) and
+   `~/.claude/fellowship.json` if present and merge defaults → project → user
+   (user wins; `/settings` documents the schema).
+2. **Isolate.** If task metadata already has a `worktree_path` that exists on
+   disk you are isolated — skip ahead. Otherwise, when `worktree.enabled` is
+   true (the default):
+   - **Branch name:** the name `/missive` suggested, if the spawn prompt has
+     one. Else `branch.pattern` with `{slug}` (slugified task description),
+     `{ticket}` (matched by `branch.ticketPattern`, default `[A-Z]+-\d+`) and
+     `{author}` (`branch.author`) substituted — ask the user for any
+     placeholder you cannot fill. Else `fellowship/{slug}`.
+   - **All four steps are required:** (a) resolve the base SHA (`git rev-parse
+     <base_branch>` if the spawn prompt names one, else `git rev-parse HEAD`)
+     into your response text, not a shell variable; (b) `EnterWorktree` with
+     that branch name, honoring `worktree.directory` if set; (c)
+     **immediately** `git reset --hard <sha>` — `EnterWorktree` bases off the
+     default branch, so without this the worktree starts from the wrong point;
+     (d) `pwd` to confirm you are in your own worktree, since parallel spawns
+     can race your CWD into a sibling's; `cd` to the path `EnterWorktree`
+     printed if not.
+3. **Quest state (fellowship only).** Before any other tool call, so hooks can
+   enforce from the start:
    ```bash
    ~/.claude/fellowship/bin/fellowship init --dir <worktree_path>
    ```
-   using the path from `EnterWorktree` in step 2.2, verified correct in step 2.4, so state is created for the correct worktree regardless of CWD. One command does everything:
-   - On a respawn it resets `gate_pending` to `false` and preserves the existing `phase`; otherwise it creates fresh state at `Onboard`.
-   - It resolves your quest name from the worktree the lead registered — pass `--quest <quest_name>` only if you need to override it.
-   - It populates auto-approved gates from `gates.autoApprove` in the merged fellowship config. You do not set that yourself.
-   - Confirm the result with `~/.claude/fellowship/bin/fellowship gate status --dir <worktree_path>`.
-   - Store the worktree path in task metadata: `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})`
-   - Your quest tome is automatically maintained by hooks — it records phases completed, gate events, and files touched. Read it with `~/.claude/fellowship/bin/fellowship tome show --dir <worktree_path>`; you never write it yourself.
-4. **Orient:** Invoke `/council` to load task-relevant context.
+   using the verified path from step 2, not your CWD. It creates state at
+   Research (or, on a respawn, resets `gate_pending` and keeps the phase),
+   resolves your quest name from the worktree the lead registered (override
+   with `--quest <name>`), and loads `gates.autoApprove` from the merged
+   config. Confirm with `fellowship gate status --dir <worktree_path>`, then
+   `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})`.
 
-If the user has already described their task, pass the description directly. Otherwise, council will ask.
+### Step 2 — orient
 
-**Gate:** Isolation set up (worktree created or skipped per config) AND Session Context block must exist before proceeding.
+Read the root CLAUDE.md for this area's reference files, review conventions,
+and architecture constraints; if there is none, note that `/chronicle` would
+set one up. In a monorepo (`packages/`, `apps/`, or a workspace config),
+identify the affected package(s) and merge any package-level CLAUDE.md over
+the root one — a single-package repo is its own scope. Then use Explore agents
+(Agent tool, `subagent_type=Explore`, `model: "haiku"`, or `models.explore` if
+config sets it) to find 5–10 key files within that scope. Produce:
 
-#### Plan-Driven Mode
+```
+## Session Context
 
-If the spawn prompt contains `PRE-EXISTING PLAN:` with a plan file path:
+**Task:** [one line]
 
-1. **Create worktree** as normal (follow the full 4-step sequence from Standard Onboard, including the immediate `git reset --hard <sha>` and CWD verification after `EnterWorktree`)
-2. **Copy plan file:** Read the plan file from the specified path and write it to `.fellowship/plan.md` in the worktree
-3. **Initialize state at Implement:** Run `~/.claude/fellowship/bin/fellowship init --dir <worktree_path> --phase Implement --plan-skip` — this creates quest state starting at Implement and records Onboard/Research/Plan as skipped in the tome
-4. **Initialize errands:** Run `~/.claude/fellowship/bin/fellowship errand init --dir <worktree_path>` to start errand tracking, then add one errand per plan task with `~/.claude/fellowship/bin/fellowship errand add --dir <worktree_path> "<task>"`
-5. **Skip /council** — the plan provides sufficient context
-6. **Proceed directly to Phase 3 (Implement)** — skip the Onboard gate, Research, and Plan entirely
+**Package(s):** [name(s) and path(s)]
 
-The plan file at `.fellowship/plan.md` is your implementation blueprint for Phase 3. Use it exactly as you would use a plan created during Phase 2.
+**Key Files:**
+- [path:lines] — [why it's relevant]
 
-### Phase 1: Research
+**Relevant Conventions:**
+- [from root and package CLAUDE.md]
 
-Goal: Understand the system well enough to plan changes. Stay objective — gather information, don't propose solutions yet.
+**Architecture Notes:**
+- [constraints, patterns, dependencies; note non-default fellowship config]
 
-#### Validation Mode (Promoted Quests)
+**Out of Scope:**
+- [what not to touch]
+```
 
-If the spawn prompt contains a `PROMOTED FROM:` block, this is a promoted quest with pre-existing scout findings:
+Every later phase and `/lembas` carry this block forward. As a teammate you
+have no direct user: route blocking questions to the lead via SendMessage and
+otherwise proceed on documented assumptions.
 
-1. **Write findings to worktree:** The spawn prompt includes `SCOUT FINDINGS CONTENT:` with the full scout findings. Write this content to `.fellowship/scout-findings-{scout_name}.md` in your worktree so it survives context compression.
-2. **Assess relevance:** Read the scout findings. Compare them against your quest task description. Are these findings about the same system, files, or problem space?
-   - **Relevant:** Findings directly inform this quest's task → proceed with validation (step 3)
-   - **Not relevant:** Findings are tangential or stale → skip to Standard Research below
-3. **Validate findings:** Spot-check key claims by reading the referenced files and line ranges. Are the findings still accurate? Flag any that are outdated or incorrect.
-4. **Supplement:** Fill implementation-specific gaps the scout didn't cover:
-   - File structure and write targets (where will changes go?)
-   - Test locations and existing test patterns
-   - Build/lint/test commands for verification
-5. **Produce output:** Amended scout findings with validation notes and supplemental research
+### Step 3 — prior art
 
-The same hard gate requirements apply — validation mode doesn't lower the bar, it changes the starting point.
+Past failures in this area, then what sibling quests have found. Either
+`bulletin scan` flag alone is fine; use both once you know both.
 
-#### Standard Research
+```bash
+~/.claude/fellowship/bin/fellowship autopsy scan --dir <main_repo> --files "<files>" --modules "<modules>"
+~/.claude/fellowship/bin/fellowship bulletin scan --topics "<topics>" --files "<files>"
+```
 
-**Actions:**
-1. **Scan autopsies:** If running as a fellowship teammate, scan for prior failure records that may be relevant to this quest:
-   ```bash
-   ~/.claude/fellowship/bin/fellowship autopsy scan --dir <main_repo> --files "<target_files>" --modules "<target_modules>"
-   ```
-   If matches are found, incorporate their warnings into your research findings — these are hard-won lessons from previous quests that failed in the same area.
-2. **Scan bulletin board:** Run `~/.claude/fellowship/bin/fellowship bulletin scan` with whatever filters you already know:
-   - `--topics "<relevant_topics>"` if you know the domain/problem area
-   - `--files "<target_files>"` once likely files are known
-   - both flags together when both are available
-   Incorporate any relevant findings into your research.
-3. If entering an unfamiliar area, invoke `/gather-lore` to extract conventions from reference files
-4. Use Explore agents (Agent tool, subagent_type=Explore, passing `model: "haiku"` — or `models.explore` from config if set) to scan relevant code paths
-5. Read key files identified in the Session Context
-6. Document findings: how the current system works, constraints, edge cases
+### Step 4 — study the code
 
-**Hard gate — Research must produce:**
-- [ ] Key files identified with specific line ranges
-- [ ] Constraints and dependencies documented
-- [ ] Current behavior understood (not just file locations)
+Read the key files. For each area whose conventions you do not already know —
+CLAUDE.md's Reference Files section names the ones that matter — study a
+reference file and extract, exhaustively: **structure** (ordering, imports,
+exports), **dependencies** (how internal and external ones are reached, any DI
+pattern), **error handling** (types, propagation, how errors surface), **data
+flow** (validation, transformation, return shape), **naming**, and **what it
+conspicuously does not do**. Absences matter as much as presences; carry both
+into the plan. With no reference files documented, ask the user for one or two
+examples a reviewer would approve, or find recently added approved work with
+`git log --oneline --diff-filter=A -- <dir> | head -10`. Offer to add any
+convention the study turns up that CLAUDE.md does not record.
 
-If these aren't met, continue researching. Don't proceed to planning with incomplete understanding.
+Document how the system works today, its constraints, and its edge cases.
 
-**Transition:** Invoke `/lembas` with phase "Research" before moving to Plan.
+### Promoted quests
 
-### Phase 2: Plan
+With a `PROMOTED FROM:` block in the spawn prompt, write the
+`SCOUT FINDINGS CONTENT:` to `.fellowship/scout-findings-{scout_name}.md` so
+it survives compaction, then judge whether the findings are about this task's
+system at all. If not, research normally. If so, spot-check the key claims
+against the referenced files, flag anything stale, and fill the gaps a scout
+does not cover: write targets, test locations and patterns, build/lint/test
+commands. The gate below is unchanged.
 
-Goal: Outline explicit steps with file:line references and a test strategy.
+**Gate — Research must produce:** key files with line ranges; documented
+constraints and dependencies; the current behavior understood, not just
+located. If any is missing, keep researching.
 
-**Actions:**
-1. Enter plan mode (EnterPlanMode) or use the writing-plans skill for formal plans
-2. Write steps that reference specific files and line ranges from research
-3. Define test strategy: what to test, how to verify
-4. Assess whether the plan has 2+ independent workstreams
+## Phase 2: Plan
 
-**Hard gate — Plan must include:**
-- [ ] Explicit file paths and line ranges for every change
-- [ ] Test strategy (what tests to write or run)
-- [ ] User approval of the plan
+Enter plan mode (EnterPlanMode), or `superpowers:writing-plans` for a formal
+plan. Write steps that name specific files and line ranges from Research,
+define the test strategy, and note whether the plan has 2+ independent
+workstreams.
 
-**Transition:** Invoke `/lembas` with phase "Plan" before moving to Implement.
+**Gate — Plan must include:** explicit file paths and line ranges for every
+change; a test strategy; the user's approval of the plan.
 
-### Phase 3: Implement
+## Phase 3: Implement
 
-Goal: Execute the plan with small, verifiable changes and tight feedback loops. Default to TDD.
+Execute the plan in small verifiable steps. TDD by default.
 
-**Errand tracking:** Run `~/.claude/fellowship/bin/fellowship errand list --dir .` to see your errand checklist. Errands are the source of truth for remaining work, not just the original prompt. Update each one as you go: `~/.claude/fellowship/bin/fellowship errand update --dir . <id> <status>`. Valid statuses are `pending`, `in_progress`, `done`, `blocked`, and `skipped` — mark an errand `in_progress` when you start it and `done` when it is finished.
+**Errands** are the source of truth for remaining work, not the original
+prompt. `fellowship errand list --dir .` shows the checklist;
+`fellowship errand update --dir . <id> <status>` moves one along, through
+`pending`, `in_progress`, `done`, `blocked`, `skipped`.
 
-**Execution mode — choose based on plan structure:**
+**Single-stream (default):** invoke `superpowers:test-driven-development` and
+work the plan step by step — failing test, minimal implementation, refactor —
+verifying and committing each logical unit.
 
-**Single-stream (default):** Tasks are sequential or tightly coupled.
-1. Invoke `superpowers:test-driven-development` — red-green-refactor for each unit of work
-2. Execute the plan step by step
-3. Verify after each change (run tests, check build)
-4. Commit each logical unit
+**Parallel subagents:** only when the plan has 3+ independent tasks touching
+disjoint files. Dispatch them in one message, each with the full task text,
+context, and TDD instructions, then review and commit the results. No two may
+touch the same file — a planning constraint, not a runtime guard; if the plan
+has such a conflict, fix the plan.
 
-**Parallel subagents:** Plan has 3+ independent tasks touching different files.
-1. Dispatch multiple implementation subagents simultaneously (multiple Agent tool calls in one message)
-2. Each subagent gets the full task text, relevant context, and TDD instructions
-3. No two subagents modify the same file — this is a planning constraint, not a runtime guard. If the plan has file conflicts between subtasks, fix the plan.
-4. Collect results, review each, then commit
+Use conventional commits and verify as you go rather than batching it. Post to
+the bulletin whenever you find something a sibling quest would want —
+refactors, API changes, infrastructure shifts, gotchas, deprecations, findings
+about shared code — but not phase progress or edit intentions:
 
-**Guidelines:**
-- **TDD by default.** Write the failing test first, then the minimal implementation, then refactor.
-- Follow the plan. If the plan is wrong, trigger recovery (see below) — don't silently deviate.
-- Small changes. One function, one test, one commit. Not a big-bang change.
-- Use conventional commits for all git commits (e.g., `feat:`, `fix:`, `docs:`, `refactor:`).
-- Verify as you go. Don't batch all testing to the end.
-- **Post discoveries to the bulletin board** when you find something likely relevant to sibling quests (during both Research and Implement). Run `~/.claude/fellowship/bin/fellowship bulletin post --quest "<quest_name>" --topic "<topic>" --files "<affected_files>" --discovery "<description>"`. Post refactors, API changes, infrastructure shifts, gotchas, deprecations, and research findings about shared code. Do NOT post phase progress, gate submissions, or file edit intentions.
+```bash
+~/.claude/fellowship/bin/fellowship bulletin post --quest "<quest>" --topic "<topic>" --files "<files>" --discovery "<text>"
+```
 
-**Recovery — when implementation hits a wall:**
+**Recovery.** Trigger it when a plan step is impossible or wrong, when 3+ TDD
+cycles fail to converge (a design problem, not a code problem), or when
+implementation reveals the plan was incomplete. Stop and commit what works,
+document which step failed and why the plan does not hold, record it:
 
-Trigger recovery when any of these occur:
-- A plan step is impossible or wrong (missing API, incorrect assumption, dependency doesn't work as expected)
-- TDD cycles aren't converging — 3+ failed attempts at making a test pass suggest a design problem, not a code problem
-- Implementation reveals the plan was incomplete (unaccounted-for edge case, missing step)
+```bash
+echo '{"quest":"<quest>","task":"<task>","phase":"Implement","trigger":"recovery","files":["<files>"],"modules":["<modules>"],"what_failed":"<specific>","resolution":"<what changed>","tags":["<tags>"]}' | ~/.claude/fellowship/bin/fellowship autopsy create --dir <main_repo>
+```
 
-Recovery procedure:
-1. **Stop implementing.** Commit what works so far — don't discard partial progress.
-2. **Document what went wrong.** Be specific: which step failed, what was discovered, why the plan doesn't hold.
-3. **Write autopsy:** If running as a fellowship teammate, record the failure for future quests:
-   ```bash
-   echo '{"quest":"<quest_name>","task":"<task>","phase":"Implement","trigger":"recovery","files":["<affected_files>"],"modules":["<affected_modules>"],"what_failed":"<specific description>","resolution":"<what you learned or changed>","tags":["<relevant_tags>"]}' | ~/.claude/fellowship/bin/fellowship autopsy create --dir <main_repo>
-   ```
-4. **Return to Phase 2 (Plan).** Invoke `/lembas` with phase "Implement (partial)" to compact, then re-enter plan mode with the new information. Revise only the affected steps — don't replan from scratch.
-5. **Get user approval** on the revised plan before resuming implementation.
-6. If running as a fellowship teammate, message the lead with the blocker before replanning.
+Then `/lembas` with phase "Implement (partial)", message the lead with the
+blocker, re-enter plan mode, revise only the affected steps, and get approval
+before resuming.
 
-**Transition:** Invoke `/lembas` with phase "Implement" before moving to Adversarial Review.
+**Gate — Implement must produce:** the plan executed or a documented recovery;
+tests passing for what you changed; each logical unit committed.
 
-### Phase 3.5: Adversarial Review
+## Phase 4: Review
 
-Goal: Find failure modes before conventions and code quality review. Spawn balrog to attack the implementation.
+Attack it, check it against the conventions, verify it, ship it. No gate
+leaves Review — the quest ends at step 5.
 
-**Actions:**
-1. Spawn the balrog agent via the Agent tool, passing:
-   - The worktree path (from Session Context / task metadata)
-   - The task description
-   - Your teammate name (so balrog can report back via SendMessage — recipients are addressed by name, not task ID). If running /quest standalone (no fellowship), tell balrog to present findings directly instead.
-   - Model: only if `models.balrog` is set in config, pass it as the Agent tool's `model` parameter; otherwise omit it — balrog inherits the session model by default. Adversarial review is not a place to economize unless the user opted in.
-2. Wait for balrog's SendMessage report. If balrog does not respond within a reasonable time (or if you receive an error from the Agent tool), proceed to Phase 4 and note in your gate message that adversarial review was skipped due to agent failure.
-3. Evaluate findings by severity:
-   - **Critical/High** — must address before Review gate opens. Fix, re-run relevant tests, then confirm fixes with balrog's reproduction steps.
-   - **Medium** — present to user for decision. Document outcome either way.
-   - **Low** — log in your response, do not block on them.
-4. If Critical/High findings were fixed, note what changed and confirm the fix is complete.
+**1. Adversarial (balrog).** Spawn the balrog agent via the Agent tool with
+the worktree path, the task description, and your teammate name (balrog
+reports back via SendMessage, addressed by name; standalone, tell it to
+present findings directly). Pass `model` only if `models.balrog` is set —
+adversarial review is not the place to economize unless the user opted in. If
+balrog never reports back, or the Agent tool errors, continue and say so in
+your completion report. Fix every **Critical/High** finding and confirm each
+against balrog's reproduction steps; put **Medium** findings to the user and
+record the decision; log **Low** ones without blocking.
 
-**Hard gate — Adversarial Review must produce:**
-- [ ] Balrog report received (even if zero findings), or agent failure documented in gate message
-- [ ] All Critical/High findings addressed or explicitly accepted by user
-- [ ] Medium findings presented to user
+**2. Conventions.** Invoke `/warden`. Fix every BLOCKING issue; put ADVISORY
+ones to the user.
 
-**Transition:** Invoke `/lembas` with phase "Adversarial" before moving to Review.
+**3. Code quality.** Invoke `/pr-review-toolkit:review-pr`. Address the
+critical and important findings, then re-run the affected tests.
 
-### Phase 4: Review
+**4. Verification.** Invoke `superpowers:verification-before-completion`. Run
+the tests for the affected package(s) only — the Session Context says which —
+confirm the build, and check the output matches expectations. Don't claim the
+work is done until this passes; if it fails, fix and re-verify.
 
-Goal: Convention compliance, code quality, and verified passing state before completion.
+**5. Ship.** Invoke `superpowers:finishing-a-development-branch` for the
+squash/merge decision, PR creation, and branch cleanup. Draft the PR if
+`pr.draft` is set; use `pr.template` as the body if set (it takes `{task}`,
+`{summary}`, `{changes}`); include any `/missive` issue keywords (e.g.
+`Closes #42`). Clean up the worktree after the merge, then report what was
+built, what review found, the verification results, and the PR link. Marking
+the task complete ends the quest — the hooks allow it only from Review with no
+gate pending, and the tome is marked completed for you.
 
-**Actions — three sequential steps:**
+## Plan-driven mode
 
-**Step 1: Convention review**
-1. Invoke `/warden` to compare changes against reference files and conventions
-2. Fix all BLOCKING issues identified
-3. For ADVISORY issues, present to the user for decision
+With `PRE-EXISTING PLAN:` and a path in the spawn prompt: provision the
+worktree exactly as in Research step 1.2 (`git reset --hard` and CWD check
+included), copy the plan file to `.fellowship/plan.md` in the worktree, then
 
-**Step 2: Code quality review**
-1. Invoke `/pr-review-toolkit:review-pr` for comprehensive code quality analysis (silent failure hunting, type design, test coverage)
-2. Address any critical or important issues identified
-3. Re-run affected tests after fixes
+```bash
+~/.claude/fellowship/bin/fellowship init --dir <worktree_path> --phase Implement --plan-skip
+~/.claude/fellowship/bin/fellowship errand init --dir <worktree_path>
+~/.claude/fellowship/bin/fellowship errand add --dir <worktree_path> "<task>"   # one per plan task
+```
 
-**Step 3: Verification gate**
-1. Invoke `superpowers:verification-before-completion` — run tests for affected package(s) only, confirm build passes, verify output matches expectations
-2. Use the scope from Session Context to determine which test suites to run — in a monorepo, run only the affected package(s), not the entire suite
-3. Do NOT claim work is complete until verification passes
-4. If verification fails, fix and re-verify
+`--plan-skip` starts the quest at Implement and records Research and Plan as
+skipped in the tome. Skip both phases entirely and work `.fellowship/plan.md`
+as your blueprint. One gate remains: Implement.
 
-**Output:** Summary of what was built, what was reviewed, verification results, and readiness for completion.
+## Escape hatch
 
-**Transition:** Invoke `/lembas` with phase "Review" before moving to Complete.
+Skip the lifecycle only when **all** of these hold: one file changes (or two,
+one a test); under ~50 lines; no new pattern — you are following an existing
+one exactly; and a familiar area, or one CLAUDE.md documents clearly. If any
+is uncertain, run the full lifecycle. The short version: read the relevant
+file, make the change, run `/warden`.
 
-### Phase 5: Complete
+## Key principles
 
-Goal: Integrate the work — squash/merge, PR creation, worktree cleanup. The quest tome is automatically marked "completed" by hooks when the task completes.
-
-**Actions:**
-1. Invoke `superpowers:finishing-a-development-branch` to present integration options
-2. This skill handles: squash vs merge decision, PR creation, branch cleanup
-3. If working in a worktree (from Phase 0), clean up the worktree after merge
-4. **PR config:** If `config.pr.draft` is true, create the PR as a draft. If `config.pr.template` is set (a string), use it as the PR body template — the template can contain `{task}`, `{summary}`, and `{changes}` placeholders that get filled in with the actual values.
-5. **Issue closing keywords:** If the spawn prompt includes issue context from `/missive` with PR keywords (e.g., `Closes #42`), include these in the PR body so the issue is automatically closed on merge.
-
-**Gate:** Phase 4 verification must have passed. Do not complete without a green verification step.
-
-## Escape Hatch
-
-Use the shortened cycle when ALL of these are true:
-- Single file changed (or 2 files where one is a test)
-- < 50 lines of new/modified code
-- No new patterns introduced — you're following an existing pattern exactly
-- Familiar area — you've seen the conventions (or CLAUDE.md documents them clearly)
-
-If any condition is uncertain, run the full cycle.
-
-Shortened cycle:
-1. Quick research (read the relevant file)
-2. Implement the change
-3. `/warden`
-
-## Key Principles
-
-1. **Context is the bottleneck.** Compact between every phase. Don't let research noise pollute planning, or planning noise pollute implementation.
-2. **Hard gates prevent drift.** Don't plan without understanding. Don't implement without a plan. Don't PR without review.
-3. **Compose, don't rebuild.** This skill orchestrates existing skills (council, gather-lore, lembas, warden, review-pr, writing-plans, TDD, verification-before-completion, finishing-a-development-branch). It doesn't replace them.
-4. **Human in the loop.** Plan approval is non-negotiable. The user guides direction; the agent handles execution.
-5. **Frequent compaction.** When in doubt, compact. The cost of re-reading a file is low; the cost of degraded reasoning is high.
+- **Context is the bottleneck.** Compact between every phase; when in doubt,
+  compact. Re-reading a file is cheap, degraded reasoning is not.
+- **Hard gates prevent drift.** No planning without understanding, no
+  implementing without a plan, no PR without review.
+- **Compose, don't rebuild.** This skill orchestrates existing skills.
+- **Human in the loop.** Plan approval is non-negotiable.

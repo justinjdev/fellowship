@@ -34,7 +34,7 @@ Between checks, you go idle. This is normal — don't try to self-wake or loop.
 
 Check task metadata for phase updates:
 - Use `TaskList` to read all tasks and their metadata
-- Each quest teammate updates their task's `phase` metadata field at phase transitions (Onboard, Research, Plan, Implement, Adversarial, Review, Complete). Adversarial means the quest is waiting on a balrog review run — a legitimately slow phase; don't flag it as stuck prematurely.
+- Each quest teammate updates their task's `phase` metadata field at phase transitions. The four phases are Research, Plan, Implement, Review. Review is the last one and the widest: it runs a balrog adversarial pass, a conventions review, a code-quality review, verification, and the PR — so a quest sitting in Review is usually working, not stuck. Give it longer before flagging it.
 - If a quest's phase hasn't changed after a prolonged period, flag it as potentially stuck
 
 **What "stuck" looks like:**

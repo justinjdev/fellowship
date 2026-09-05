@@ -48,7 +48,7 @@ func TestLoad_NotFound(t *testing.T) {
 func TestUpsert_Update(t *testing.T) {
 	d := db.OpenTest(t)
 	d.WithTx(context.Background(), func(conn *db.Conn) error {
-		s := &state.State{QuestName: "q1", Phase: "Onboard"}
+		s := &state.State{QuestName: "q1", Phase: "Research"}
 		state.Upsert(conn, s)
 
 		s.Phase = "Research"
@@ -110,12 +110,12 @@ func TestNextPhase(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{"Onboard", "Research", false},
 		{"Research", "Plan", false},
 		{"Plan", "Implement", false},
-		{"Implement", "Adversarial", false},
-		{"Adversarial", "Review", false},
-		{"Review", "Complete", false},
+		{"Implement", "Review", false},
+		{"Review", "", true},
+		{"Onboard", "", true},
+		{"Adversarial", "", true},
 		{"Complete", "", true},
 		{"InvalidPhase", "", true},
 	}
@@ -131,21 +131,52 @@ func TestNextPhase(t *testing.T) {
 }
 
 func TestIsValidPhase(t *testing.T) {
-	for _, p := range []string{"Onboard", "Research", "Plan", "Implement", "Adversarial", "Review", "Complete"} {
+	for _, p := range []string{"Research", "Plan", "Implement", "Review"} {
 		if !state.IsValidPhase(p) {
 			t.Errorf("IsValidPhase(%q) = false, want true", p)
 		}
 	}
-	for _, p := range []string{"", "onboard", "InvalidPhase", "Done"} {
+	// The retired seven-phase names are not phases any more.
+	for _, p := range []string{"", "research", "InvalidPhase", "Done", "Onboard", "Adversarial", "Complete"} {
 		if state.IsValidPhase(p) {
 			t.Errorf("IsValidPhase(%q) = true, want false", p)
 		}
 	}
 }
 
+func TestPhasesAndGatePhases(t *testing.T) {
+	phases := state.Phases()
+	if got, want := strings.Join(phases, ","), "Research,Plan,Implement,Review"; got != want {
+		t.Fatalf("Phases() = %q, want %q", got, want)
+	}
+	if state.TerminalPhase != phases[len(phases)-1] {
+		t.Errorf("TerminalPhase = %q, want the last phase %q", state.TerminalPhase, phases[len(phases)-1])
+	}
+	// Three gates: one leaving each phase but the terminal one.
+	if got, want := strings.Join(state.GatePhases(), ","), "Research,Plan,Implement"; got != want {
+		t.Fatalf("GatePhases() = %q, want %q", got, want)
+	}
+	// Both must hand out copies — a caller that scribbles on the result
+	// would otherwise rewrite the lifecycle for the whole process.
+	state.Phases()[0] = "Mutated"
+	state.GatePhases()[0] = "Mutated"
+	if state.Phases()[0] != "Research" || state.GatePhases()[0] != "Research" {
+		t.Error("Phases()/GatePhases() must return a copy, not the package's own slice")
+	}
+	// Every gate-bearing phase has a successor; the terminal one does not.
+	for _, p := range state.GatePhases() {
+		if _, err := state.NextPhase(p); err != nil {
+			t.Errorf("NextPhase(%q) = %v, want a successor", p, err)
+		}
+	}
+	if _, err := state.NextPhase(state.TerminalPhase); err == nil {
+		t.Errorf("NextPhase(%q) should have no successor", state.TerminalPhase)
+	}
+}
+
 func TestIsEarlyPhase(t *testing.T) {
-	early := []string{"Onboard", "Research", "Plan"}
-	late := []string{"Implement", "Adversarial", "Review", "Complete"}
+	early := []string{"Research", "Plan"}
+	late := []string{"Implement", "Review"}
 	for _, p := range early {
 		if !state.IsEarlyPhase(p) {
 			t.Errorf("IsEarlyPhase(%q) should be true", p)
@@ -175,17 +206,17 @@ func TestApprove(t *testing.T) {
 	}{
 		{
 			name:     "advances phase and clears gate and prereqs",
-			in:       &state.State{Phase: "Implement", GatePending: true, GateID: ptr("gate-Implement-1"), LembasCompleted: true, MetadataUpdated: true},
-			wantPrev: "Implement",
-			wantNext: "Adversarial",
-			want:     &state.State{Phase: "Adversarial"},
+			in:       &state.State{Phase: "Plan", GatePending: true, GateID: ptr("gate-Plan-1"), LembasCompleted: true, MetadataUpdated: true},
+			wantPrev: "Plan",
+			wantNext: "Implement",
+			want:     &state.State{Phase: "Implement"},
 		},
 		{
-			name:     "last gate lands on Complete",
-			in:       &state.State{Phase: "Review", GatePending: true, GateID: ptr("gate-Review-1")},
-			wantPrev: "Review",
-			wantNext: "Complete",
-			want:     &state.State{Phase: "Complete"},
+			name:     "last gate lands on Review",
+			in:       &state.State{Phase: "Implement", GatePending: true, GateID: ptr("gate-Implement-1")},
+			wantPrev: "Implement",
+			wantNext: "Review",
+			want:     &state.State{Phase: "Review"},
 		},
 		{
 			name:    "no gate pending",
@@ -194,10 +225,10 @@ func TestApprove(t *testing.T) {
 			want:    &state.State{Phase: "Implement"},
 		},
 		{
-			name:       "no phase after Complete leaves the state untouched",
-			in:         &state.State{Phase: "Complete", GatePending: true, GateID: ptr("gate-Complete-1")},
+			name:       "no phase after the terminal phase leaves the state untouched",
+			in:         &state.State{Phase: "Review", GatePending: true, GateID: ptr("gate-Review-1")},
 			wantAnyErr: true,
-			want:       &state.State{Phase: "Complete", GatePending: true, GateID: ptr("gate-Complete-1")},
+			want:       &state.State{Phase: "Review", GatePending: true, GateID: ptr("gate-Review-1")},
 		},
 		{
 			name:       "unknown phase leaves the state untouched",
@@ -341,8 +372,8 @@ func TestReset(t *testing.T) {
 	}{
 		{
 			name: "clears gate and prereq flags, keeps phase",
-			in:   &state.State{Phase: "Adversarial", GatePending: true, GateID: ptr("gate-Adversarial-1"), LembasCompleted: true, MetadataUpdated: true},
-			want: &state.State{Phase: "Adversarial"},
+			in:   &state.State{Phase: "Review", GatePending: true, GateID: ptr("gate-Review-1"), LembasCompleted: true, MetadataUpdated: true},
+			want: &state.State{Phase: "Review"},
 		},
 		{
 			name: "leaves hold state alone",
@@ -351,8 +382,8 @@ func TestReset(t *testing.T) {
 		},
 		{
 			name: "already clean is a no-op",
-			in:   &state.State{Phase: "Onboard"},
-			want: &state.State{Phase: "Onboard"},
+			in:   &state.State{Phase: "Research"},
+			want: &state.State{Phase: "Research"},
 		},
 	}
 

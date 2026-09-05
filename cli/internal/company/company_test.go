@@ -20,9 +20,9 @@ func TestCalculateProgress_MixedPhases(t *testing.T) {
 	}
 
 	quests := []fellowship.QuestStatus{
-		{Name: "quest-endpoint", Phase: "Implement", GatePending: false},
-		{Name: "quest-tests", Phase: "Complete", GatePending: false},
-		{Name: "quest-docs", Phase: "Research", GatePending: true},
+		{Name: "quest-endpoint", Phase: "Implement", GatePending: false, Status: "active"},
+		{Name: "quest-tests", Phase: "Review", GatePending: false, Status: "completed"},
+		{Name: "quest-docs", Phase: "Research", GatePending: true, Status: "active"},
 	}
 
 	progress := CalculateProgress(company, quests)
@@ -37,7 +37,7 @@ func TestCalculateProgress_MixedPhases(t *testing.T) {
 	if progress.Completed != 1 {
 		t.Errorf("expected 1 completed, got %d", progress.Completed)
 	}
-	// Implement+ includes Implement, Review, Complete
+	// Implement+ includes Implement and Review
 	if progress.InProgress != 2 {
 		t.Errorf("expected 2 in_progress (Implement+), got %d", progress.InProgress)
 	}
@@ -52,8 +52,8 @@ func TestCalculateProgress_AllComplete(t *testing.T) {
 		Quests: []string{"q1", "q2"},
 	}
 	quests := []fellowship.QuestStatus{
-		{Name: "q1", Phase: "Complete"},
-		{Name: "q2", Phase: "Complete"},
+		{Name: "q1", Phase: "Review", Status: "completed"},
+		{Name: "q2", Phase: "Review", Status: "completed"},
 	}
 
 	progress := CalculateProgress(company, quests)
@@ -532,7 +532,11 @@ func TestLoadAndMarshalProgress(t *testing.T) {
 		if err := state.Upsert(conn, &state.State{QuestName: "q1", Phase: "Implement"}); err != nil {
 			return err
 		}
-		if err := state.Upsert(conn, &state.State{QuestName: "q2", Phase: "Complete"}); err != nil {
+		if err := state.Upsert(conn, &state.State{QuestName: "q2", Phase: "Review"}); err != nil {
+			return err
+		}
+		// Review is terminal — the entry status is what marks q2 finished.
+		if err := tome.SetStatus(conn, "q2", "completed"); err != nil {
 			return err
 		}
 
@@ -555,7 +559,7 @@ func TestLoadAndMarshalProgress(t *testing.T) {
 		if progress.Completed != 1 {
 			t.Errorf("Completed = %d, want 1", progress.Completed)
 		}
-		if progress.InProgress != 2 { // Implement + Complete both >= 3
+		if progress.InProgress != 2 { // Implement and Review both rank >= Implement
 			t.Errorf("InProgress = %d, want 2", progress.InProgress)
 		}
 		return nil

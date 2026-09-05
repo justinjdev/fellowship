@@ -45,6 +45,19 @@ Hooks are subcommands of the CLI, not standalone scripts. `plugin/hooks/hooks.js
 
 Current hooks: `gate-guard`, `gate-submit`, `gate-prereq`, `completion-guard`, `metadata-track`, `file-track`, `worktree-guard`. Run `fellowship` with no args for the full command reference.
 
+What each of the gate hooks decides, against the four-phase lifecycle (Research → Plan → Implement → Review):
+
+| Hook | Decides |
+|---|---|
+| `gate-guard` | Blocks a held quest, blocks everything but a read-only escape command while a gate is pending, and blocks source writes outside the data directory during Research and Plan (`state.IsEarlyPhase`) |
+| `gate-submit` | Detects a `[GATE]` marker, checks the lembas and metadata prerequisites, and runs the phase transition — including the auto-approve path for a phase named in `gates.autoApprove` |
+| `gate-prereq` | Records that `/lembas` ran for this phase |
+| `metadata-track` | Records that the task's `phase` metadata was updated |
+| `completion-guard` | Allows `TaskUpdate(status: "completed")` only in Review with no gate pending — Review is terminal, so this is the one place a quest may end |
+| `file-track` | Records file touches in the quest tome |
+
+The lifecycle itself has exactly one definition: `phaseOrder` in `cli/internal/state/state.go`. `state.Phases()`, `state.GatePhases()` (the three phases a gate leaves, and the only valid `gates.autoApprove` entries) and `state.TerminalPhase` all derive from it — never write a phase name into a comparison when one of those will do.
+
 ## How to Contribute
 
 1. Open an issue first for non-trivial changes so we can discuss the approach

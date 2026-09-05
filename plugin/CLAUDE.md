@@ -26,7 +26,9 @@ plugin/hooks/scripts/ensure-binary.sh # Downloads CLI binary from GitHub release
 Cross-file duplication that exists on purpose — agent files must be self-contained at runtime (they're injected as system prompts with no path context), and docs mirror the canonical schema. When editing one side, update the other:
 
 - `plugin/agents/_protocol.md` (canonical) ↔ protocol blocks embedded in `plugin/agents/balrog.md`, `palantir.md`, `scout.md`
-- `plugin/skills/gather-lore/SKILL.md` Step 2 pattern taxonomy ↔ `plugin/skills/warden/SKILL.md` Step 3 dimensions (and gather-lore Step 4 ↔ warden Step 6)
+- `plugin/skills/gather-lore/SKILL.md` Step 2 pattern taxonomy ↔ `plugin/skills/warden/SKILL.md` Step 3 dimensions (and gather-lore Step 4 ↔ warden Step 6) ↔ the condensed taxonomy in `plugin/skills/quest/SKILL.md` Research step 4
+- `plugin/skills/council/SKILL.md` Steps 1–5 ↔ `plugin/skills/quest/SKILL.md` Research step 2 (quest inlines the orientation rather than invoking council, so a quest carries no second skill's phase vocabulary)
+- The quest lifecycle — Research → Plan → Implement → Review, three gates — is named in `plugin/skills/quest/SKILL.md`, `plugin/skills/fellowship/SKILL.md` and its `resources/`, `plugin/agents/palantir.md`, `plugin/commands/{settings,guide,scribe}.md`, README, and `site/src/routes/`. The enforcing list is `phaseOrder` in `cli/internal/state/state.go`
 - Config schema: `plugin/commands/settings.md` (canonical) ↔ README Configuration section ↔ `site/src/routes/configuration/+page.svelte`
 
 Do not encode these as HTML comments inside skill/agent prompt files — hidden directives in agent-facing content can be followed by agents as instructions.
