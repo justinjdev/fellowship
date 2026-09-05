@@ -9,7 +9,12 @@
 #     location and moved into place atomically; a failed or interrupted
 #     install never leaves a partial/corrupt binary at $BINARY.
 #   - A mkdir-based lock keeps two concurrent sessions from racing the
-#     same install.
+#     same install. The lock records its holder's PID and a timestamp, so a
+#     session killed mid-install (kill -9, OOM) doesn't wedge every future
+#     install: a contending session reclaims the lock once the recorded PID
+#     is no longer alive, or once 120s have passed regardless. Leftover
+#     scratch dirs from a killed install are swept once they're 10 minutes
+#     old, but only while no live install currently holds the lock.
 #   - "installed" is only ever printed after the binary is verified,
 #     executable, and moved into place.
 
@@ -24,38 +29,78 @@ LOCK_DIR="$INSTALL_DIR/.lock"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
-# A plain `grep -o '"version"...'` would match ANY key named "version"
-# anywhere in the file — including one day showing up nested inside some
-# other object (e.g. a future per-entry version field) — and `head -1`
-# would then silently prefer whichever happens to appear first in the file,
-# not the top-level manifest version this script actually needs. There's no
-# jq (or any JSON tooling) guaranteed present on end-user machines, and
-# pulling one in just to read a single field isn't worth the added
-# dependency, so this walks brace depth by hand and only accepts a
-# "version" key seen while depth == 1 (directly inside the outermost { }).
-# That's not a general JSON parser — a string value containing a literal
-# `{` or `}` would throw the count off — but plugin.json is a small,
-# hand-maintained, one-key-per-line manifest, so that trade-off is fine
-# here. Guarded with `|| true`: under `set -o pipefail` a no-match here
-# would otherwise trip `set -e` before we get a chance to report a clean
-# error.
-VERSION=$(awk '
-  {
-    line = $0
-    for (i = 1; i <= length(line); i++) {
-      c = substr(line, i, 1)
-      if (c == "{") depth++
-      else if (c == "}") depth--
+PLUGIN_JSON="$PLUGIN_ROOT/.claude-plugin/plugin.json"
+
+# Fast path: a real JSON parser reads the top-level "version" field exactly,
+# with no risk of matching a same-named key nested elsewhere. Neither
+# python3 nor node is guaranteed present on end-user machines (that's why
+# this is a fast path in front of the awk fallback below, not a hard
+# dependency) but both are common on dev/CI machines, where they make this
+# start-of-session hook do less string-munging. Each is only used if found
+# on PATH; either failure mode (not found, or the read/parse itself fails)
+# falls through to awk. Constraint: keep plugin.json parseable as plain JSON
+# by both of these paths and by the awk fallback — no comments, no trailing
+# commas, "version" a direct top-level string field.
+VERSION=""
+if command -v python3 >/dev/null 2>&1; then
+  VERSION=$(python3 -c '
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        sys.stdout.write(json.load(f)["version"])
+except Exception:
+    sys.exit(1)
+' "$PLUGIN_JSON" 2>/dev/null) || VERSION=""
+elif command -v node >/dev/null 2>&1; then
+  VERSION=$(node -e '
+const fs = require("fs");
+try {
+  const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  if (typeof data.version !== "string" || data.version === "") {
+    throw new Error("missing version");
+  }
+  process.stdout.write(data.version);
+} catch (e) {
+  process.exit(1);
+}
+' "$PLUGIN_JSON" 2>/dev/null) || VERSION=""
+fi
+
+if [ -z "$VERSION" ]; then
+  # Fallback: no python3 or node on PATH (or the fast path above failed).
+  # A plain `grep -o '"version"...'` would match ANY key named "version"
+  # anywhere in the file — including one day showing up nested inside some
+  # other object (e.g. a future per-entry version field) — and `head -1`
+  # would then silently prefer whichever happens to appear first in the file,
+  # not the top-level manifest version this script actually needs. There's no
+  # jq (or any JSON tooling) guaranteed present on end-user machines, and
+  # pulling one in just to read a single field isn't worth the added
+  # dependency, so this walks brace depth by hand and only accepts a
+  # "version" key seen while depth == 1 (directly inside the outermost { }).
+  # That's not a general JSON parser — a string value containing a literal
+  # `{` or `}` would throw the count off — but plugin.json is a small,
+  # hand-maintained, one-key-per-line manifest, so that trade-off is fine
+  # here. Guarded with `|| true`: under `set -o pipefail` a no-match here
+  # would otherwise trip `set -e` before we get a chance to report a clean
+  # error.
+  VERSION=$(awk '
+    {
+      line = $0
+      for (i = 1; i <= length(line); i++) {
+        c = substr(line, i, 1)
+        if (c == "{") depth++
+        else if (c == "}") depth--
+      }
     }
-  }
-  depth == 1 && match($0, /"version"[[:space:]]*:[[:space:]]*"[^"]*"/) {
-    val = substr($0, RSTART, RLENGTH)
-    sub(/^"version"[[:space:]]*:[[:space:]]*"/, "", val)
-    sub(/"$/, "", val)
-    print val
-    exit
-  }
-' "$PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null) || true
+    depth == 1 && match($0, /"version"[[:space:]]*:[[:space:]]*"[^"]*"/) {
+      val = substr($0, RSTART, RLENGTH)
+      sub(/^"version"[[:space:]]*:[[:space:]]*"/, "", val)
+      sub(/"$/, "", val)
+      print val
+      exit
+    }
+  ' "$PLUGIN_JSON" 2>/dev/null) || true
+fi
 
 if [ -z "$VERSION" ]; then
   echo "fellowship: could not determine version from plugin.json" >&2
@@ -108,28 +153,116 @@ download() {
 
 mkdir -p "$INSTALL_DIR"
 
+LOCK_DIR_OWNER="$LOCK_DIR/owner"
+STALE_LOCK_SECONDS=120
+
+# lock_is_stale: the lock dir has no identifiable, still-running owner, so it
+# is safe to reclaim. True (0) when: there's no owner record at all, the
+# recorded PID is not alive (kill -0 fails — the holder session exited
+# without running its EXIT trap, e.g. kill -9), or the owner's timestamp is
+# older than STALE_LOCK_SECONDS regardless of liveness (a wedged holder).
+lock_is_stale() {
+  local pid ts now dir_mtime
+  if [ ! -f "$LOCK_DIR_OWNER" ]; then
+    # mkdir and the owner-file write below aren't one atomic step, so a lock
+    # dir that was JUST created is briefly ownerless while its holder is
+    # still alive and about to write it — that's mid-acquisition, not
+    # abandoned. Use the lock dir's own mtime as a short grace window before
+    # treating a missing owner file as evidence of a lock nobody is
+    # finishing (e.g. the write itself failed): without this, a contender
+    # that checks in that window reclaims a live process's lock out from
+    # under it.
+    dir_mtime=$( (stat -c %Y "$LOCK_DIR" 2>/dev/null || stat -f %m "$LOCK_DIR" 2>/dev/null) || echo 0)
+    now=$(date +%s)
+    if [ "$dir_mtime" != "0" ] && [ $((now - dir_mtime)) -lt 5 ]; then
+      return 1
+    fi
+    return 0
+  fi
+  read -r pid ts < "$LOCK_DIR_OWNER" 2>/dev/null || true
+  if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+    return 0
+  fi
+  if [ -z "$ts" ]; then
+    return 0
+  fi
+  now=$(date +%s)
+  if [ $((now - ts)) -ge "$STALE_LOCK_SECONDS" ]; then
+    return 0
+  fi
+  return 1
+}
+
+# Sweep scratch dirs left behind by a session that was killed (kill -9, OOM,
+# etc.) mid-install — the EXIT trap that would normally remove them never
+# gets to run. TMP_DIR is only ever created after the lock below is held, so
+# the only scratch dir that can still be genuinely in flight belongs to
+# whoever holds a live (non-stale) lock right now — skip the sweep entirely
+# in that case rather than trusting mtime alone, which a slow-network
+# install exceeding 10 minutes would otherwise blow through.
+if [ ! -d "$LOCK_DIR" ] || lock_is_stale; then
+  find "$INSTALL_DIR" -maxdepth 1 -name '.install.*' -mmin +10 -exec rm -rf {} + 2>/dev/null || true
+fi
+
 LOCK_ACQUIRED=0
 acquire_lock() {
   local tries=0
-  while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+  local reclaim_tries=0
+  while true; do
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+      LOCK_ACQUIRED=1
+      # Record who holds the lock so a contending session can tell a live
+      # install apart from an abandoned one. Best-effort: if this write
+      # fails, the lock still works, it just always looks reclaimable.
+      echo "$$ $(date +%s)" > "$LOCK_DIR_OWNER" 2>/dev/null || true
+      return 0
+    fi
+    if lock_is_stale; then
+      # Reclaim: the holder is gone or wedged. Remove the whole lock dir
+      # (owner file included) and retry mkdir immediately, without counting
+      # it against the contention budget below.
+      rm -rf "$LOCK_DIR" 2>/dev/null || true
+      if [ -d "$LOCK_DIR" ]; then
+        # rm -rf couldn't clear it (e.g. permission denied on a shared
+        # box) — lock_is_stale would keep saying yes forever, so without
+        # this bound we'd spin tight with no sleep and never stop. Back off
+        # like the contention path below instead of retrying immediately.
+        reclaim_tries=$((reclaim_tries + 1))
+        if [ "$reclaim_tries" -ge 20 ]; then
+          return 1
+        fi
+        sleep 0.1
+      fi
+      continue
+    fi
     tries=$((tries + 1))
     if [ "$tries" -ge 100 ]; then
       return 1
     fi
     sleep 0.1
   done
-  LOCK_ACQUIRED=1
-  return 0
 }
 
 TMP_DIR=""
 cleanup() {
-  local ec=$?
+  local ec=$? owner_pid
   if [ -n "$TMP_DIR" ]; then
     rm -rf "$TMP_DIR"
   fi
   if [ "$LOCK_ACQUIRED" = "1" ]; then
-    rmdir "$LOCK_DIR" 2>/dev/null || true
+    # Only remove the lock if we still own it. A slow-but-alive install can
+    # run past STALE_LOCK_SECONDS, in which case another session's
+    # acquire_lock may have already reclaimed and rewritten $LOCK_DIR_OWNER
+    # with its own PID before we get here — an unconditional rm -rf would
+    # then delete that other session's live lock (and its in-flight
+    # install) out from under it, defeating the very mutual exclusion this
+    # lock exists for. Comparing the owner file's PID to our own $$ before
+    # removing keeps that from happening; if the owner file is missing or
+    # names someone else, leave the lock alone.
+    owner_pid=$(cut -d' ' -f1 "$LOCK_DIR_OWNER" 2>/dev/null) || owner_pid=""
+    if [ "$owner_pid" = "$$" ]; then
+      rm -rf "$LOCK_DIR" 2>/dev/null || true
+    fi
   fi
   exit "$ec"
 }
