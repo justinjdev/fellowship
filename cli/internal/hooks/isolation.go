@@ -31,20 +31,22 @@ type IsolationParams struct {
 	ToolName string
 	// FilePath is the absolute, cleaned path to the tool's target file.
 	FilePath string
-	// DataDirName is the configured fellowship data directory name
-	// (datadir.Name(), e.g. ".fellowship" or a user override). Writes under it
-	// are coordination state, always allowed even in the main tree.
+	// DataDirName is the fellowship data directory name configured for the MAIN
+	// repo (datadir.Resolve(mainRoot), e.g. ".fellowship" or a user override).
+	// Writes under it are coordination state, allowed in the main tree for a
+	// session standing there — the store file excepted.
 	DataDirName string
 	// SessionID is the Claude Code session id from the hook payload, or "" if
 	// the payload carried none.
 	SessionID string
 	// LeadSessionID is the session id `fellowship state init` recorded in the
-	// lead marker, or "" when there is no marker or it holds no id.
+	// store's lead row, or "" when no lead is recorded.
 	LeadSessionID string
 	// SessionIsRegisteredQuest reports that the session's git top-level is
-	// registered as a quest worktree in fellowship state. Combined with a
-	// top-level that IS the main root, it is a positive mis-placement: a quest
-	// was provisioned in the main working tree.
+	// registered as a quest worktree in fellowship state. Combined with a write
+	// that lands in the main tree, it is a positive mis-placement: either a
+	// quest provisioned into the main working tree, or a teammate reaching into
+	// it from its own worktree.
 	SessionIsRegisteredQuest bool
 }
 
@@ -101,9 +103,9 @@ func IsolationGuard(p IsolationParams) HookResult {
 	// writing decides, in this order:
 	//
 	//  1. The session that ran `fellowship state init` is the lead — allow.
-	//  2. A session whose top-level is BOTH the main root and a registered
-	//     quest worktree is a quest provisioned into the main tree — block,
-	//     with or without session ids.
+	//  2. A session registered as a quest worktree, writing here, is a
+	//     teammate: either provisioned into the main tree, or reaching into it
+	//     from its own worktree — block, with or without session ids.
 	//  3. A known session that is not the recorded lead, during an active
 	//     fellowship, is a teammate in the wrong tree — block.
 	//  4. Otherwise the writer cannot be identified. The guard is a fail-open
@@ -119,7 +121,7 @@ func IsolationGuard(p IsolationParams) HookResult {
 	}
 	if p.SessionID != "" && p.LeadSessionID != "" {
 		return blockMainTreeWrite(rel,
-			"this session is not the lead recorded by \"fellowship state init\" — if it is, re-record it with \"fellowship state init\"")
+			"this session is not the lead recorded by \"fellowship state init\" — if it is, re-record it with \"fellowship state init --claim-lead\"")
 	}
 	return HookResult{}
 }
