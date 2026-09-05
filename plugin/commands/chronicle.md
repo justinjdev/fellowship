@@ -6,9 +6,9 @@ description: One-time codebase onboarding — interactively extracts your team's
 
 ## Overview
 
-Interactive skill that walks through your codebase and extracts the implicit conventions into explicit, AI-readable rules. Produces a `## Reference Files` section and a `## Review Conventions` section for your CLAUDE.md.
+Interactive command that walks through your codebase and extracts the implicit conventions into explicit, AI-readable rules. Produces a `## Reference Files` section and a `## Review Conventions` section for your CLAUDE.md.
 
-This is a one-time setup skill. After running it, conventions are maintained incrementally through PR feedback capture.
+This is a one-time setup command. After running it, conventions are maintained incrementally through PR feedback capture.
 
 ## Process
 

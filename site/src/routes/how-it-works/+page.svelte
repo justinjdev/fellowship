@@ -27,6 +27,12 @@
 			skill: 'test-driven-development'
 		},
 		{
+			number: 3.5,
+			name: 'Adversarial',
+			description: 'Spawns the balrog agent to attack the implementation: edge cases, error paths, targeted tests. Findings are fixed before review.',
+			skill: 'balrog'
+		},
+		{
 			number: 4,
 			name: 'Review',
 			description: 'Convention review via /warden. Code quality verification. Runs full test suite.',
@@ -43,7 +49,7 @@
 	const fellowshipSteps = [
 		{ label: 'Describe', detail: 'You describe multiple tasks (quests and scouts)' },
 		{ label: 'Analyze', detail: 'Gandalf analyzes them, creates task list' },
-		{ label: 'Spawn', detail: 'Spawns quest-runner agents in isolated worktrees' },
+		{ label: 'Spawn', detail: 'Spawns quest teammates in isolated worktrees' },
 		{ label: 'Scout', detail: 'Spawns scout agents for research questions' },
 		{ label: 'Monitor', detail: 'Palantir monitors progress (at 2+ quests)' },
 		{ label: 'Gate', detail: 'Gates surface to you for approval' },
@@ -73,7 +79,7 @@
 	<section class="section" id="quest">
 		<h2>Single Task &mdash; /quest</h2>
 		<p class="section-intro">
-			Run <code>/quest</code> for any non-trivial task. It walks through six phases with hard gates between each.
+			Run <code>/quest</code> for any non-trivial task. It walks through seven phases with hard gates between each.
 		</p>
 
 		<div class="timeline">
