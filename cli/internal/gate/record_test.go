@@ -30,7 +30,7 @@ func TestRecordApproval(t *testing.T) {
 	d := newQuest(t, "Research")
 
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
-		return gate.RecordApproval(conn, "quest-1", "Implement", "Review", "Batch approved for company c")
+		return gate.RecordApproval(conn, "quest-1", "Implement", "Review", "Batch approved for group c")
 	}); err != nil {
 		t.Fatalf("RecordApproval: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestRecordApproval(t *testing.T) {
 		if len(qt.GateHistory) != 1 || qt.GateHistory[0].Action != "approved" || qt.GateHistory[0].Phase != "Implement" {
 			t.Errorf("gates = %+v, want one approved Implement gate", qt.GateHistory)
 		}
-		if len(qt.GateHistory) == 1 && qt.GateHistory[0].Reason != "Batch approved for company c" {
+		if len(qt.GateHistory) == 1 && qt.GateHistory[0].Reason != "Batch approved for group c" {
 			t.Errorf("gate reason = %q", qt.GateHistory[0].Reason)
 		}
 		if len(qt.PhasesCompleted) != 1 || qt.PhasesCompleted[0].Phase != "Implement" {

@@ -16,11 +16,11 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/justinjdev/fellowship/cli/internal/company"
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
+	"github.com/justinjdev/fellowship/cli/internal/group"
 	"github.com/justinjdev/fellowship/cli/internal/health"
 	"github.com/justinjdev/fellowship/cli/internal/history"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
@@ -281,7 +281,7 @@ func runCompany(d *db.DB, args []string) int {
 		fs.Parse(rest)
 
 		if err := d.WithConn(ctx, func(conn *db.Conn) error {
-			return company.List(conn)
+			return group.List(conn)
 		}); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
@@ -304,10 +304,10 @@ func runCompany(d *db.DB, args []string) int {
 		name := fs.Arg(0)
 
 		if jsonOut {
-			var detail *company.Detail
+			var detail *group.Detail
 			if err := d.WithConn(ctx, func(conn *db.Conn) error {
 				var err error
-				detail, err = company.LoadDetail(conn, name)
+				detail, err = group.LoadDetail(conn, name)
 				return err
 			}); err != nil {
 				fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -319,7 +319,7 @@ func runCompany(d *db.DB, args []string) int {
 		}
 
 		if err := d.WithConn(ctx, func(conn *db.Conn) error {
-			return company.Show(conn, name)
+			return group.Show(conn, name)
 		}); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1
@@ -337,7 +337,7 @@ func runCompany(d *db.DB, args []string) int {
 		name := fs.Arg(0)
 
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
-			return company.Approve(conn, name)
+			return group.Approve(conn, name)
 		}); err != nil {
 			fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 			return 1

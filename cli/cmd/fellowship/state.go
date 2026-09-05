@@ -210,7 +210,7 @@ func runStateAddCompany(d *db.DB, args []string) int {
 	}
 
 	if err := d.WithTx(ctx, func(conn *db.Conn) error {
-		return fellowship.AddCompany(conn, *name, questList, scoutList)
+		return fellowship.AddGroup(conn, *name, questList, scoutList)
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1

@@ -137,6 +137,7 @@ var baseSchema = []string{
 		task_id  TEXT
 	)`,
 
+	// table: companies, company_members -> package group (cli/internal/group)
 	`CREATE TABLE IF NOT EXISTS companies (
 		name TEXT PRIMARY KEY
 	)`,

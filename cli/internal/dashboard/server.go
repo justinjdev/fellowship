@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/justinjdev/fellowship/cli/internal/company"
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/fellowship"
+	"github.com/justinjdev/fellowship/cli/internal/group"
 	"github.com/justinjdev/fellowship/cli/internal/health"
 	"github.com/justinjdev/fellowship/cli/internal/notes"
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -266,10 +266,10 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 
-		var target *fellowship.CompanyEntry
-		for i := range fs.Companies {
-			if fs.Companies[i].Name == name {
-				target = &fs.Companies[i]
+		var target *fellowship.GroupEntry
+		for i := range fs.Groups {
+			if fs.Groups[i].Name == name {
+				target = &fs.Groups[i]
 				break
 			}
 		}
@@ -277,7 +277,7 @@ func (s *Server) handleCompanyApprove(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("company not found: %s", name)
 		}
 
-		approved, errs := company.BatchApprove(conn, *target)
+		approved, errs := group.BatchApprove(conn, *target)
 		resp.Approved = approved
 		if resp.Approved == nil {
 			resp.Approved = []string{}

@@ -1,4 +1,4 @@
-package company
+package group
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 )
 
 func TestCalculateProgress_MixedPhases(t *testing.T) {
-	company := fellowship.CompanyEntry{
+	grp := fellowship.GroupEntry{
 		Name:   "API Work",
 		Quests: []string{"quest-endpoint", "quest-tests", "quest-docs"},
 		Scouts: []string{"scout-review"},
@@ -25,7 +25,7 @@ func TestCalculateProgress_MixedPhases(t *testing.T) {
 		{Name: "quest-docs", Phase: "Research", GatePending: true, Status: "active"},
 	}
 
-	progress := CalculateProgress(company, quests)
+	progress := CalculateProgress(grp, quests)
 
 	if progress.Name != "API Work" {
 		t.Errorf("expected name 'API Work', got %q", progress.Name)
@@ -47,8 +47,8 @@ func TestCalculateProgress_MixedPhases(t *testing.T) {
 }
 
 func TestCalculateProgress_AllComplete(t *testing.T) {
-	company := fellowship.CompanyEntry{
-		Name:   "done-company",
+	grp := fellowship.GroupEntry{
+		Name:   "done-grp",
 		Quests: []string{"q1", "q2"},
 	}
 	quests := []fellowship.QuestStatus{
@@ -56,7 +56,7 @@ func TestCalculateProgress_AllComplete(t *testing.T) {
 		{Name: "q2", Phase: "Review", Status: "completed"},
 	}
 
-	progress := CalculateProgress(company, quests)
+	progress := CalculateProgress(grp, quests)
 
 	if progress.Completed != 2 {
 		t.Errorf("expected 2 completed, got %d", progress.Completed)
@@ -67,7 +67,7 @@ func TestCalculateProgress_AllComplete(t *testing.T) {
 }
 
 func TestCalculateProgress_MissingQuests(t *testing.T) {
-	company := fellowship.CompanyEntry{
+	grp := fellowship.GroupEntry{
 		Name:   "sparse",
 		Quests: []string{"exists", "missing"},
 	}
@@ -75,7 +75,7 @@ func TestCalculateProgress_MissingQuests(t *testing.T) {
 		{Name: "exists", Phase: "Plan"},
 	}
 
-	progress := CalculateProgress(company, quests)
+	progress := CalculateProgress(grp, quests)
 
 	// Missing quest should be gracefully skipped
 	if progress.Completed != 0 {
@@ -98,7 +98,7 @@ func TestBatchApprove_MultipleQuests(t *testing.T) {
 		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q2", Worktree: "/tmp/wt2"}); err != nil {
 			return err
 		}
-		if err := fellowship.AddCompany(conn, "batch-test", []string{"q1", "q2"}, nil); err != nil {
+		if err := fellowship.AddGroup(conn, "batch-test", []string{"q1", "q2"}, nil); err != nil {
 			return err
 		}
 
@@ -117,12 +117,12 @@ func TestBatchApprove_MultipleQuests(t *testing.T) {
 			return err
 		}
 
-		company := fellowship.CompanyEntry{
+		grp := fellowship.GroupEntry{
 			Name:   "batch-test",
 			Quests: []string{"q1", "q2"},
 		}
 
-		approved, errs := BatchApprove(conn, company)
+		approved, errs := BatchApprove(conn, grp)
 
 		if len(errs) != 0 {
 			t.Errorf("expected no errors, got %v", errs)
@@ -174,12 +174,12 @@ func TestBatchApprove_NoPendingGates(t *testing.T) {
 			return err
 		}
 
-		company := fellowship.CompanyEntry{
+		grp := fellowship.GroupEntry{
 			Name:   "no-gates",
 			Quests: []string{"q1"},
 		}
 
-		approved, errs := BatchApprove(conn, company)
+		approved, errs := BatchApprove(conn, grp)
 
 		if len(errs) != 0 {
 			t.Errorf("expected no errors, got %v", errs)
@@ -204,12 +204,12 @@ func TestBatchApprove_MissingQuestState(t *testing.T) {
 			return err
 		}
 
-		company := fellowship.CompanyEntry{
+		grp := fellowship.GroupEntry{
 			Name:   "missing-state",
 			Quests: []string{"q1", "q2"}, // q2 doesn't even exist in fellowship_quests
 		}
 
-		approved, errs := BatchApprove(conn, company)
+		approved, errs := BatchApprove(conn, grp)
 
 		// Both should produce errors (can't load state)
 		if len(approved) != 0 {
@@ -224,25 +224,25 @@ func TestBatchApprove_MissingQuestState(t *testing.T) {
 	}
 }
 
-func TestFindCompanyForQuest(t *testing.T) {
-	companies := []fellowship.CompanyEntry{
+func TestFindGroupForQuest(t *testing.T) {
+	groups := []fellowship.GroupEntry{
 		{Name: "API", Quests: []string{"q-api", "q-tests"}},
 		{Name: "Docs", Quests: []string{"q-docs"}},
 	}
 
-	if got := FindCompanyForQuest(companies, "q-api"); got != "API" {
+	if got := FindGroupForQuest(groups, "q-api"); got != "API" {
 		t.Errorf("expected 'API', got %q", got)
 	}
-	if got := FindCompanyForQuest(companies, "q-docs"); got != "Docs" {
+	if got := FindGroupForQuest(groups, "q-docs"); got != "Docs" {
 		t.Errorf("expected 'Docs', got %q", got)
 	}
-	if got := FindCompanyForQuest(companies, "q-other"); got != "" {
+	if got := FindGroupForQuest(groups, "q-other"); got != "" {
 		t.Errorf("expected empty string for ungrouped quest, got %q", got)
 	}
 }
 
 func TestProgressSummary(t *testing.T) {
-	p := CompanyProgress{
+	p := GroupProgress{
 		Name:       "API Work",
 		Total:      3,
 		InProgress: 2,
@@ -272,12 +272,12 @@ func TestBatchApprove_HeraldLogging(t *testing.T) {
 			return err
 		}
 
-		company := fellowship.CompanyEntry{
+		grp := fellowship.GroupEntry{
 			Name:   "herald-test",
 			Quests: []string{"q1"},
 		}
 
-		approved, errs := BatchApprove(conn, company)
+		approved, errs := BatchApprove(conn, grp)
 
 		if len(errs) != 0 {
 			t.Errorf("expected no errors, got %v", errs)
@@ -330,12 +330,12 @@ func TestBatchApprove_HistoryRecording(t *testing.T) {
 			return err
 		}
 
-		company := fellowship.CompanyEntry{
+		grp := fellowship.GroupEntry{
 			Name:   "history-test",
 			Quests: []string{"q1"},
 		}
 
-		approved, _ := BatchApprove(conn, company)
+		approved, _ := BatchApprove(conn, grp)
 		if len(approved) != 1 {
 			t.Fatalf("expected 1 approved, got %d", len(approved))
 		}
@@ -370,13 +370,13 @@ func TestBatchApprove_HistoryRecording(t *testing.T) {
 	}
 }
 
-func TestList_NoCompanies(t *testing.T) {
+func TestList_NoGroups(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
-		// No companies — should print "No companies defined."
+		// No groups — should print "No groups defined."
 		err := List(conn)
 		if err != nil {
 			t.Fatalf("List() error: %v", err)
@@ -387,7 +387,7 @@ func TestList_NoCompanies(t *testing.T) {
 	}
 }
 
-func TestList_WithCompanies(t *testing.T) {
+func TestList_WithGroups(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
@@ -396,7 +396,7 @@ func TestList_WithCompanies(t *testing.T) {
 		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
 			return err
 		}
-		if err := fellowship.AddCompany(conn, "team-alpha", []string{"q1"}, nil); err != nil {
+		if err := fellowship.AddGroup(conn, "team-alpha", []string{"q1"}, nil); err != nil {
 			return err
 		}
 
@@ -410,7 +410,7 @@ func TestList_WithCompanies(t *testing.T) {
 	}
 }
 
-func TestShow_CompanyNotFound(t *testing.T) {
+func TestShow_GroupNotFound(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
@@ -418,7 +418,7 @@ func TestShow_CompanyNotFound(t *testing.T) {
 		}
 		err := Show(conn, "nonexistent")
 		if err == nil {
-			t.Fatal("expected error for nonexistent company")
+			t.Fatal("expected error for nonexistent grp")
 		}
 		return nil
 	}); err != nil {
@@ -435,7 +435,7 @@ func TestShow_WithQuestState(t *testing.T) {
 		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
 			return err
 		}
-		if err := fellowship.AddCompany(conn, "team-alpha", []string{"q1"}, []string{}); err != nil {
+		if err := fellowship.AddGroup(conn, "team-alpha", []string{"q1"}, []string{}); err != nil {
 			return err
 		}
 
@@ -466,7 +466,7 @@ func TestLoadDetail_WithQuestState(t *testing.T) {
 		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
 			return err
 		}
-		if err := fellowship.AddCompany(conn, "team-alpha", []string{"q1"}, []string{"s1"}); err != nil {
+		if err := fellowship.AddGroup(conn, "team-alpha", []string{"q1"}, []string{"s1"}); err != nil {
 			return err
 		}
 		if err := state.Upsert(conn, &state.State{
@@ -499,14 +499,14 @@ func TestLoadDetail_WithQuestState(t *testing.T) {
 	}
 }
 
-func TestLoadDetail_CompanyNotFound(t *testing.T) {
+func TestLoadDetail_GroupNotFound(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
 			return err
 		}
 		if _, err := LoadDetail(conn, "nonexistent"); err == nil {
-			t.Fatal("expected error for nonexistent company")
+			t.Fatal("expected error for nonexistent grp")
 		}
 		return nil
 	}); err != nil {
@@ -514,7 +514,7 @@ func TestLoadDetail_CompanyNotFound(t *testing.T) {
 	}
 }
 
-func TestApprove_CompanyNotFound(t *testing.T) {
+func TestApprove_GroupNotFound(t *testing.T) {
 	d := db.OpenTest(t)
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
 		if err := fellowship.InitFellowship(conn, "test", "/tmp", "main"); err != nil {
@@ -522,7 +522,7 @@ func TestApprove_CompanyNotFound(t *testing.T) {
 		}
 		err := Approve(conn, "nonexistent")
 		if err == nil {
-			t.Fatal("expected error for nonexistent company")
+			t.Fatal("expected error for nonexistent grp")
 		}
 		return nil
 	}); err != nil {
@@ -539,7 +539,7 @@ func TestApprove_WithPendingGates(t *testing.T) {
 		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q1", Worktree: "/tmp/wt1"}); err != nil {
 			return err
 		}
-		if err := fellowship.AddCompany(conn, "team-alpha", []string{"q1"}, nil); err != nil {
+		if err := fellowship.AddGroup(conn, "team-alpha", []string{"q1"}, nil); err != nil {
 			return err
 		}
 
@@ -582,7 +582,7 @@ func TestLoadAndMarshalProgress(t *testing.T) {
 		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{Name: "q2", Worktree: "/tmp/wt2"}); err != nil {
 			return err
 		}
-		if err := fellowship.AddCompany(conn, "team-alpha", []string{"q1", "q2"}, nil); err != nil {
+		if err := fellowship.AddGroup(conn, "team-alpha", []string{"q1", "q2"}, nil); err != nil {
 			return err
 		}
 
@@ -602,7 +602,7 @@ func TestLoadAndMarshalProgress(t *testing.T) {
 			t.Fatalf("LoadAndMarshalProgress() error: %v", err)
 		}
 
-		var progress CompanyProgress
+		var progress GroupProgress
 		if err := json.Unmarshal(data, &progress); err != nil {
 			t.Fatalf("unmarshal error: %v", err)
 		}
@@ -633,7 +633,7 @@ func TestLoadAndMarshalProgress_NotFound(t *testing.T) {
 		}
 		_, err := LoadAndMarshalProgress(conn, "nonexistent")
 		if err == nil {
-			t.Fatal("expected error for nonexistent company")
+			t.Fatal("expected error for nonexistent grp")
 		}
 		return nil
 	}); err != nil {

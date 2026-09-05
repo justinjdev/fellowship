@@ -1,4 +1,4 @@
-package company
+package group
 
 import (
 	"encoding/json"
@@ -14,8 +14,8 @@ import (
 	"github.com/justinjdev/fellowship/cli/internal/state"
 )
 
-// CompanyProgress returns aggregate progress for a company.
-type CompanyProgress struct {
+// GroupProgress returns aggregate progress for a group.
+type GroupProgress struct {
 	Name       string `json:"name"`
 	Total      int    `json:"total"`
 	Completed  int    `json:"completed"`
@@ -33,11 +33,11 @@ var phaseRank = func() map[string]int {
 	return m
 }()
 
-// CalculateProgress computes aggregate progress for a company given quest statuses.
-func CalculateProgress(company fellowship.CompanyEntry, quests []fellowship.QuestStatus) CompanyProgress {
-	progress := CompanyProgress{
-		Name:  company.Name,
-		Total: len(company.Quests) + len(company.Scouts),
+// CalculateProgress computes aggregate progress for a group given quest statuses.
+func CalculateProgress(grp fellowship.GroupEntry, quests []fellowship.QuestStatus) GroupProgress {
+	progress := GroupProgress{
+		Name:  grp.Name,
+		Total: len(grp.Quests) + len(grp.Scouts),
 	}
 
 	questByName := make(map[string]fellowship.QuestStatus)
@@ -45,7 +45,7 @@ func CalculateProgress(company fellowship.CompanyEntry, quests []fellowship.Ques
 		questByName[q.Name] = q
 	}
 
-	for _, qName := range company.Quests {
+	for _, qName := range grp.Quests {
 		qs, ok := questByName[qName]
 		if !ok {
 			continue
@@ -66,10 +66,10 @@ func CalculateProgress(company fellowship.CompanyEntry, quests []fellowship.Ques
 	return progress
 }
 
-// BatchApprove approves all pending gates within a company. It returns the names
+// BatchApprove approves all pending gates within a group. It returns the names
 // of quests that were approved and any errors encountered (non-fatal).
-func BatchApprove(conn *sqlite.Conn, company fellowship.CompanyEntry) (approved []string, errs []error) {
-	for _, qName := range company.Quests {
+func BatchApprove(conn *sqlite.Conn, grp fellowship.GroupEntry) (approved []string, errs []error) {
+	for _, qName := range grp.Quests {
 		st, err := state.Load(conn, qName)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("loading state for %s: %w", qName, err))
@@ -93,7 +93,7 @@ func BatchApprove(conn *sqlite.Conn, company fellowship.CompanyEntry) (approved 
 		}
 
 		if err := gate.RecordApproval(conn, qName, prevPhase, nextPhase,
-			fmt.Sprintf("Batch approved for company %s", company.Name)); err != nil {
+			fmt.Sprintf("Batch approved for group %s", grp.Name)); err != nil {
 			errs = append(errs, err)
 		}
 
@@ -103,19 +103,19 @@ func BatchApprove(conn *sqlite.Conn, company fellowship.CompanyEntry) (approved 
 	return approved, errs
 }
 
-// List prints a summary of all companies in the fellowship state.
+// List prints a summary of all groups in the fellowship state.
 func List(conn *sqlite.Conn) error {
-	companies, err := fellowship.ListCompanies(conn)
+	groups, err := fellowship.ListGroups(conn)
 	if err != nil {
 		return err
 	}
 
-	if len(companies) == 0 {
-		fmt.Println("No companies defined.")
+	if len(groups) == 0 {
+		fmt.Println("No groups defined.")
 		return nil
 	}
 
-	for _, c := range companies {
+	for _, c := range groups {
 		parts := []string{}
 		if len(c.Quests) > 0 {
 			parts = append(parts, fmt.Sprintf("%d quest(s)", len(c.Quests)))
@@ -133,7 +133,7 @@ func List(conn *sqlite.Conn) error {
 	return nil
 }
 
-// QuestSummary is one quest's status within a company, for `company show --json`.
+// QuestSummary is one quest's status within a group, for `group show --json`.
 type QuestSummary struct {
 	Name        string `json:"name"`
 	Phase       string `json:"phase,omitempty"`
@@ -141,27 +141,27 @@ type QuestSummary struct {
 	Unavailable bool   `json:"unavailable,omitempty"` // state could not be loaded
 }
 
-// Detail is a company's full detail, for `company show --json`.
+// Detail is a group's full detail, for `group show --json`.
 type Detail struct {
 	Name   string         `json:"name"`
 	Quests []QuestSummary `json:"quests"`
 	Scouts []string       `json:"scouts"`
 }
 
-// LoadDetail loads a company's full detail — the same data Show prints as a
+// LoadDetail loads a group's full detail — the same data Show prints as a
 // table, structured for JSON output.
 func LoadDetail(conn *sqlite.Conn, name string) (*Detail, error) {
-	company, err := findCompany(conn, name)
+	grp, err := findGroup(conn, name)
 	if err != nil {
 		return nil, err
 	}
 
 	d := &Detail{
-		Name:   company.Name,
+		Name:   grp.Name,
 		Quests: []QuestSummary{},
-		Scouts: append([]string{}, company.Scouts...),
+		Scouts: append([]string{}, grp.Scouts...),
 	}
-	for _, qName := range company.Quests {
+	for _, qName := range grp.Quests {
 		st, err := state.Load(conn, qName)
 		if err != nil {
 			d.Quests = append(d.Quests, QuestSummary{Name: qName, Unavailable: true})
@@ -172,18 +172,18 @@ func LoadDetail(conn *sqlite.Conn, name string) (*Detail, error) {
 	return d, nil
 }
 
-// Show prints detailed status for a single company.
+// Show prints detailed status for a single group.
 func Show(conn *sqlite.Conn, name string) error {
-	company, err := findCompany(conn, name)
+	grp, err := findGroup(conn, name)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Company: %s\n", company.Name)
-	fmt.Printf("Quests: %d  Scouts: %d\n\n", len(company.Quests), len(company.Scouts))
+	fmt.Printf("Group: %s\n", grp.Name)
+	fmt.Printf("Quests: %d  Scouts: %d\n\n", len(grp.Quests), len(grp.Scouts))
 
-	if len(company.Quests) > 0 {
-		for _, qName := range company.Quests {
+	if len(grp.Quests) > 0 {
+		for _, qName := range grp.Quests {
 			st, err := state.Load(conn, qName)
 			if err != nil {
 				fmt.Printf("  %-25s (state unavailable)\n", qName)
@@ -198,9 +198,9 @@ func Show(conn *sqlite.Conn, name string) error {
 		}
 	}
 
-	if len(company.Scouts) > 0 {
+	if len(grp.Scouts) > 0 {
 		fmt.Println()
-		for _, sName := range company.Scouts {
+		for _, sName := range grp.Scouts {
 			fmt.Printf("  %-25s (scout)\n", sName)
 		}
 	}
@@ -208,21 +208,21 @@ func Show(conn *sqlite.Conn, name string) error {
 	return nil
 }
 
-// Approve batch-approves all pending gates in a company.
+// Approve batch-approves all pending gates in a group.
 func Approve(conn *sqlite.Conn, name string) error {
-	company, err := findCompany(conn, name)
+	grp, err := findGroup(conn, name)
 	if err != nil {
 		return err
 	}
 
-	approved, errs := BatchApprove(conn, *company)
+	approved, errs := BatchApprove(conn, *grp)
 
 	for _, e := range errs {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", e)
 	}
 
 	if len(approved) == 0 {
-		fmt.Println("No pending gates in company.")
+		fmt.Println("No pending gates in group.")
 		return nil
 	}
 
@@ -233,9 +233,9 @@ func Approve(conn *sqlite.Conn, name string) error {
 	return nil
 }
 
-// FindCompanyForQuest returns the company name a quest belongs to, or "" if ungrouped.
-func FindCompanyForQuest(companies []fellowship.CompanyEntry, questName string) string {
-	for _, c := range companies {
+// FindGroupForQuest returns the group name a quest belongs to, or "" if ungrouped.
+func FindGroupForQuest(groups []fellowship.GroupEntry, questName string) string {
+	for _, c := range groups {
 		for _, q := range c.Quests {
 			if q == questName {
 				return c.Name
@@ -246,14 +246,14 @@ func FindCompanyForQuest(companies []fellowship.CompanyEntry, questName string) 
 }
 
 // ProgressSummary returns a human-readable summary like "2/3 quests in Implement+".
-func ProgressSummary(progress CompanyProgress) string {
+func ProgressSummary(progress GroupProgress) string {
 	active := progress.InProgress
 	return fmt.Sprintf("%d/%d quests in Implement+", active, progress.Total)
 }
 
-// LoadAndMarshalProgress loads state and returns JSON-serializable progress for a company.
+// LoadAndMarshalProgress loads state and returns JSON-serializable progress for a group.
 func LoadAndMarshalProgress(conn *sqlite.Conn, name string) ([]byte, error) {
-	company, err := findCompany(conn, name)
+	grp, err := findGroup(conn, name)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +264,7 @@ func LoadAndMarshalProgress(conn *sqlite.Conn, name string) ([]byte, error) {
 		return nil, err
 	}
 	var quests []fellowship.QuestStatus
-	for _, qName := range company.Quests {
+	for _, qName := range grp.Quests {
 		st, err := state.Load(conn, qName)
 		if err != nil {
 			continue
@@ -277,7 +277,7 @@ func LoadAndMarshalProgress(conn *sqlite.Conn, name string) ([]byte, error) {
 		})
 	}
 
-	progress := CalculateProgress(*company, quests)
+	progress := CalculateProgress(*grp, quests)
 	return json.Marshal(progress)
 }
 
@@ -300,10 +300,10 @@ func questEntryStatuses(conn *sqlite.Conn) (map[string]string, error) {
 	return out, nil
 }
 
-// findCompany looks up a company by name from the DB.
-func findCompany(conn *sqlite.Conn, name string) (*fellowship.CompanyEntry, error) {
+// findGroup looks up a group by name from the DB.
+func findGroup(conn *sqlite.Conn, name string) (*fellowship.GroupEntry, error) {
 	var found bool
-	entry := &fellowship.CompanyEntry{
+	entry := &fellowship.GroupEntry{
 		Quests: []string{},
 		Scouts: []string{},
 	}
@@ -319,10 +319,10 @@ func findCompany(conn *sqlite.Conn, name string) (*fellowship.CompanyEntry, erro
 			},
 		})
 	if err != nil {
-		return nil, fmt.Errorf("company: lookup %s: %w", name, err)
+		return nil, fmt.Errorf("group: lookup %s: %w", name, err)
 	}
 	if !found {
-		return nil, fmt.Errorf("company %q not found", name)
+		return nil, fmt.Errorf("group %q not found", name)
 	}
 
 	// Load members
@@ -343,7 +343,7 @@ func findCompany(conn *sqlite.Conn, name string) (*fellowship.CompanyEntry, erro
 			},
 		})
 	if err != nil {
-		return nil, fmt.Errorf("company: load members for %s: %w", name, err)
+		return nil, fmt.Errorf("group: load members for %s: %w", name, err)
 	}
 
 	return entry, nil
