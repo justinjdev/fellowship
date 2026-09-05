@@ -234,8 +234,8 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 						return err
 					}
 					// An auto-approved gate is recorded exactly as the lead's
-					// `gate approve` records one, so the tome and herald look
-					// the same whoever (or whatever) approved it.
+					// `gate approve` records one, so the history and events
+					// look the same whoever (or whatever) approved it.
 					if sr.AutoApproved {
 						if err := gate.RecordApproval(conn, questName, sr.PrevPhase, sr.NextPhase, "Auto-approved by gates.autoApprove"); err != nil {
 							return err

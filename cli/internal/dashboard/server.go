@@ -152,7 +152,7 @@ func (s *Server) handleGateApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Best-effort herald announcements after tx commits.
+	// Best-effort event announcements after tx commits.
 	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		now := time.Now().UTC().Format(time.RFC3339)
 		events.Record(conn, events.Event{
@@ -228,7 +228,7 @@ func (s *Server) handleGateReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Best-effort herald announcement after tx commits.
+	// Best-effort event announcement after tx commits.
 	s.db.WithConn(context.Background(), func(conn *db.Conn) error {
 		events.Record(conn, events.Event{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
