@@ -1,5 +1,5 @@
 ---
-description: Recover a fellowship after a session crash. Scans worktrees and state files, presents a recovery dashboard, and re-spawns Gandalf with recovered quest context. Use when returning to a crashed or expired fellowship session.
+description: Recover a fellowship after a session crash. Scans worktrees and quest state, presents a recovery dashboard, and re-spawns Gandalf with recovered quest context. Use when returning to a crashed or expired fellowship session.
 ---
 
 # Rekindle — Fellowship Crash Recovery

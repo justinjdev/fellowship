@@ -42,7 +42,7 @@ INSTRUCTIONS:
 
    After sending a gate message, your Edit/Write/Bash/Agent/Skill tools
    are blocked by hooks until the lead approves. You cannot bypass this.
-   The lead approves by updating your state file — only the lead can
+   The lead approves by updating your quest state — only the lead can
    unblock you.
 
    {gate_config_override}

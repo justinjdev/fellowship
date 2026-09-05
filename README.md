@@ -169,7 +169,7 @@ Commands are user-invoked only — Claude never calls them automatically, so the
 | `/dashboard` | Starts the live web dashboard for the current fellowship — quest/scout progress, gate approvals, event history — in the background, and prints the URL. |
 | `/guide` | Interactive, learn-by-doing walkthrough of fellowship using a real task on your codebase. |
 | `/red-book` | Post-PR convention capture. Extracts conventions from reviewer comments and adds them to CLAUDE.md. |
-| `/rekindle` | Recovers a fellowship after a session crash — scans worktrees and state files, then re-spawns Gandalf with recovered context. |
+| `/rekindle` | Recovers a fellowship after a session crash — scans worktrees and quest state, then re-spawns Gandalf with recovered context. |
 | `/scribe` | Creates a reusable quest template that encodes project-specific rules and conventions into phase guidance. |
 | `/settings` | View or edit fellowship settings (`~/.claude/fellowship.json`). Interactive setup for all configuration options. |
 
@@ -228,7 +228,7 @@ A `/lembas` checkpoint at `.fellowship/checkpoint.md` is what a dead session lea
 
 `/council` does not check for checkpoints. It is orientation for a fresh task, nothing more.
 
-**Gate enforcement** — gates are structurally enforced via plugin hooks. After a teammate submits a gate, their work tools (Edit, Write, Bash, etc.) are blocked until the lead approves by writing to the quest state file. Prerequisites (running `/lembas` and updating task metadata) are verified before gate submission is allowed. Self-approval is structurally impossible.
+**Gate enforcement** — gates are structurally enforced via plugin hooks. After a teammate submits a gate, their work tools (Edit, Write, Bash, etc.) are blocked until the lead approves by updating quest state. Prerequisites (running `/lembas` and updating task metadata) are verified before gate submission is allowed. Self-approval is structurally impossible.
 
 ## Design Principles
 
