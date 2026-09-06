@@ -210,3 +210,22 @@ func TestGateGuard_CompleteDirIsJudgedAgainstThatQuest(t *testing.T) {
 		t.Error("without --dir the caller's own phase decides")
 	}
 }
+
+func TestCommandPaths(t *testing.T) {
+	cases := []struct {
+		command string
+		want    string
+	}{
+		{"cat > /wt/calc.py <<'EOF'\nx\nEOF", "/wt/calc.py"},
+		{"git -C /wt commit -am x", "/wt"},
+		{"cd /wt && ls", "/wt"},
+		{"echo hi >> /wt/a.txt; cat /wt/a.txt", "/wt/a.txt"},
+		{"~/.claude/fellowship/bin/fellowship init --dir /wt", "~/.claude/fellowship/bin/fellowship,/wt"},
+		{"ls", ""},
+	}
+	for _, c := range cases {
+		if got := strings.Join(CommandPaths(c.command), ","); got != c.want {
+			t.Errorf("CommandPaths(%q) = %q, want %q", c.command, got, c.want)
+		}
+	}
+}

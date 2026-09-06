@@ -329,7 +329,8 @@ as your blueprint. One gate remains: Implement.
 
 **Standalone only.** A fellowship teammate never takes it: the lead spawned
 you for the gated lifecycle, the hooks enforce it from `fellowship init` on,
-and a write into your worktree before `init` is refused. However small the
+and before `init` they allow only the self-check and init themselves (plus
+writes into your worktree's data directory). However small the
 task, run Research → Plan → Implement → Review and submit every gate.
 
 Standalone, skip the lifecycle only when **all** of these hold: one file

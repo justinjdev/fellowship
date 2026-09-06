@@ -523,9 +523,21 @@ func TestRunHookWith_NoWritesBeforeInit(t *testing.T) {
 			t.Errorf("init before init from %s: exit %d, want 0 (bootstrap)", cwd, got)
 		}
 	}
+	// The data directory is writable before init (a plan-driven quest copies
+	// its plan there); a Bash file write and a commit are not.
+	in := strings.NewReader(`{"session_id":"lead-1","agent_id":"agent-h","tool_name":"Write","tool_input":{"file_path":"` + filepath.Join(worktree, ".fellowship", "plan.md") + `","content":"x"}}`)
+	if got := runHookWith("gate-guard", in, root, d); got != 0 {
+		t.Errorf("plan copy before init: exit %d, want 0", got)
+	}
+	for _, cmd := range []string{"printf x > " + target, "git -C " + worktree + " commit -am x"} {
+		in = strings.NewReader(`{"session_id":"lead-1","agent_id":"agent-h","tool_name":"Bash","tool_input":{"command":` + quote(cmd) + `}}`)
+		if got := runHookWith("gate-guard", in, root, d); got != 2 {
+			t.Errorf("%q before init: exit %d, want 2 (block)", cmd, got)
+		}
+	}
 	// Once the row exists, the phase rule decides as usual.
 	setQuestState(t, d, &state.State{QuestName: "quest-noinit-eta", Phase: "Implement"})
-	in := strings.NewReader(`{"session_id":"lead-1","agent_id":"agent-h","tool_name":"Write","tool_input":{"file_path":"` + target + `","content":"x"}}`)
+	in = strings.NewReader(`{"session_id":"lead-1","agent_id":"agent-h","tool_name":"Write","tool_input":{"file_path":"` + target + `","content":"x"}}`)
 	if got := runHookWith("gate-guard", in, root, d); got != 0 {
 		t.Errorf("Write after init in Implement: exit %d, want 0", got)
 	}

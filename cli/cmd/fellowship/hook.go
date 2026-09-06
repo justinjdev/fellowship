@@ -174,16 +174,11 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 		var result hooks.HookResult
 		if err := d.WithConn(ctx, func(conn *db.Conn) error {
 			s, err := loadQuestState(conn, questName)
-			if errors.Is(err, state.ErrNotFound) && hooks.TargetPath(input) != "" {
-				// The bootstrap window exists so the teammate can run
-				// `fellowship init`; it is not a licence to write. A quest
-				// that skipped init has no phase, no gates and no history,
-				// and nothing here could ever be enforced — so a file write
-				// into a registered worktree waits for the row.
-				result = hooks.HookResult{
-					Block:   true,
-					Message: fmt.Sprintf("fellowship: quest %s has no state yet — run \"fellowship init --dir <worktree>\" before writing any file. The quest lifecycle starts there; nothing is skipped.", questName),
-				}
+			if errors.Is(err, state.ErrNotFound) {
+				// The bootstrap window: a registered worktree with no row
+				// yet. It exists so the teammate can run `fellowship init`,
+				// not so the lifecycle can be skipped — see BootstrapGuard.
+				result = hooks.BootstrapGuard(input, questName, dataDirName)
 				return nil
 			}
 			if err != nil {
@@ -643,6 +638,15 @@ func resolveSubagentQuest(ctx context.Context, conn *db.Conn, input *hooks.HookI
 	var candidates []string
 	if input.ToolInput.Command != "" {
 		candidates = append(candidates, hooks.FellowshipDirArgs(input.ToolInput.Command)...)
+		// Any absolute path the command names, so a heredoc into the
+		// worktree or a `git -C <worktree> commit` is attributed too.
+		// Each candidate costs a git call; a command naming more than a
+		// handful of paths is not the bootstrap shape this is for.
+		extra := hooks.CommandPaths(input.ToolInput.Command)
+		if len(extra) > 8 {
+			extra = extra[:8]
+		}
+		candidates = append(candidates, extra...)
 	}
 	if p := hooks.TargetPath(input); p != "" {
 		candidates = append(candidates, filepath.Dir(p))
