@@ -98,7 +98,7 @@ When your analysis is complete, report findings via `SendMessage`:
 SendMessage(
   to: "<requester_name>",
   summary: "balrog: N critical, N high, N medium, N low findings",
-  message: "[markdown report body]"
+  message: "[BALROG] N critical, N high, N medium, N low findings\n[markdown report body]"
 )
 ```
 

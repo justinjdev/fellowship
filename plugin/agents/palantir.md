@@ -89,7 +89,7 @@ When you detect an issue, send a message to the lead using `SendMessage`:
 SendMessage(
   to: "main",
   summary: "palantir: [brief issue description]",
-  message: "..."
+  message: "[PALANTIR] <CATEGORY> <quest_name>\n<alert text from the category below>"
 )
 ```
 
@@ -112,10 +112,12 @@ SendMessage(
 
 ### Alert Persistence
 
-After sending each alert via `SendMessage`, record it in the fellowship event log so `/retro` can analyze it later. The CLI writes the entry for you — no `jq`, no log file to append to, no quoting hazards:
+After sending each alert via `SendMessage`, record it in the fellowship event log so `/retro` can analyze it later. The CLI writes the entry for you — no `jq`, no log file to append to. The detail text comes from other quests' notes, so never paste it into the command line: `--detail -` reads it from stdin, and a single-quoted heredoc keeps the shell from expanding anything in it:
 
 ```bash
-~/.claude/fellowship/bin/fellowship events post --quest "<quest_name>" --type "<type>" --detail "<alert message>"
+~/.claude/fellowship/bin/fellowship events post --quest "<quest_name>" --type "<type>" --detail - <<'EOF'
+<alert message>
+EOF
 ```
 
 Where `<type>` is one of `palantir_stuck`, `palantir_drift`, `palantir_conflict`, `palantir_health`, or `palantir_notes`, and `<quest_name>` is the quest the alert is about (for `CONFLICT`, the first quest named; for `NOTES`, the target quest). Apply this logging step after every alert in all five categories.
@@ -123,8 +125,9 @@ Where `<type>` is one of `palantir_stuck`, `palantir_drift`, `palantir_conflict`
 For `palantir_notes` alerts, write the detail so the deduplication check in step 4 can recognize a repeat — name the source quest, the topic, and the discovery:
 
 ```bash
-~/.claude/fellowship/bin/fellowship events post --quest "<target_quest>" --type palantir_notes \
-  --detail "from <source_quest> [<topic>]: <discovery>"
+~/.claude/fellowship/bin/fellowship events post --quest "<target_quest>" --type palantir_notes --detail - <<'EOF'
+from <source_quest> [<topic>]: <discovery>
+EOF
 ```
 
 ### 6. Stopping

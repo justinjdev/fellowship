@@ -73,7 +73,7 @@ Store the result as `base_branch` — every quest spawn prompt carries it so wor
 
 > **Note:** `.fellowship/` is the default data directory. Users can override it via `dataDir` in `~/.claude/fellowship.json`. All `fellowship` CLI commands resolve the correct directory automatically.
 
-`state init` takes no `--dir` — it operates on the current directory, so run it from the repo root. Register each quest and scout after spawning it, and register the worktree before spawning:
+`state init` takes no `--dir` — it operates on the current directory, so run it from the repo root. Register each quest and scout — and, for a quest, its worktree — *before* spawning it: `fellowship init --dir <worktree>` resolves the quest from that registration, and gate hooks block an unregistered worktree.
 
 `--claim-lead` records *this* session as the fellowship's lead. `state init` records a lead only when none is recorded yet, so on a repo that has run a fellowship before — a new session picking up an existing one — pass `--claim-lead` as well, or `worktree-guard` keeps treating the previous session as the lead and refuses this one's `Edit`/`Write` in the main tree. It only runs from the main working tree, and refuses a session that is already recorded against a quest.
 

@@ -476,7 +476,7 @@ func initCallerIsLead(d *db.DB, mainRoot string) (callerIsLead, leadKnown bool, 
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: warning: could not read the recorded lead: %v\n", err)
 	}
-	callerIsLead = hooks.IsLeadSession(state.CurrentSessionID(), leadID) && sessionInMainWorktree(mainRoot)
+	callerIsLead = hooks.IsLeadSession(state.CurrentSessionID(), leadID) && sessionKnownInMainWorktree(mainRoot)
 	return callerIsLead, leadID != "", leadID
 }
 

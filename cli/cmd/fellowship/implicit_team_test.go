@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/events"
 	"github.com/justinjdev/fellowship/cli/internal/fellowship"
 	"github.com/justinjdev/fellowship/cli/internal/history"
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -433,5 +434,68 @@ func TestRunInit_RecordsNoSessionWithoutALead(t *testing.T) {
 	}
 	if got := claimLeadSession(d, root); got != 0 {
 		t.Errorf("claim-lead after a lead-less init = %d, want 0", got)
+	}
+}
+
+// A phase move is a gate decision, so the lead check behind it fails closed:
+// a process whose working directory cannot be resolved to any git tree is
+// not "in the main worktree", even under the lead's session id.
+func TestRunInit_PhaseMoveRefusedFromANonGitDirectory(t *testing.T) {
+	root := newMainRepo(t)
+	t.Setenv("HOME", t.TempDir())
+	worktree := addWorktree(t, root, "quest-init-zeta")
+	d := fellowshipWith(t, root, map[string]string{"quest-init-zeta": worktree})
+	recordLead(t, d, root, "lead-1")
+	setQuestState(t, d, &state.State{QuestName: "quest-init-zeta", Phase: "Research"})
+
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "lead-1")
+	t.Chdir(t.TempDir()) // not a git repository
+	if got := runInit(d, []string{"--dir", worktree, "--phase", "Implement"}); got != 1 {
+		t.Errorf("init --phase from a non-git directory = %d, want 1 (refused)", got)
+	}
+	if got := questPhase(t, d, "quest-init-zeta"); got != "Research" {
+		t.Errorf("phase = %q, want Research", got)
+	}
+}
+
+// `events post --detail -` takes the text from stdin, so an alert built from
+// another agent's words never has to pass through a shell command line.
+func TestRunEventsPost_DetailFromStdin(t *testing.T) {
+	root := newMainRepo(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Chdir(root)
+	d := fellowshipWith(t, root, map[string]string{})
+
+	detail := "from quest-a [auth]: uses $(rm -rf /) and `id` in the middleware\n"
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.WriteString(detail); err != nil {
+		t.Fatal(err)
+	}
+	w.Close()
+	stdin := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = stdin })
+
+	if got := runEventsPost(d, []string{"--quest", "quest-b", "--type", "palantir_notes", "--detail", "-"}); got != 0 {
+		t.Fatalf("events post --detail - = %d, want 0", got)
+	}
+	var recorded string
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		evs, err := events.Read(conn, "quest-b", 0)
+		if err != nil {
+			return err
+		}
+		for _, e := range evs {
+			recorded = e.Detail
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if recorded != strings.TrimRight(detail, "\n") {
+		t.Errorf("recorded detail = %q, want the stdin text verbatim", recorded)
 	}
 }

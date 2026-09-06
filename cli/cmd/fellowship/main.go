@@ -313,7 +313,7 @@ Agent/lead commands:
   phase confirm          Confirm the quest's current phase (a gate prerequisite; never moves it)
     --dir DIR            Worktree directory (default: current directory)
     --phase PHASE        The phase the quest is in (must match)
-  complete               End the quest: allowed only in Review with no gate pending
+  complete               End the quest: allowed only in Review, with no gate pending and no hold
     --dir DIR            Worktree directory (default: current directory)
   hold                   Hold (pause) a quest — blocks Edit/Write/Bash/Agent/Skill/NotebookEdit
     --dir DIR            Worktree directory (required)
@@ -425,7 +425,7 @@ Events (activity log):
                          palantir_drift, palantir_conflict, palantir_health,
                          palantir_notes
     --phase PHASE        Quest phase (optional)
-    --detail "TEXT"      Detail text (required)
+    --detail "TEXT"      Detail text (required); "-" reads it from stdin
 
 Dashboard:
   dashboard              Start live web dashboard

@@ -133,9 +133,11 @@ prompt carries a `PRE-EXISTING PLAN:`.
    resolves your quest name from the worktree the lead registered (override
    with `--quest <name>`), and loads `gates.autoApprove` from the merged
    config. Confirm with `~/.claude/fellowship/bin/fellowship gate status --dir
-   <worktree_path>`. If you had to create the worktree yourself, message the
-   lead its absolute path so the lead can register it (`state update-quest
-   --worktree` is a lead command; gate-guard refuses it from a worktree).
+   <worktree_path>`. If you had to create the worktree yourself, it is not
+   registered yet: pass `--quest <your_name>` to `init` so the state is created
+   for your quest and not for the directory's name, then message the lead the
+   absolute path so the lead can register it (`state update-quest --worktree`
+   is a lead command; gate-guard refuses it from a worktree).
 
 ### Step 2 — orient
 

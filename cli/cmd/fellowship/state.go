@@ -164,15 +164,32 @@ func runStateInit(d *db.DB, args []string) int {
 // reads as true: the check exists to keep a teammate from naming itself the
 // lead, not to refuse a lead whose git lookup failed.
 func sessionInMainWorktree(mainRoot string) bool {
-	cwd, err := os.Getwd()
+	in, err := inMainWorktree(mainRoot)
 	if err != nil {
 		return true
+	}
+	return in
+}
+
+// sessionKnownInMainWorktree is the fail-CLOSED form: a working directory
+// that cannot be resolved reads as "not the main worktree". A phase move on an
+// existing quest is a gate decision, so it is refused rather than granted when
+// the lookup fails — a caller in a non-git directory must not slip past it.
+func sessionKnownInMainWorktree(mainRoot string) bool {
+	in, err := inMainWorktree(mainRoot)
+	return err == nil && in
+}
+
+func inMainWorktree(mainRoot string) (bool, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return false, err
 	}
 	top, err := gitutil.TopLevel(cwd)
 	if err != nil {
-		return true
+		return false, err
 	}
-	return hooks.CanonicalPath(top) == hooks.CanonicalPath(mainRoot)
+	return hooks.CanonicalPath(top) == hooks.CanonicalPath(mainRoot), nil
 }
 
 // claimLeadSession re-records the running session as the fellowship's lead,

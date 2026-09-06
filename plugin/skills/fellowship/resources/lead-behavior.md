@@ -130,8 +130,8 @@ When the user explicitly requests promotion (e.g., "promote scout-auth findings 
 4. **Get task description:** Ask the user what the quest task should be (scout questions are research-oriented; quest tasks should be action-oriented). If the user already provided one, use it
 5. **Spawn promoted quest:**
    - Read the findings file content
+   - Provision and verify the worktree (Isolation Pre-flight) and register the quest via `~/.claude/fellowship/bin/fellowship state add-quest --worktree <path>`
    - Spawn a teammate using the quest spawn prompt's **Promoted variant** from spawn-prompts.md, with `{scout_findings_content}` set to the full file content
-   - Register the quest via `~/.claude/fellowship/bin/fellowship state add-quest`
 6. **Report:** Tell the user the promotion is underway
 
 **Important:** Promotion is always explicit — Gandalf never auto-promotes. Scout findings might suggest work that doesn't warrant a quest, or should be folded into an existing quest.
