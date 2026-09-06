@@ -243,7 +243,7 @@ A `/lembas` checkpoint at `.fellowship/checkpoint.md` is what a dead session lea
 
 ## Changelog
 
-### Unreleased
+### v3.0.0
 
 - **Gates are a question, not a keyword** — Gandalf now surfaces each gate with `AskUserQuestion` (Approve / Reject with feedback / Hold) after showing the teammate's gate message, one quest's gate per question. Typing "approve" still works.
 - **Teammates run the full lifecycle** — a fellowship teammate could take `/quest`'s escape hatch for a small task, skip `fellowship init`, and finish with no gate ever submitted; with no state row the hooks had nothing to enforce. The escape hatch is now standalone-only, the spawn prompt says so, and until `fellowship init` has run in a registered worktree `gate-guard` allows only what bootstrap needs: Edit/Write into the data directory (a plan-driven quest copies its plan there), the fellowship CLI minus the lead's `state` commands, read-only git, and read-only shell builtins with no redirection — a source write, a heredoc, a `git commit` all wait for `init`. A `[COMPLETE]` with no gate history is a violation, not a finished quest.

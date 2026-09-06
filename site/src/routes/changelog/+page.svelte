@@ -10,9 +10,9 @@
 <div class="container page">
 	<h1>Changelog</h1>
 
-	<!-- Unreleased -->
-	<section class="version" id="unreleased">
-		<h2 class="version-heading"><a href="{base}/changelog#unreleased">Unreleased</a></h2>
+	<!-- v3.0.0 -->
+	<section class="version" id="v3-0-0">
+		<h2 class="version-heading"><a href="{base}/changelog#v3-0-0">v3.0.0</a></h2>
 		<ul class="changes">
 			<li>
 				<strong>Gates are a question, not a keyword</strong> &mdash; Gandalf now surfaces each gate with <code>AskUserQuestion</code> (Approve / Reject with feedback / Hold) after showing the teammate's gate message, one quest's gate per question. Typing &ldquo;approve&rdquo; still works.
