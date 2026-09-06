@@ -49,6 +49,14 @@ var ErrEmptyStore = errors.New("db: fellowship store is empty")
 func StorePath(fromDir string) (string, error) {
 	mainRepo, err := resolveMainRepo(fromDir)
 	if err != nil {
+		// Outside any git repository there is no main repo to key a store
+		// to, so there is no store: the same answer as a repo without one,
+		// and one the hooks allow. It used to surface as a generic failure,
+		// which gate hooks read as "the store cannot be read" and blocked —
+		// every Bash call in a plain directory, cleanup included.
+		if errors.Is(err, gitutil.ErrNotARepository) {
+			return "", fmt.Errorf("%w: %s is not inside a git repository", ErrNoStore, fromDir)
+		}
 		return "", fmt.Errorf("db: resolve main repo: %w", err)
 	}
 	return filepath.Join(mainRepo, datadir.Resolve(mainRepo), datadir.StoreFileName), nil

@@ -1,7 +1,9 @@
 package gitutil
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -27,10 +29,21 @@ func RunGitContext(ctx context.Context, dir string, args ...string) (string, err
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && bytes.Contains(exitErr.Stderr, []byte("not a git repository")) {
+			return "", fmt.Errorf("%w: %s", ErrNotARepository, dir)
+		}
 		return "", err
 	}
 	return string(out), nil
 }
+
+// ErrNotARepository reports that a directory is not inside any git working
+// tree — git's own "not a git repository" answer, told apart from every other
+// way git can fail. A fellowship lives in a repo, so outside one there is
+// nothing to enforce, and callers that fail closed on an unreadable store
+// must not fail closed on this.
+var ErrNotARepository = errors.New("not a git repository")
 
 // ListWorktrees parses `git worktree list --porcelain` and returns worktree paths.
 func ListWorktrees(gitRoot string) ([]string, error) {
