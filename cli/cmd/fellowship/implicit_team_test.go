@@ -499,3 +499,34 @@ func TestRunEventsPost_DetailFromStdin(t *testing.T) {
 		t.Errorf("recorded detail = %q, want the stdin text verbatim", recorded)
 	}
 }
+
+// The bootstrap window (a registered worktree with no quest_state row yet)
+// lets the teammate run `fellowship init`; it does not let it write. A quest
+// that skipped init would otherwise have no phase, no gates and no history,
+// and nothing could ever be enforced against it.
+func TestRunHookWith_NoWritesBeforeInit(t *testing.T) {
+	root := newMainRepo(t)
+	t.Setenv("HOME", t.TempDir())
+	worktree := addWorktree(t, root, "quest-noinit-eta")
+	d := fellowshipWith(t, root, map[string]string{"quest-noinit-eta": worktree})
+
+	target := filepath.Join(worktree, "calc.py")
+	// From the worktree (a separate session) and from the main root (an
+	// in-process teammate, resolved through the target path).
+	for _, cwd := range []string{worktree, root} {
+		in := strings.NewReader(`{"session_id":"lead-1","agent_id":"agent-h","tool_name":"Write","tool_input":{"file_path":"` + target + `","content":"x"}}`)
+		if got := runHookWith("gate-guard", in, cwd, d); got != 2 {
+			t.Errorf("Write before init from %s: exit %d, want 2 (block)", cwd, got)
+		}
+		in = strings.NewReader(`{"session_id":"lead-1","agent_id":"agent-h","tool_name":"Bash","tool_input":{"command":"fellowship init --dir ` + worktree + `"}}`)
+		if got := runHookWith("gate-guard", in, cwd, d); got != 0 {
+			t.Errorf("init before init from %s: exit %d, want 0 (bootstrap)", cwd, got)
+		}
+	}
+	// Once the row exists, the phase rule decides as usual.
+	setQuestState(t, d, &state.State{QuestName: "quest-noinit-eta", Phase: "Implement"})
+	in := strings.NewReader(`{"session_id":"lead-1","agent_id":"agent-h","tool_name":"Write","tool_input":{"file_path":"` + target + `","content":"x"}}`)
+	if got := runHookWith("gate-guard", in, root, d); got != 0 {
+		t.Errorf("Write after init in Implement: exit %d, want 0", got)
+	}
+}

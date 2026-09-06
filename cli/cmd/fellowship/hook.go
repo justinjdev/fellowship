@@ -174,6 +174,18 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 		var result hooks.HookResult
 		if err := d.WithConn(ctx, func(conn *db.Conn) error {
 			s, err := loadQuestState(conn, questName)
+			if errors.Is(err, state.ErrNotFound) && hooks.TargetPath(input) != "" {
+				// The bootstrap window exists so the teammate can run
+				// `fellowship init`; it is not a licence to write. A quest
+				// that skipped init has no phase, no gates and no history,
+				// and nothing here could ever be enforced — so a file write
+				// into a registered worktree waits for the row.
+				result = hooks.HookResult{
+					Block:   true,
+					Message: fmt.Sprintf("fellowship: quest %s has no state yet — run \"fellowship init --dir <worktree>\" before writing any file. The quest lifecycle starts there; nothing is skipped.", questName),
+				}
+				return nil
+			}
 			if err != nil {
 				return err
 			}

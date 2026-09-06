@@ -144,7 +144,7 @@ Valid gate names are the phases a gate leaves: `Research`, `Plan`, `Implement`. 
 | Placeholder | Value |
 |---|---|
 | `{mode_context}` | Empty string |
-| `{mode_instruction_1}` | `Run /quest to execute this task through the full quest lifecycle` |
+| `{mode_instruction_1}` | `Run /quest to execute this task through the full quest lifecycle. The quest skill's escape hatch is standalone-only: however small this task looks, run every phase and submit every gate.` |
 | `{boundaries_exception}` | Empty string |
 
 ### Variant: Plan-Driven
@@ -177,7 +177,7 @@ Use when promoting a scout's findings into a new quest. The quest enters validat
 | Placeholder | Value |
 |---|---|
 | `{mode_context}` | See below |
-| `{mode_instruction_1}` | `Run /quest to execute this task through the full quest lifecycle` (same as Standard) |
+| `{mode_instruction_1}` | Same as Standard |
 | `{boundaries_exception}` | Empty string |
 | `{scout_name}` | Name of the scout being promoted (e.g., `"scout-auth-analysis"`) |
 | `{findings_path}` | Path to the scout findings file: `.fellowship/scout-findings-{scout_name}.md` (using configured `dataDir` if overridden) |
