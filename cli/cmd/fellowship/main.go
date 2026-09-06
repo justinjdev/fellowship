@@ -100,6 +100,14 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(runState(d, os.Args[2:]))
+	case "phase":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: fellowship phase confirm --dir <worktree> --phase <phase>")
+			os.Exit(1)
+		}
+		os.Exit(runPhase(d, os.Args[2:]))
+	case "complete":
+		os.Exit(runComplete(d, os.Args[2:]))
 	case "hold":
 		os.Exit(runHold(d, os.Args[2:]))
 	case "unhold":
@@ -127,6 +135,7 @@ var knownCommands = map[string]bool{
 	"version": true, "migrate": true, "hook": true, "gate": true, "init": true,
 	"status": true, "group": true, "history": true, "health": true,
 	"notes": true, "todo": true, "state": true, "hold": true,
+	"phase": true, "complete": true,
 	"unhold": true, "failures": true, "events": true, "dashboard": true,
 	// Deprecated aliases — see commandAliases.
 	"company": true, "tome": true, "eagles": true,
@@ -165,8 +174,7 @@ func storeCreatingCommand(args []string) bool {
 // readOnlyHooks are the hooks that only decide — they read the store and write
 // nothing back. They get a read-only connection, so a bug or a future edit
 // cannot quietly turn a decision into a write. The recording hooks
-// (gate-submit, gate-prereq, metadata-track, file-track, completion-guard)
-// need the write side.
+// (gate-submit, gate-prereq, file-track) need the write side.
 var readOnlyHooks = map[string]bool{
 	"gate-guard":     true,
 	"worktree-guard": true,
@@ -259,7 +267,7 @@ func storeOpenExit(cwd string, args []string, err error) int {
 				fmt.Fprintln(os.Stderr, `fellowship: the store is out of date — allowing this command to upgrade it.`)
 				return 0
 			}
-			fmt.Fprintln(os.Stderr, `fellowship: the store is out of date — run "fellowship status" to upgrade it (every non-hook command migrates the store on open). Blocking for safety.`)
+			fmt.Fprintln(os.Stderr, `fellowship: the store is out of date — run "fellowship status" to upgrade it (every non-hook command migrates the store on open). Run it as the whole command, on its own: not after a cd, and with no && or pipe chained on. Blocking for safety.`)
 			return 2
 		}
 		if isHook {
@@ -291,8 +299,6 @@ Hook commands (called by Claude Code hooks, read stdin):
   hook gate-guard        Block tools when gate pending or early-phase file writes
   hook gate-submit       Detect [GATE] messages, check prereqs, advance state
   hook gate-prereq       Track lembas skill invocation
-  hook metadata-track    Track phase metadata updates
-  hook completion-guard  Block task completion unless phase is Review with no pending gate
   hook file-track        Record file touches in quest history
   hook worktree-guard    Block source writes to the main tree during a fellowship
 
@@ -302,6 +308,11 @@ Agent/lead commands:
   gate approve           Approve a pending gate (advances to next phase)
     --dir DIR            Worktree directory (default: current directory)
   gate reject            Reject a pending gate (clears pending, keeps phase)
+    --dir DIR            Worktree directory (default: current directory)
+  phase confirm          Confirm the quest's current phase (a gate prerequisite; never moves it)
+    --dir DIR            Worktree directory (default: current directory)
+    --phase PHASE        The phase the quest is in (must match)
+  complete               End the quest: allowed only in Review with no gate pending
     --dir DIR            Worktree directory (default: current directory)
   hold                   Hold (pause) a quest — blocks Edit/Write/Bash/Agent/Skill/NotebookEdit
     --dir DIR            Worktree directory (required)
@@ -344,12 +355,10 @@ Fellowship state:
     --task "DESC"         Task description (required)
     --branch BRANCH       Branch name
     --worktree PATH       Worktree path
-    --task-id ID          Task ID
     --dir DIR             Repo or worktree directory (default: current dir)
   state add-scout         Add a scout entry to fellowship state
     --name NAME           Scout name (required)
     --question "Q"        Research question (required)
-    --task-id ID          Task ID
     --dir DIR             Repo or worktree directory (default: current dir)
   state add-group         Add a group entry to fellowship state
     --name NAME           Group name (required)
@@ -360,7 +369,6 @@ Fellowship state:
     --name NAME           Quest name (required)
     --worktree PATH       Worktree path
     --branch BRANCH       Branch name
-    --task-id ID          Task ID
     --status STATUS       Quest status (active, completed, cancelled)
     --dir DIR             Repo or worktree directory (default: current dir)
   state show              Show fellowship state as JSON

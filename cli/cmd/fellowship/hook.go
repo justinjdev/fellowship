@@ -29,12 +29,10 @@ import (
 // is deliberately absent — it is defense-in-depth behind lead-provisioned
 // isolation and fails open.
 var gateHooks = map[string]bool{
-	"gate-guard":       true,
-	"gate-submit":      true,
-	"gate-prereq":      true,
-	"completion-guard": true,
-	"metadata-track":   true,
-	"file-track":       true,
+	"gate-guard":  true,
+	"gate-submit": true,
+	"gate-prereq": true,
+	"file-track":  true,
 }
 
 func isGateHook(name string) bool { return gateHooks[name] }
@@ -185,29 +183,6 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 		}
 		return 0
 
-	case "completion-guard":
-		var result hooks.HookResult
-		if err := d.WithTx(ctx, func(conn *db.Conn) error {
-			s, err := loadQuestState(conn, questName)
-			if err != nil {
-				return err
-			}
-			result = hooks.CompletionGuard(s, input)
-			if !result.Block && input.ToolInput.Status == "completed" {
-				if err := hooks.MarkHistoryCompleted(conn, questName); err != nil {
-					return err
-				}
-			}
-			return nil
-		}); err != nil {
-			return hookDBExit(err)
-		}
-		if result.Block {
-			fmt.Fprintln(os.Stderr, result.Message)
-			return 2
-		}
-		return 0
-
 	case "file-track":
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
 			s, err := loadQuestState(conn, questName)
@@ -283,40 +258,18 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 				fmt.Fprintf(os.Stderr, "fellowship: gate enrichment unavailable: %v\n", err)
 			}
 			if enrichment != "" {
-				enrichedContent := input.ToolInput.Content + enrichment
-				out := hooks.NewAllowOutput(map[string]string{"content": enrichedContent})
+				// The body comes back under the field it arrived in: the
+				// SendMessage tool reads `message`; older payloads used
+				// `content`.
+				field := "message"
+				if input.ToolInput.Message == "" && input.ToolInput.Content != "" {
+					field = "content"
+				}
+				out := hooks.NewAllowOutput(map[string]string{field: input.ToolInput.MessageBody() + enrichment})
 				if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
 					fmt.Fprintf(os.Stderr, "fellowship: could not emit gate enrichment: %v\n", err)
 				}
 			}
-		}
-		return 0
-
-	case "metadata-track":
-		if err := d.WithTx(ctx, func(conn *db.Conn) error {
-			s, err := loadQuestState(conn, questName)
-			if err != nil {
-				return err
-			}
-			recorded, notice := hooks.MetadataTrack(s, input)
-			if notice != "" {
-				fmt.Fprintln(os.Stderr, notice)
-			}
-			if !recorded {
-				return nil
-			}
-			if err := state.Upsert(conn, s); err != nil {
-				return err
-			}
-			return events.Record(conn, events.Event{
-				Timestamp: time.Now().UTC().Format(time.RFC3339),
-				Quest:     questName,
-				Type:      events.MetadataUpdated,
-				Phase:     s.Phase,
-				Detail:    "Task metadata updated",
-			})
-		}); err != nil {
-			return hookDBExit(err)
 		}
 		return 0
 
@@ -504,6 +457,7 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 		FilePath:                 filePath,
 		DataDirName:              dataDirName,
 		SessionID:                input.SessionID,
+		AgentID:                  input.AgentID,
 		LeadSessionID:            leadSessionID,
 		SessionIsRegisteredQuest: sessionIsQuest,
 	})

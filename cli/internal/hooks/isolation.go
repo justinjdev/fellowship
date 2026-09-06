@@ -39,6 +39,11 @@ type IsolationParams struct {
 	// SessionID is the Claude Code session id from the hook payload, or "" if
 	// the payload carried none.
 	SessionID string
+	// AgentID is the subagent id from the hook payload, "" for the main
+	// conversation. A teammate spawned with the Agent tool runs in-process
+	// and carries the lead's session id, so it is the agent id — not the
+	// session id — that tells the lead's own writes from a teammate's.
+	AgentID string
 	// LeadSessionID is the session id `fellowship state init` recorded in the
 	// store's lead row, or "" when no lead is recorded.
 	LeadSessionID string
@@ -102,15 +107,18 @@ func IsolationGuard(p IsolationParams) HookResult {
 	// workspace, and blocking it blocked the lead out of its own repo. Who is
 	// writing decides, in this order:
 	//
-	//  1. The session that ran `fellowship state init` is the lead — allow.
+	//  1. The session that ran `fellowship state init`, in its own
+	//     conversation (no agent id), is the lead — allow.
 	//  2. A session registered as a quest worktree, writing here, is a
 	//     teammate: either provisioned into the main tree, or reaching into it
 	//     from its own worktree — block, with or without session ids.
-	//  3. A known session that is not the recorded lead, during an active
-	//     fellowship, is a teammate in the wrong tree — block.
+	//  3. A subagent (the payload carries an agent id), or a known session
+	//     that is not the recorded lead, during an active fellowship, is a
+	//     teammate in the wrong tree — block. The lead's own conversation is
+	//     the only thing that writes source in the main tree.
 	//  4. Otherwise the writer cannot be identified. The guard is a fail-open
 	//     backstop behind lead-provisioned isolation, so it allows.
-	if IsLeadSession(p.SessionID, p.LeadSessionID) {
+	if p.AgentID == "" && IsLeadSession(p.SessionID, p.LeadSessionID) {
 		return HookResult{}
 	}
 	if p.SessionIsRegisteredQuest {
@@ -118,6 +126,10 @@ func IsolationGuard(p IsolationParams) HookResult {
 			return blockMainTreeWrite(rel, "this worktree is registered as a quest but resolves to the main working tree")
 		}
 		return blockMainTreeWrite(rel, "this session is a registered quest worktree writing into the main working tree")
+	}
+	if p.AgentID != "" {
+		return blockMainTreeWrite(rel,
+			"this write comes from a subagent (agent "+p.AgentID+"), and only the lead's own conversation writes in the main tree")
 	}
 	if p.SessionID != "" && p.LeadSessionID != "" {
 		return blockMainTreeWrite(rel,

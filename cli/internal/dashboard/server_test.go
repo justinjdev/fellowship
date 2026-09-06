@@ -28,15 +28,12 @@ func setupTestDB(t *testing.T) (*db.DB, string) {
 		if err := fellowship.AddQuest(conn, fellowship.QuestEntry{
 			Name:     "quest-login",
 			Worktree: worktreeDir,
-			TaskID:   "t1",
 		}); err != nil {
 			return err
 		}
 		gateID := "gate-plan-review"
 		if err := state.Upsert(conn, &state.State{
 			QuestName:   "quest-login",
-			TaskID:      "t1",
-			TeamName:    "team",
 			Phase:       "Plan",
 			GatePending: true,
 			GateID:      &gateID,
@@ -237,8 +234,6 @@ func TestAPIGateApprove_NoPending(t *testing.T) {
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
 		return state.Upsert(conn, &state.State{
 			QuestName:   "quest-login",
-			TaskID:      "t1",
-			TeamName:    "team",
 			Phase:       "Plan",
 			GatePending: false,
 		})

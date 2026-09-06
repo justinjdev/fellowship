@@ -262,3 +262,19 @@ func shellSegments(command string) []string {
 	flush()
 	return segments
 }
+
+// HasCompleteCommand reports whether a Bash command line runs
+// `fellowship complete` anywhere — through operators, substitutions, `sh -c`
+// and `eval`, exactly as LeadOnlyCommands scans. gate-guard judges such a
+// line against CompletionCheck so the quest cannot be ended before Review by
+// shelling past the command's own refusal.
+func HasCompleteCommand(command string) bool {
+	for _, tokens := range commandInvocations(command, 0) {
+		for i := 0; i+1 < len(tokens); i++ {
+			if isFellowshipBinary(tokens[i]) && tokens[i+1] == "complete" {
+				return true
+			}
+		}
+	}
+	return false
+}

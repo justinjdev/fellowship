@@ -301,7 +301,6 @@ func runStateAddQuest(d *db.DB, args []string) int {
 	task := fs.String("task", "", "Task description (required)")
 	branch := fs.String("branch", "", "Branch name")
 	worktree := fs.String("worktree", "", "Worktree path")
-	taskID := fs.String("task-id", "", "Task ID")
 	dir := fs.String("dir", "", "Repo or worktree directory (default: current directory)")
 	fs.Parse(args)
 
@@ -311,7 +310,7 @@ func runStateAddQuest(d *db.DB, args []string) int {
 	}
 
 	if *name == "" || *task == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship state add-quest --name <name> --task \"<desc>\" [--branch BRANCH] [--worktree PATH] [--task-id ID] [--dir DIR]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship state add-quest --name <name> --task \"<desc>\" [--branch BRANCH] [--worktree PATH] [--dir DIR]")
 		return 1
 	}
 
@@ -321,7 +320,6 @@ func runStateAddQuest(d *db.DB, args []string) int {
 			TaskDescription: *task,
 			Worktree:        *worktree,
 			Branch:          *branch,
-			TaskID:          *taskID,
 		})
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -336,7 +334,6 @@ func runStateAddScout(d *db.DB, args []string) int {
 	fs := flag.NewFlagSet("state add-scout", flag.ExitOnError)
 	name := fs.String("name", "", "Scout name (required)")
 	question := fs.String("question", "", "Research question (required)")
-	taskID := fs.String("task-id", "", "Task ID")
 	dir := fs.String("dir", "", "Repo or worktree directory (default: current directory)")
 	fs.Parse(args)
 
@@ -346,7 +343,7 @@ func runStateAddScout(d *db.DB, args []string) int {
 	}
 
 	if *name == "" || *question == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship state add-scout --name <name> --question \"<question>\" [--task-id ID] [--dir DIR]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship state add-scout --name <name> --question \"<question>\" [--dir DIR]")
 		return 1
 	}
 
@@ -354,7 +351,6 @@ func runStateAddScout(d *db.DB, args []string) int {
 		return fellowship.AddScout(conn, fellowship.ScoutEntry{
 			Name:     *name,
 			Question: *question,
-			TaskID:   *taskID,
 		})
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
@@ -408,7 +404,6 @@ func runStateUpdateQuest(d *db.DB, args []string) int {
 	name := fs.String("name", "", "Quest name (required)")
 	worktree := fs.String("worktree", "", "Worktree path")
 	branch := fs.String("branch", "", "Branch name")
-	taskID := fs.String("task-id", "", "Task ID")
 	statusFlag := fs.String("status", "", "Quest status (active, completed, cancelled)")
 	dir := fs.String("dir", "", "Repo or worktree directory (default: current directory)")
 	fs.Parse(args)
@@ -419,7 +414,7 @@ func runStateUpdateQuest(d *db.DB, args []string) int {
 	}
 
 	if *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: fellowship state update-quest --name <name> [--worktree PATH] [--branch BRANCH] [--task-id ID] [--status STATUS] [--dir DIR]")
+		fmt.Fprintln(os.Stderr, "usage: fellowship state update-quest --name <name> [--worktree PATH] [--branch BRANCH] [--status STATUS] [--dir DIR]")
 		return 1
 	}
 
@@ -434,9 +429,6 @@ func runStateUpdateQuest(d *db.DB, args []string) int {
 	}
 	if *branch != "" {
 		updates["branch"] = *branch
-	}
-	if *taskID != "" {
-		updates["task_id"] = *taskID
 	}
 	if *statusFlag != "" {
 		updates["status"] = *statusFlag

@@ -91,8 +91,6 @@ func TestClassifyHealthy(t *testing.T) {
 
 	seedQuest(t, d, &state.State{
 		QuestName: "quest-api",
-		TaskID:    "t1",
-		TeamName:  "team",
 		Phase:     "Implement",
 	})
 	seedEvent(t, d, testEvent{
@@ -147,8 +145,6 @@ func TestClassifyStalledWithGateID(t *testing.T) {
 
 	seedQuest(t, d, &state.State{
 		QuestName:   "quest-auth",
-		TaskID:      "t2",
-		TeamName:    "team",
 		Phase:       "Plan",
 		GatePending: true,
 		GateID:      &gateID,
@@ -196,8 +192,6 @@ func TestClassifyStalledGatePendingWithinThreshold(t *testing.T) {
 
 	seedQuest(t, d, &state.State{
 		QuestName:   "quest-fresh",
-		TaskID:      "t3",
-		TeamName:    "team",
 		Phase:       "Plan",
 		GatePending: true,
 		GateID:      &gateID,
@@ -237,8 +231,6 @@ func TestClassifyZombie(t *testing.T) {
 
 	seedQuest(t, d, &state.State{
 		QuestName: "quest-dead",
-		TaskID:    "t4",
-		TeamName:  "team",
 		Phase:     "Implement",
 	})
 	// Last activity was 30 minutes ago
@@ -280,8 +272,6 @@ func TestClassifyZombieWithCheckpoint(t *testing.T) {
 
 	seedQuest(t, d, &state.State{
 		QuestName: "quest-resumable",
-		TaskID:    "t5",
-		TeamName:  "team",
 		Phase:     "Implement",
 	})
 	// Last activity was 30 minutes ago
@@ -333,8 +323,6 @@ func TestClassifyComplete(t *testing.T) {
 
 	seedQuest(t, d, &state.State{
 		QuestName: "quest-done",
-		TaskID:    "t6",
-		TeamName:  "team",
 		Phase:     "Review",
 	})
 	seedFinished(t, d, "quest-done", "completed")
@@ -407,8 +395,6 @@ func TestClassifyStalledNoGateID(t *testing.T) {
 
 	seedQuest(t, d, &state.State{
 		QuestName:   "quest-stuck",
-		TaskID:      "t7",
-		TeamName:    "team",
 		Phase:       "Review",
 		GatePending: true,
 		GateID:      nil,
@@ -469,8 +455,6 @@ func TestClassifyStruggling(t *testing.T) {
 
 	seedQuest(t, d, &state.State{
 		QuestName: "quest-struggling",
-		TaskID:    "t8",
-		TeamName:  "team",
 		Phase:     "Plan",
 	})
 	seedEvent(t, d, testEvent{Timestamp: now.Format(time.RFC3339), Quest: "quest-struggling", Type: "gate_rejected", Phase: "Plan"})
@@ -514,8 +498,6 @@ func TestClassifyNotStrugglingWithOneRejection(t *testing.T) {
 
 	seedQuest(t, d, &state.State{
 		QuestName: "quest-one-rejection",
-		TaskID:    "t9",
-		TeamName:  "team",
 		Phase:     "Plan",
 	})
 	seedEvent(t, d, testEvent{Timestamp: now.Format(time.RFC3339), Quest: "quest-one-rejection", Type: "gate_rejected", Phase: "Plan"})

@@ -21,6 +21,7 @@ const (
 	MetadataUpdated EventType = "metadata_updated"
 	QuestHeld       EventType = "quest_held"
 	QuestUnheld     EventType = "quest_unheld"
+	QuestCompleted  EventType = "quest_completed"
 
 	// Palantir alert types. The palantir monitor records its alerts as events
 	// so retrospectives can read them back with the same CLI as gate history.
@@ -34,7 +35,7 @@ const (
 // allTypes lists every event type the CLI accepts on `events post`.
 var allTypes = []EventType{
 	GateSubmitted, GateApproved, GateRejected, PhaseTransition,
-	LembasCompleted, MetadataUpdated, QuestHeld, QuestUnheld,
+	LembasCompleted, MetadataUpdated, QuestHeld, QuestUnheld, QuestCompleted,
 	PalantirStuck, PalantirDrift, PalantirConflict, PalantirHealth, PalantirNotes,
 }
 

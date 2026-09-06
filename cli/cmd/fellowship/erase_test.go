@@ -29,7 +29,7 @@ func TestStoreOpen_MissingStoreBlocksWhenAFellowshipIsExpected(t *testing.T) {
 		d.Close()
 		t.Fatal("expected a no-store error")
 	}
-	for _, name := range []string{"gate-guard", "gate-submit", "gate-prereq", "completion-guard", "metadata-track", "file-track"} {
+	for _, name := range []string{"gate-guard", "gate-submit", "gate-prereq", "file-track"} {
 		if got := storeOpenExit(root, []string{"hook", name}, err); got != 2 {
 			t.Errorf("%s with the store erased: exit %d, want 2 (block)", name, got)
 		}
@@ -166,8 +166,8 @@ func TestRunHookWith_MissingQuestRow(t *testing.T) {
 		t.Errorf("deleted row on a quest with history: exit %d, want 2 (block)", got)
 	}
 	// Every gate hook agrees, not just the guard.
-	if got := runHookWith("completion-guard", bashInput("ls"), worktree, d); got != 2 {
-		t.Errorf("completion-guard: exit %d, want 2 (block)", got)
+	if got := runHookWith("file-track", bashInput("ls"), worktree, d); got != 2 {
+		t.Errorf("file-track: exit %d, want 2 (block)", got)
 	}
 
 	// A row that exists is unaffected by any of this.

@@ -340,10 +340,14 @@ func runInit(d *db.DB, args []string) int {
 
 	// Auto-approved gates come from the merged fellowship config: the main
 	// repo's .fellowship/config.json, overridden by ~/.claude/fellowship.json.
-	autoApprove := datadir.AutoApproveGates(mainRoot)
-	if err := validateAutoApproveGates(autoApprove); err != nil {
-		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
-		return 1
+	// An entry that is not a gate-bearing phase is dropped with a warning
+	// rather than failing init: a user config written by an older plugin
+	// (the retired Onboard/Adversarial names, or "Review") otherwise failed
+	// every quest in every project at init, with nothing pointing at the file.
+	autoApprove, unknown := splitAutoApproveGates(datadir.AutoApproveGates(mainRoot))
+	if len(unknown) > 0 {
+		fmt.Fprintf(os.Stderr, "fellowship: warning: ignoring unknown gates.autoApprove entries %s (valid: %s) — update ~/.claude/fellowship.json or the project's config.json\n",
+			strings.Join(quoteAll(unknown), ", "), strings.Join(autoApprovablePhases(), ", "))
 	}
 	if autoApprove == nil {
 		autoApprove = []string{}
@@ -355,7 +359,16 @@ func runInit(d *db.DB, args []string) int {
 	// being submitted, and gate-guard waves it through because nothing is
 	// pending. Only the lead may do that. On a row being created for the first
 	// time the flags are ordinary bootstrap and anyone may pass them.
-	callerIsLead, leadKnown := initCallerIsLead(d, mainRoot)
+	callerIsLead, leadKnown, leadID := initCallerIsLead(d, mainRoot)
+	// The session id recorded against the quest identifies the TEAMMATE
+	// working it. A teammate spawned in-process with the Agent tool shares
+	// the lead's session id, and recording that would make the lead "a
+	// teammate" — and `state init --claim-lead` would then refuse the lead
+	// itself. Only an id that differs from the lead's identifies anyone.
+	questSession := state.CurrentSessionID()
+	if questSession == leadID {
+		questSession = ""
+	}
 	// Whether --plan-skip's history entry is written: only alongside a phase
 	// move that actually happened.
 	recordSkipped := true
@@ -400,8 +413,8 @@ func runInit(d *db.DB, args []string) int {
 			// `state init --claim-lead` refuse a session that is already a
 			// teammate; a session that cannot be identified records nothing
 			// and leaves that check to gate-guard.
-			if sid := state.CurrentSessionID(); sid != "" {
-				existing.SessionID = sid
+			if questSession != "" {
+				existing.SessionID = questSession
 			}
 			if err := state.Upsert(conn, existing); err != nil {
 				return err
@@ -413,7 +426,7 @@ func runInit(d *db.DB, args []string) int {
 				QuestName:        qn,
 				Phase:            initPhase,
 				AutoApproveGates: autoApprove,
-				SessionID:        state.CurrentSessionID(),
+				SessionID:        questSession,
 			}
 			if err := state.Upsert(conn, s); err != nil {
 				return err
@@ -444,16 +457,48 @@ func runInit(d *db.DB, args []string) int {
 //
 // leadKnown is what separates "you are not the lead" (a teammate — refuse) from
 // "nobody knows who the lead is" (an old fellowship, or a plain shell — refuse
-// the phase move, but do not accuse anyone).
-func initCallerIsLead(d *db.DB, mainRoot string) (callerIsLead, leadKnown bool) {
-	lead := ""
+// the phase move, but do not accuse anyone). leadID is the recorded id itself.
+//
+// The session id is not enough on its own: a teammate spawned in-process with
+// the Agent tool runs under the lead's session id, and its environment carries
+// nothing that names the agent. What a teammate cannot fake from its own
+// worktree is where the process stands, so the lead is the lead's session AND
+// a working directory inside the main working tree. (The Bash form from a
+// teammate — `cd <main> && fellowship init --phase ...` — is refused earlier by
+// gate-guard, which does see the agent id in its hook payload.)
+func initCallerIsLead(d *db.DB, mainRoot string) (callerIsLead, leadKnown bool, leadID string) {
 	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		lead = state.LeadSessionID(conn, mainRoot, datadir.Resolve(mainRoot))
+		leadID = state.LeadSessionID(conn, mainRoot, datadir.Resolve(mainRoot))
 		return nil
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: warning: could not read the recorded lead: %v\n", err)
 	}
-	return hooks.IsLeadSession(state.CurrentSessionID(), lead), lead != ""
+	callerIsLead = hooks.IsLeadSession(state.CurrentSessionID(), leadID) && sessionInMainWorktree(mainRoot)
+	return callerIsLead, leadID != "", leadID
+}
+
+// splitAutoApproveGates partitions gates.autoApprove entries into the ones
+// that name a gate-bearing phase and the ones that do not.
+func splitAutoApproveGates(gates []string) (valid, unknown []string) {
+	for _, g := range gates {
+		if validateAutoApproveGates([]string{g}) == nil {
+			valid = append(valid, g)
+		} else {
+			unknown = append(unknown, g)
+		}
+	}
+	if gates != nil && valid == nil {
+		valid = []string{}
+	}
+	return valid, unknown
+}
+
+func quoteAll(ss []string) []string {
+	out := make([]string, len(ss))
+	for i, s := range ss {
+		out[i] = fmt.Sprintf("%q", s)
+	}
+	return out
 }
 
 // resolveInitQuestName picks the quest name `fellowship init` records: the

@@ -9,14 +9,18 @@ import (
 	"zombiezen.com/go/sqlite"
 )
 
-func CompletionGuard(s *state.State, input *HookInput) HookResult {
-	if input.ToolInput.Status != "completed" {
-		return HookResult{}
+// CompletionCheck decides whether a quest may be marked complete: only in the
+// terminal phase, with no gate awaiting the lead's decision. It is the one
+// rule behind `fellowship complete` and behind gate-guard's refusal of that
+// command's Bash form, so the CLI and the hook cannot disagree.
+func CompletionCheck(s *state.State) HookResult {
+	if s == nil {
+		return HookResult{Block: true, Message: "Cannot complete quest — no quest state."}
 	}
 	if s.Phase != state.TerminalPhase {
 		return HookResult{
 			Block: true,
-			Message: fmt.Sprintf("Cannot complete task — current phase is '%s'. Submit and clear the gates for %s before completing (the quest ends in %s).",
+			Message: fmt.Sprintf("Cannot complete quest — current phase is '%s'. Submit and clear the gates for %s before completing (the quest ends in %s).",
 				s.Phase, strings.Join(state.GatePhases(), " → "), state.TerminalPhase),
 		}
 	}
@@ -26,7 +30,13 @@ func CompletionGuard(s *state.State, input *HookInput) HookResult {
 	if s.GatePending {
 		return HookResult{
 			Block:   true,
-			Message: "Cannot complete task — a gate is still awaiting the lead's decision.",
+			Message: "Cannot complete quest — a gate is still awaiting the lead's decision.",
+		}
+	}
+	if s.Held {
+		return HookResult{
+			Block:   true,
+			Message: "Cannot complete quest — the quest is held by the lead. Wait for the lead to unhold it.",
 		}
 	}
 	return HookResult{}

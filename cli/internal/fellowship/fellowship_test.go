@@ -153,7 +153,7 @@ func TestAddAndRemoveScout(t *testing.T) {
 		if err := InitFellowship(conn, "f1", "/tmp", "main"); err != nil {
 			t.Fatal(err)
 		}
-		if err := AddScout(conn, ScoutEntry{Name: "s1", Question: "how?", TaskID: "t1"}); err != nil {
+		if err := AddScout(conn, ScoutEntry{Name: "s1", Question: "how?"}); err != nil {
 			t.Fatal(err)
 		}
 		scouts, err := ListScouts(conn)
@@ -289,10 +289,10 @@ func TestSaveFellowship_RoundTrip(t *testing.T) {
 			MainRepo:   "/path/to/repo",
 			BaseBranch: "main",
 			Quests: []QuestEntry{
-				{Name: "quest-1", TaskDescription: "do stuff", Worktree: "/tmp/wt", Branch: "fellowship/quest-1", TaskID: "t1"},
+				{Name: "quest-1", TaskDescription: "do stuff", Worktree: "/tmp/wt", Branch: "fellowship/quest-1"},
 			},
 			Scouts: []ScoutEntry{
-				{Name: "scout-1", Question: "how does X work?", TaskID: "t2"},
+				{Name: "scout-1", Question: "how does X work?"},
 			},
 			Groups: []GroupEntry{
 				{Name: "group-1", Quests: []string{"quest-1"}, Scouts: []string{"scout-1"}},

@@ -38,17 +38,29 @@ func TestParseInput_SendMessage(t *testing.T) {
 	}
 }
 
-func TestParseInput_TaskUpdate(t *testing.T) {
-	input := `{"tool_input":{"status":"completed","metadata":{"phase":"Research"}}}`
+// The SendMessage tool carries its body in `message`; `content` is the field
+// the pre-implicit-team tool used. Both must read as the gate text.
+func TestParseInput_SendMessageMessageField(t *testing.T) {
+	input := `{"tool_name":"SendMessage","tool_input":{"to":"main","summary":"gate","message":"[GATE] Research complete\n- [x] done"}}`
 	hi, err := ParseInput(strings.NewReader(input))
 	if err != nil {
 		t.Fatalf("ParseInput failed: %v", err)
 	}
-	if hi.ToolInput.Status != "completed" {
-		t.Errorf("Status = %q", hi.ToolInput.Status)
+	if got := hi.ToolInput.MessageBody(); got != "[GATE] Research complete\n- [x] done" {
+		t.Errorf("MessageBody = %q", got)
 	}
-	if hi.ToolInput.Metadata.Phase != "Research" {
-		t.Errorf("Metadata.Phase = %q", hi.ToolInput.Metadata.Phase)
+}
+
+// A hook that fires inside a subagent carries agent_id and agent_type next to
+// the shared session_id; the main conversation's payload carries neither.
+func TestParseInput_SubagentIdentity(t *testing.T) {
+	input := `{"session_id":"s-1","agent_id":"a-9","agent_type":"general-purpose","tool_name":"Bash","tool_input":{"command":"ls"}}`
+	hi, err := ParseInput(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("ParseInput failed: %v", err)
+	}
+	if hi.SessionID != "s-1" || hi.AgentID != "a-9" || hi.AgentType != "general-purpose" {
+		t.Errorf("identity = %q/%q/%q", hi.SessionID, hi.AgentID, hi.AgentType)
 	}
 }
 
