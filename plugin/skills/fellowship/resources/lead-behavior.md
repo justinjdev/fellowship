@@ -78,7 +78,7 @@ Health monitoring (the `fellowship health` sweep — stalled/zombie/struggling q
 
 ## Reactive (responding to teammate events)
 
-- **Gate message received** → check `config.gates.autoApprove` (default: empty — no auto-approvals). If the specific gate name is explicitly listed in the config, auto-approve and relay. Otherwise (including when no config exists), surface to user for approval — never auto-approve by default. After handling the gate, send a "check" message to palantir (if active) to trigger a monitoring sweep, or run `fellowship health --json` yourself if palantir is not active (see Health Monitoring Without Palantir above). **Track the gate** — increment the gate count for this teammate (see Gate Tracking below).
+- **Gate message received** → check `config.gates.autoApprove` (default: empty — no auto-approvals). If the specific gate name is explicitly listed in the config, auto-approve and relay. Otherwise (including when no config exists), surface it to the user with `AskUserQuestion` (options Approve / Reject with feedback / Hold — see "Surfacing a Gate" in fellowship/SKILL.md) — never auto-approve by default. After handling the gate, send a "check" message to palantir (if active) to trigger a monitoring sweep, or run `fellowship health --json` yourself if palantir is not active (see Health Monitoring Without Palantir above). **Track the gate** — increment the gate count for this teammate (see Gate Tracking below).
 - **Quest completed** → a `[COMPLETE]` message (or the agent's final result carrying it) is the "quest completed" event. **FIRST verify completion in the store** (see Gate Tracking below) — nothing is "marked done" by the lead; the store already says completed. If the checks fail, reject the completion and demand the missing gates. Only after all checks pass: record the PR URL, report to user.
 - **Quest stuck/errored** → report to user with context (phase, error), offer respawn
 - **Teammate idle** → normal, no action needed
@@ -111,7 +111,7 @@ This is defense-in-depth — the CLI and gate-guard also mechanically refuse `fe
 - **Issue references detected** (`#\d+` in quest description) → invoke `/missive` to fetch issue context before spawning. Use missive output for `{issue_context}` placeholder and branch name suggestion. Spawn one quest per issue if multiple references found.
 - **"scout: {question}"** → spawn new scout teammate (see Spawn a Scout). Scouts don't count toward palantir's quest threshold.
 - **"status"** → read `fellowship state show --json` and `health --json`, present structured progress report (see [progress-tracking.md](progress-tracking.md))
-- **"approve" / "reject"** → relay to the relevant teammate
+- **"approve" / "reject"** (typed in chat, or chosen in the gate question) → run the approval or rejection procedure for the relevant teammate
 - **"approve all gates for {group_name}"** → batch-approve all pending gates in the named group using `~/.claude/fellowship/bin/fellowship group approve <name>`. Report which quests were approved.
 - **"hold quest-N"** → `~/.claude/fellowship/bin/fellowship hold --dir <worktree> [--reason "..."]`, notify teammate via SendMessage
 - **"unhold quest-N"** → `~/.claude/fellowship/bin/fellowship unhold --dir <worktree>`, notify teammate via SendMessage with updated instructions
