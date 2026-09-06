@@ -181,6 +181,16 @@ Each quest runs the full `/quest` lifecycle: **Research → Plan → Implement �
 
 **With `config.gates.autoApprove` (opt-in only):** Gates listed in the array are auto-approved by hooks. Valid gate names are the three phases a gate leaves: `"Research"`, `"Plan"`, `"Implement"`. `"Review"` is rejected — no gate leaves it.
 
+### Surfacing a Gate
+
+A gate that is not auto-approved is put to the user with `AskUserQuestion`, one gate per question, never a free-text "say approve". First show the teammate's `[GATE]` message (its Summary, Artifacts, Risks and Next Phase Needs, plus the hook's auto-generated Gate Context), then ask:
+
+- `question`: `"<quest_name> submitted its <phase> gate. Approving advances it to <next_phase>."`
+- `header`: `"Gate: <quest_name>"` (trimmed to fit)
+- `options`: `"Approve"` — run the approval procedure; `"Reject with feedback"` — ask a follow-up `AskUserQuestion` for the feedback text (or take it from the "Other" answer), then run the rejection procedure; `"Hold"` — `fellowship hold --dir <worktree>` and tell the teammate.
+
+A user answer typed in chat ("approve", "reject: use a table") is handled the same way. Never combine two quests' gates into one question, and never ask about a gate that is already decided.
+
 ### Gate Approval Procedure
 
 1. Read the worktree path: `fellowship state show --json` (quests[].worktree) — or the path the lead itself provisioned
