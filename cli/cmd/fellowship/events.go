@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -99,11 +100,23 @@ func runEventsPost(d *db.DB, args []string) int {
 	quest := fs.String("quest", "", "Quest the event is about (required)")
 	eventType := fs.String("type", "", "Event type (required)")
 	phase := fs.String("phase", "", "Quest phase")
-	detail := fs.String("detail", "", "Detail text (required)")
+	detail := fs.String("detail", "", "Detail text (required); \"-\" reads it from stdin")
 	fs.Parse(args)
 
+	// The detail is often text written by another agent (a notes entry, an
+	// alert). Reading it from stdin lets the caller pass it without ever
+	// putting it on a shell command line, where its metacharacters would run.
+	if *detail == "-" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fellowship: reading --detail from stdin: %v\n", err)
+			return 1
+		}
+		*detail = strings.TrimRight(string(data), "\n")
+	}
+
 	if *quest == "" || *eventType == "" || *detail == "" {
-		fmt.Fprintln(os.Stderr, `usage: fellowship events post --quest <name> --type <type> --detail "TEXT" [--phase PHASE]`)
+		fmt.Fprintln(os.Stderr, `usage: fellowship events post --quest <name> --type <type> --detail "TEXT" [--phase PHASE]   (--detail - reads the text from stdin)`)
 		return 1
 	}
 

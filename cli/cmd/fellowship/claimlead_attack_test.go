@@ -112,6 +112,8 @@ func TestRunInit_RecordsTheTeammateSession(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Chdir(root)
 	d := db.OpenTest(t)
+	// A teammate id only means something relative to a known lead.
+	recordLead(t, d, root, "lead-1")
 
 	t.Setenv("CLAUDE_CODE_SESSION_ID", "team-1")
 	if got := runInit(d, []string{"--quest", "alpha"}); got != 0 {

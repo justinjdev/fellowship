@@ -42,16 +42,6 @@
             "timeout": 10
           }
         ]
-      },
-      {
-        "matcher": "TaskUpdate",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/plugin/hooks/scripts/fellowship.sh hook completion-guard",
-            "timeout": 5
-          }
-        ]
       }
     ],
     "PostToolUse": [
@@ -66,21 +56,21 @@
         ]
       },
       {
-        "matcher": "TaskUpdate",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/plugin/hooks/scripts/fellowship.sh hook metadata-track",
-            "timeout": 5
-          }
-        ]
-      },
-      {
         "matcher": "Edit|Write|NotebookEdit",
         "hooks": [
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/plugin/hooks/scripts/fellowship.sh hook file-track",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/plugin/hooks/scripts/fellowship.sh hook agent-track",
             "timeout": 5
           }
         ]

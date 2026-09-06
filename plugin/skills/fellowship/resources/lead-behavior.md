@@ -11,7 +11,7 @@ digraph gandalf {
     "Quest stuck?" [shape=diamond];
     "Surface gate to user, WAIT" [shape=box];
     "Relay user decision to teammate" [shape=box];
-    "Record PR URL, mark done, report" [shape=box];
+    "Verify completion in the store, record PR URL, report" [shape=box];
     "Reject completion, demand missing gates" [shape=box];
     "Report error, offer respawn" [shape=box];
     "No action (idle is normal)" [shape=box];
@@ -24,7 +24,7 @@ digraph gandalf {
     "status?" [shape=diamond];
     "Present progress report" [shape=box];
     "wrap up?" [shape=diamond];
-    "Shutdown all, summarize, TeamDelete" [shape=box];
+    "Stop teammates, summarize, disband" [shape=box];
     "Relay message to teammate" [shape=box];
 
     "Event received" -> "From teammate?";
@@ -34,7 +34,7 @@ digraph gandalf {
     "Surface gate to user, WAIT" -> "Relay user decision to teammate";
     "Gate message?" -> "Quest completed?" [label="no"];
     "Quest completed?" -> "All expected gates + phase Review?" [label="yes"];
-    "All expected gates + phase Review?" -> "Record PR URL, mark done, report" [label="yes"];
+    "All expected gates + phase Review?" -> "Verify completion in the store, record PR URL, report" [label="yes"];
     "All expected gates + phase Review?" -> "Reject completion, demand missing gates" [label="no"];
     "Quest completed?" -> "Quest stuck?" [label="no"];
     "Quest stuck?" -> "Report error, offer respawn" [label="yes"];
@@ -59,7 +59,7 @@ digraph gandalf {
     "approve/reject?" -> "status?" [label="no"];
     "status?" -> "Present progress report" [label="yes"];
     "status?" -> "wrap up?" [label="no"];
-    "wrap up?" -> "Shutdown all, summarize, TeamDelete" [label="yes"];
+    "wrap up?" -> "Stop teammates, summarize, disband" [label="yes"];
     "wrap up?" -> "Relay message to teammate" [label="no"];
 }
 ```
@@ -79,7 +79,7 @@ Health monitoring (the `fellowship health` sweep — stalled/zombie/struggling q
 ## Reactive (responding to teammate events)
 
 - **Gate message received** → check `config.gates.autoApprove` (default: empty — no auto-approvals). If the specific gate name is explicitly listed in the config, auto-approve and relay. Otherwise (including when no config exists), surface to user for approval — never auto-approve by default. After handling the gate, send a "check" message to palantir (if active) to trigger a monitoring sweep, or run `fellowship health --json` yourself if palantir is not active (see Health Monitoring Without Palantir above). **Track the gate** — increment the gate count for this teammate (see Gate Tracking below).
-- **Quest completed** → **FIRST verify gate completeness** (see Gate Tracking below). If the teammate has not sent all expected gates, reject the completion and demand the missing gates. Only after all gates are accounted for: record PR URL, mark task done via `TaskUpdate`, report to user.
+- **Quest completed** → a `[COMPLETE]` message (or the agent's final result carrying it) is the "quest completed" event. **FIRST verify completion in the store** (see Gate Tracking below) — nothing is "marked done" by the lead; the store already says completed. If the checks fail, reject the completion and demand the missing gates. Only after all checks pass: record the PR URL, report to user.
 - **Quest stuck/errored** → report to user with context (phase, error), offer respawn
 - **Teammate idle** → normal, no action needed
 
@@ -94,31 +94,30 @@ No gate leaves Review — it is the last phase, and the quest ends inside it whe
 
 Each gate received (whether auto-approved or user-approved) increments the count.
 
-**Before accepting quest completion**, Gandalf verifies:
-1. The teammate's gate count equals the expected count for its mode (3 standard/promoted, 1 plan-driven)
-2. The teammate's phase metadata shows "Review", with no gate still pending
+**Before accepting quest completion**, Gandalf verifies from the store — nothing is "marked done" by the lead:
+1. `fellowship history show --quest <name> --json` lists every gate submitted/approved, matching the expected count for its mode (3 standard/promoted, 1 plan-driven)
+2. `gate status --dir <worktree>` shows Review with no gate pending, and `fellowship history show --quest <name> --json` shows `status: completed` with a `quest_completed` event (`fellowship events --quest <name> --json`) — the real evidence the teammate ran `fellowship complete`, since the store's own `status: completed` (`fellowship state show --json`) can also be set directly by the lead's `state update-quest --status completed`
 
 If either check fails, Gandalf rejects the completion:
 - Message the teammate: "Gate discipline violation — you have completed {N}/{expected} gates. You must submit gates for all phase transitions before completing. Missing: {list of missing transitions}."
-- Do NOT mark the task as done
 - Do NOT record a PR URL
 - Report the violation to the user
 
-This is defense-in-depth — the `completion-guard` hook also mechanically blocks `TaskUpdate(status: "completed")` unless the quest's phase is "Review" with no gate pending, but Gandalf's verification catches cases where the hooks can't (e.g., store corruption, manual overrides).
+This is defense-in-depth — the CLI and gate-guard also mechanically refuse `fellowship complete` unless the quest's phase is Review with no gate pending, but Gandalf's verification catches cases where the hooks can't (e.g., store corruption, manual overrides).
 
 ## Proactive (responding to user commands)
 
 - **"quest: {desc}"** → spawn new quest teammate (see Spawn a Quest). After spawning, send a "check" message to palantir (if active) with the updated quest list, or run `fellowship health --json` yourself if palantir is not active (see Health Monitoring Without Palantir above).
 - **Issue references detected** (`#\d+` in quest description) → invoke `/missive` to fetch issue context before spawning. Use missive output for `{issue_context}` placeholder and branch name suggestion. Spawn one quest per issue if multiple references found.
 - **"scout: {question}"** → spawn new scout teammate (see Spawn a Scout). Scouts don't count toward palantir's quest threshold.
-- **"status"** → read task list (including metadata), present structured progress report (see [progress-tracking.md](progress-tracking.md))
+- **"status"** → read `fellowship state show --json` and `health --json`, present structured progress report (see [progress-tracking.md](progress-tracking.md))
 - **"approve" / "reject"** → relay to the relevant teammate
 - **"approve all gates for {group_name}"** → batch-approve all pending gates in the named group using `~/.claude/fellowship/bin/fellowship group approve <name>`. Report which quests were approved.
 - **"hold quest-N"** → `~/.claude/fellowship/bin/fellowship hold --dir <worktree> [--reason "..."]`, notify teammate via SendMessage
 - **"unhold quest-N"** → `~/.claude/fellowship/bin/fellowship unhold --dir <worktree>`, notify teammate via SendMessage with updated instructions
-- **"cancel quest-N"** → send `shutdown_request` to teammate, preserve worktree
+- **"cancel quest-N"** → `TaskStop(task_id: "quest-N")`, then `fellowship state update-quest --dir <root> --name quest-N --status cancelled`, preserve worktree
 - **"tell quest-N to ..."** → relay message to specific teammate via `SendMessage`
-- **"wrap up" / "disband"** → shutdown all teammates, synthesize summary, `TeamDelete`
+- **"wrap up" / "disband"** → `TaskStop(task_id: "<name>")` every teammate still running (quests, scouts, palantir); idle ones need nothing; synthesize summary; no team object is created or torn down — the fellowship is the session's implicit team
 - **"promote {scout_name}" / "promote that scout to a quest"** → follow Scout-to-Quest Promotion protocol (see below)
 
 ## Scout-to-Quest Promotion
@@ -130,10 +129,9 @@ When the user explicitly requests promotion (e.g., "promote scout-auth findings 
 3. **Verify findings exist:** If the file doesn't exist, tell the user the scout hasn't written findings yet — cannot promote
 4. **Get task description:** Ask the user what the quest task should be (scout questions are research-oriented; quest tasks should be action-oriented). If the user already provided one, use it
 5. **Spawn promoted quest:**
-   - `TaskCreate` with the quest description
    - Read the findings file content
+   - Provision and verify the worktree (Isolation Pre-flight) and register the quest via `~/.claude/fellowship/bin/fellowship state add-quest --worktree <path>`
    - Spawn a teammate using the quest spawn prompt's **Promoted variant** from spawn-prompts.md, with `{scout_findings_content}` set to the full file content
-   - Register the quest via `~/.claude/fellowship/bin/fellowship state add-quest`
 6. **Report:** Tell the user the promotion is underway
 
 **Important:** Promotion is always explicit — Gandalf never auto-promotes. Scout findings might suggest work that doesn't warrant a quest, or should be folded into an existing quest.

@@ -189,3 +189,17 @@ func TestGateSubmit_BlocksWhenHeld(t *testing.T) {
 		t.Error("a blocked submission must not set gate_pending")
 	}
 }
+
+// The SendMessage tool carries the gate text in `message`; detection and the
+// blocked-prerequisite message must read it there too.
+func TestGateSubmit_ReadsMessageField(t *testing.T) {
+	s := &state.State{Phase: "Research"}
+	input := &HookInput{ToolName: "SendMessage", ToolInput: ToolInput{Message: "[GATE] Research complete"}}
+	result := GateSubmit(s, input)
+	if !result.Block {
+		t.Fatal("a gate in `message` with no prerequisites must be blocked, not ignored")
+	}
+	if !strings.Contains(result.Message, "phase not confirmed") || !strings.Contains(result.Message, "fellowship phase confirm") {
+		t.Errorf("block message should name the phase-confirm prerequisite, got: %s", result.Message)
+	}
+}

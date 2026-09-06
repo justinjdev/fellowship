@@ -30,6 +30,11 @@ type GuardParams struct {
 	// exempting the wrong directory and blocking the right one. Empty falls
 	// back to the process-wide lookup.
 	DataDirName string
+	// StateForDir resolves the quest state registered for a `--dir` a
+	// command names, so `fellowship complete --dir <other>` is judged
+	// against THAT quest. nil means "use the caller's own state"; an error
+	// or a nil state from the resolver blocks, fail closed.
+	StateForDir func(dir string) (*state.State, error)
 }
 
 // dataDirName returns the data directory name to enforce with, falling back to
@@ -41,11 +46,28 @@ func (p GuardParams) dataDirName() string {
 	return datadir.Name()
 }
 
-// IsLeadSession reports whether a hook payload's session id identifies the
-// fellowship's lead. Both ids must be known: an empty id on either side means
+// IsLeadSession reports whether a session id identifies the fellowship's
+// lead. Both ids must be known: an empty id on either side means
 // "unidentifiable", never "the lead".
+//
+// It answers for a SESSION, which is all a CLI command can see (the
+// CLAUDE_CODE_SESSION_ID in its environment). A hook payload knows more —
+// see IsLeadPayload — and hooks must use that instead: a teammate spawned with
+// the Agent tool runs in-process and shares the lead's session id.
 func IsLeadSession(sessionID, leadSessionID string) bool {
 	return sessionID != "" && sessionID == leadSessionID
+}
+
+// IsLeadPayload reports whether a hook payload comes from the lead's own
+// conversation: its session id is the recorded lead's AND it carries no agent
+// id. A payload with an agent id fired inside a subagent — a quest teammate, a
+// scout, palantir, or any other agent the lead spawned — and a subagent is
+// never the lead, whatever session id it shares.
+func IsLeadPayload(input *HookInput, leadSessionID string) bool {
+	if input == nil {
+		return false
+	}
+	return input.AgentID == "" && IsLeadSession(input.SessionID, leadSessionID)
 }
 
 func GateGuard(s *state.State, input *HookInput, p GuardParams) HookResult {
@@ -84,7 +106,7 @@ func GateGuard(s *state.State, input *HookInput, p GuardParams) HookResult {
 	// Every invocation on the line is judged, not just the first: a no-op
 	// `init --phase <current phase>` is waved through below, and stopping at
 	// it would hand a teammate everything chained behind it.
-	if !IsLeadSession(input.SessionID, p.LeadSessionID) {
+	if !IsLeadPayload(input, p.LeadSessionID) {
 		for _, inv := range LeadOnlyCommands(input.ToolInput.Command) {
 			switch inv.Subcommand {
 			case "state":
@@ -106,6 +128,28 @@ func GateGuard(s *state.State, input *HookInput, p GuardParams) HookResult {
 					}
 				}
 			}
+		}
+	}
+
+	// `fellowship complete` ends the quest. The command refuses to run outside
+	// Review, or with a gate pending, or while held — and so does the guard,
+	// so the invariant holds structurally even if the binary the teammate
+	// reaches is not this one. Judged against the same rule the command uses,
+	// for the quest the invocation actually names.
+	for _, dir := range CompleteCommands(input.ToolInput.Command) {
+		target := s
+		if dir != "" && p.StateForDir != nil {
+			resolved, err := p.StateForDir(dir)
+			if err != nil {
+				return HookResult{Block: true, Message: fmt.Sprintf("fellowship: cannot resolve the quest for --dir %q: %v — blocking for safety.", dir, err)}
+			}
+			if resolved == nil {
+				return HookResult{Block: true, Message: fmt.Sprintf("fellowship: no quest is registered for --dir %q — nothing to complete.", dir)}
+			}
+			target = resolved
+		}
+		if result := CompletionCheck(target); result.Block {
+			return result
 		}
 	}
 

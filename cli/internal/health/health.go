@@ -140,7 +140,7 @@ func questWorktrees(conn *db.Conn) (map[string]string, error) {
 func listAllQuests(conn *db.Conn) ([]*state.State, error) {
 	var states []*state.State
 	err := sqlitex.Execute(conn,
-		`SELECT quest_name, task_id, team_name, phase,
+		`SELECT quest_name, phase,
 			gate_pending, gate_id, lembas_completed, metadata_updated,
 			held, held_reason, auto_approve
 			FROM quest_state ORDER BY quest_name`,
@@ -148,23 +148,21 @@ func listAllQuests(conn *db.Conn) ([]*state.State, error) {
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				s := &state.State{
 					QuestName:       stmt.ColumnText(0),
-					TaskID:          stmt.ColumnText(1),
-					TeamName:        stmt.ColumnText(2),
-					Phase:           stmt.ColumnText(3),
-					GatePending:     stmt.ColumnInt(4) != 0,
-					LembasCompleted: stmt.ColumnInt(6) != 0,
-					MetadataUpdated: stmt.ColumnInt(7) != 0,
-					Held:            stmt.ColumnInt(8) != 0,
+					Phase:           stmt.ColumnText(1),
+					GatePending:     stmt.ColumnInt(2) != 0,
+					LembasCompleted: stmt.ColumnInt(4) != 0,
+					MetadataUpdated: stmt.ColumnInt(5) != 0,
+					Held:            stmt.ColumnInt(6) != 0,
 				}
-				if stmt.ColumnType(5) != sqlite.TypeNull {
-					gid := stmt.ColumnText(5)
+				if stmt.ColumnType(3) != sqlite.TypeNull {
+					gid := stmt.ColumnText(3)
 					s.GateID = &gid
 				}
-				if stmt.ColumnType(9) != sqlite.TypeNull {
-					hr := stmt.ColumnText(9)
+				if stmt.ColumnType(7) != sqlite.TypeNull {
+					hr := stmt.ColumnText(7)
 					s.HeldReason = &hr
 				}
-				if aa := stmt.ColumnText(10); aa != "" {
+				if aa := stmt.ColumnText(8); aa != "" {
 					json.Unmarshal([]byte(aa), &s.AutoApproveGates)
 				}
 				states = append(states, s)

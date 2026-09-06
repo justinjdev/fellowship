@@ -14,20 +14,41 @@ type HookInput struct {
 	// the payload that distinguishes the lead's session from a teammate's when
 	// both resolve to the same git top-level (see the worktree-guard).
 	SessionID string `json:"session_id,omitempty"`
+	// AgentID is set only when the hook fires inside a subagent — a teammate
+	// spawned with the Agent tool. Such an agent runs in-process and shares
+	// the lead's session id, so the session id alone can no longer tell the
+	// lead from a teammate: a payload that carries an agent id is never the
+	// lead's own conversation.
+	AgentID string `json:"agent_id,omitempty"`
+	// AgentType is the subagent's type (e.g. "general-purpose",
+	// "fellowship:scout"), present alongside AgentID.
+	AgentType string `json:"agent_type,omitempty"`
+	// RawToolInput is the tool_input object as it arrived, every field kept.
+	// A hook that rewrites one field (gate-submit's enrichment) hands the
+	// whole object back, so a harness that replaces tool_input with the
+	// hook's updatedInput rather than merging it does not lose `to`.
+	RawToolInput map[string]any `json:"-"`
 }
 
 type ToolInput struct {
-	Command      string        `json:"command,omitempty"`
-	FilePath     string        `json:"file_path,omitempty"`
-	NotebookPath string        `json:"notebook_path,omitempty"`
-	Content      string        `json:"content,omitempty"`
-	Skill        string        `json:"skill,omitempty"`
-	Status       string        `json:"status,omitempty"`
-	Metadata     *TaskMetadata `json:"metadata,omitempty"`
+	Command      string `json:"command,omitempty"`
+	FilePath     string `json:"file_path,omitempty"`
+	NotebookPath string `json:"notebook_path,omitempty"`
+	Content      string `json:"content,omitempty"`
+	// Message is the SendMessage tool's body. Content is the field the
+	// pre-implicit-team tool used; both are read so a gate is detected
+	// whichever name the running Claude Code sends.
+	Message string `json:"message,omitempty"`
+	Skill   string `json:"skill,omitempty"`
 }
 
-type TaskMetadata struct {
-	Phase string `json:"phase,omitempty"`
+// MessageBody returns the text of a SendMessage call, whichever field carried
+// it.
+func (t ToolInput) MessageBody() string {
+	if t.Message != "" {
+		return t.Message
+	}
+	return t.Content
 }
 
 func ParseInput(r io.Reader) (*HookInput, error) {
@@ -41,6 +62,12 @@ func ParseInput(r io.Reader) (*HookInput, error) {
 	var hi HookInput
 	if err := json.Unmarshal(data, &hi); err != nil {
 		return nil, fmt.Errorf("parsing input: %w", err)
+	}
+	var raw struct {
+		ToolInput map[string]any `json:"tool_input"`
+	}
+	if err := json.Unmarshal(data, &raw); err == nil {
+		hi.RawToolInput = raw.ToolInput
 	}
 	return &hi, nil
 }

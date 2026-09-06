@@ -28,7 +28,7 @@ type SubmitResult struct {
 }
 
 func GateSubmit(s *state.State, input *HookInput) SubmitResult {
-	content := input.ToolInput.Content
+	content := input.ToolInput.MessageBody()
 
 	if !hasGateMarker(content) {
 		return SubmitResult{}
@@ -47,12 +47,12 @@ func GateSubmit(s *state.State, input *HookInput) SubmitResult {
 		missing = append(missing, "lembas not completed")
 	}
 	if !s.MetadataUpdated {
-		missing = append(missing, "metadata not updated")
+		missing = append(missing, "phase not confirmed")
 	}
 	if len(missing) > 0 {
 		return SubmitResult{
 			Block:   true,
-			Message: fmt.Sprintf("Gate blocked: %s. Run /lembas and update task metadata before submitting a gate.", strings.Join(missing, ", ")),
+			Message: fmt.Sprintf("Gate blocked: %s. Run /lembas and \"fellowship phase confirm --dir <worktree> --phase <phase>\" before submitting a gate.", strings.Join(missing, ", ")),
 		}
 	}
 
@@ -60,7 +60,7 @@ func GateSubmit(s *state.State, input *HookInput) SubmitResult {
 	if err != nil {
 		msg := fmt.Sprintf("fellowship: %v — cannot submit gate", err)
 		if s.Phase == state.TerminalPhase {
-			msg = "Quest is in its final phase — no further gates to submit. Open the PR and mark the task complete."
+			msg = "Quest is in its final phase — no further gates to submit. Open the PR and run \"fellowship complete\"."
 		}
 		return SubmitResult{Block: true, Message: msg}
 	}
@@ -102,15 +102,15 @@ type HookSpecificOutput struct {
 }
 
 type hookSpecificOutputInner struct {
-	HookEventName            string            `json:"hookEventName"`
-	PermissionDecision       string            `json:"permissionDecision"`
-	PermissionDecisionReason string            `json:"permissionDecisionReason,omitempty"`
-	UpdatedInput             map[string]string `json:"updatedInput,omitempty"`
+	HookEventName            string         `json:"hookEventName"`
+	PermissionDecision       string         `json:"permissionDecision"`
+	PermissionDecisionReason string         `json:"permissionDecisionReason,omitempty"`
+	UpdatedInput             map[string]any `json:"updatedInput,omitempty"`
 }
 
 // NewAllowOutput returns a HookSpecificOutput that allows the tool call
 // with optional input mutation.
-func NewAllowOutput(updatedInput map[string]string) HookSpecificOutput {
+func NewAllowOutput(updatedInput map[string]any) HookSpecificOutput {
 	return HookSpecificOutput{
 		HSO: hookSpecificOutputInner{
 			HookEventName:      "PreToolUse",

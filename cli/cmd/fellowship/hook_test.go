@@ -146,7 +146,7 @@ func TestStoreOpen_CorruptStoreFailsClosedForGateHooks(t *testing.T) {
 		d.Close()
 		t.Fatal("expected an error opening a corrupt store")
 	}
-	for _, name := range []string{"gate-guard", "gate-submit", "gate-prereq", "completion-guard", "metadata-track", "file-track"} {
+	for _, name := range []string{"gate-guard", "gate-submit", "gate-prereq", "file-track"} {
 		if got := storeOpenExit(root, []string{"hook", name}, err); got != 2 {
 			t.Errorf("%s with a corrupt store: exit %d, want 2 (block)", name, got)
 		}
@@ -298,7 +298,7 @@ func TestRunHookWith(t *testing.T) {
 		},
 		{
 			name: "malformed JSON blocks the recording hooks",
-			hook: "completion-guard",
+			hook: "file-track",
 			cwd:  worktree,
 			setup: func(t *testing.T) *db.DB {
 				d := fellowshipWith(t, root, map[string]string{"quest-alpha": worktree})

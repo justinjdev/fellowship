@@ -262,3 +262,70 @@ func shellSegments(command string) []string {
 	flush()
 	return segments
 }
+
+// CompleteCommands reports every `fellowship complete` invocation in a Bash
+// command line — through operators, substitutions, `sh -c` and `eval`, exactly
+// as LeadOnlyCommands scans — as the `--dir` each one names ("" when it names
+// none, meaning the process working directory). gate-guard judges each
+// against CompletionCheck for THAT quest, so the quest cannot be ended before
+// Review by shelling past the command's own refusal, and so a `--dir` naming
+// another quest is judged against that quest rather than the caller's.
+func CompleteCommands(command string) []string {
+	var dirs []string
+	for _, tokens := range commandInvocations(command, 0) {
+		for i := 0; i+1 < len(tokens); i++ {
+			if isFellowshipBinary(tokens[i]) && tokens[i+1] == "complete" {
+				dirs = append(dirs, dirArgFrom(tokens[i+2:]))
+			}
+		}
+	}
+	return dirs
+}
+
+// HasCompleteCommand reports whether a Bash command line runs `fellowship
+// complete` anywhere.
+func HasCompleteCommand(command string) bool {
+	return len(CompleteCommands(command)) > 0
+}
+
+// FellowshipDirArgs reports every `--dir` a fellowship invocation on a Bash
+// command line names, in order. It is how a hook resolves the quest a
+// subagent is working when the process working directory says nothing: an
+// in-process teammate never stands in its worktree, so its `fellowship init
+// --dir <worktree>`, `todo ... --dir`, `phase confirm --dir` all name it.
+func FellowshipDirArgs(command string) []string {
+	var dirs []string
+	for _, tokens := range commandInvocations(command, 0) {
+		for i := 0; i+1 < len(tokens); i++ {
+			if !isFellowshipBinary(tokens[i]) {
+				continue
+			}
+			if d := dirArgFrom(tokens[i+1:]); d != "" {
+				dirs = append(dirs, d)
+			}
+		}
+	}
+	return dirs
+}
+
+// dirArgFrom reads the `--dir` value out of the arguments following a
+// fellowship subcommand, stopping at the next fellowship binary token so one
+// invocation's --dir is not read for another's.
+func dirArgFrom(args []string) string {
+	for j, arg := range args {
+		if isFellowshipBinary(arg) {
+			return ""
+		}
+		switch {
+		case arg == "--dir" || arg == "-dir":
+			if j+1 < len(args) {
+				return args[j+1]
+			}
+		case strings.HasPrefix(arg, "--dir="):
+			return strings.TrimPrefix(arg, "--dir=")
+		case strings.HasPrefix(arg, "-dir="):
+			return strings.TrimPrefix(arg, "-dir=")
+		}
+	}
+	return ""
+}

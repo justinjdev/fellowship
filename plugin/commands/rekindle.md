@@ -65,22 +65,21 @@ If the user declines, stop. Do not proceed without confirmation.
 On user confirmation, transition into Gandalf coordinator mode:
 
 1. **Load config:** Read `~/.claude/fellowship.json` if it exists (same as `/fellowship`)
-2. **Create team:** `TeamCreate` with name `fellowship-{timestamp}`
-3. **Record fellowship state:** From the repo root, run `~/.claude/fellowship/bin/fellowship state init --name fellowship-{timestamp} --claim-lead` (it has no `--dir` — it operates on the current directory), then re-register each recovered quest with `~/.claude/fellowship/bin/fellowship state add-quest --name <quest_name> --task "<task>" [--branch <branch>] [--worktree <path>]` (same as `/fellowship` startup). `--claim-lead` matters here: `state init` leaves an already-recorded lead alone, and after a crash that lead is the *dead* session — without it `worktree-guard` refuses this recovered session's `Edit`/`Write` in the main tree.
-4. **Clean up stale flags:** Run `~/.claude/fellowship/bin/fellowship state clean-worktrees` to reset any `gate_pending`/`held` flags a crashed session left set — a quest that crashed mid-gate or mid-hold should not resume already blocked.
-5. **Write failure records for dead quests:** Before respawning, run `~/.claude/fellowship/bin/fellowship failures infer --dir <worktree>` for each quest classified as `stale`. This preserves failure knowledge from the crashed session for future quests to learn from.
-6. **For each quest that has not shipped:**
-   a. `TaskCreate` with the original task description (from `~/.claude/fellowship/bin/fellowship state show --json` or inferred from quest name)
-   b. Spawn a quest runner teammate with the **resume spawn prompt** (see below)
-7. **Enter Gandalf coordinator loop** — same behavior as `/fellowship` (gate handling, status reports, user commands)
+2. **Record fellowship state:** From the repo root, run `~/.claude/fellowship/bin/fellowship state init --name fellowship-{timestamp} --claim-lead` (it has no `--dir` — it operates on the current directory), then re-register each recovered quest with `~/.claude/fellowship/bin/fellowship state add-quest --name <quest_name> --task "<task>" [--branch <branch>] --worktree <path>` (same as `/fellowship` startup). `--claim-lead` matters here: `state init` leaves an already-recorded lead alone, and after a crash that lead is the *dead* session — without it `worktree-guard` refuses this recovered session's `Edit`/`Write` in the main tree.
+3. **Clean up stale flags:** Run `~/.claude/fellowship/bin/fellowship state clean-worktrees` to reset any `gate_pending`/`held` flags a crashed session left set — a quest that crashed mid-gate or mid-hold should not resume already blocked.
+4. **Write failure records for dead quests:** Before respawning, run `~/.claude/fellowship/bin/fellowship failures infer --dir <worktree>` for each quest classified as `stale`. This preserves failure knowledge from the crashed session for future quests to learn from.
+5. **For each quest that has not shipped:** spawn a quest runner teammate — `Agent(name: "<quest_name>", subagent_type: "general-purpose", run_in_background: true, prompt: <Resume variant>)` — with the **resume spawn prompt** (see below). The original task description comes from `~/.claude/fellowship/bin/fellowship state show --json` or inferred from quest name.
+6. **Enter Gandalf coordinator loop** — same behavior as `/fellowship` (gate handling, status reports, user commands)
 
 **Resume spawn prompt:** use the **Resume** variant of the base quest spawn
 template in `plugin/skills/fellowship/resources/spawn-prompts.md`. Rekindle
 keeps no copy of it — the gate, hold, isolation, and boundary language is the
 same for a resumed quest as for a fresh one, and a second copy here would
-drift. Fill the variant's `{worktree_path}`, `{phase}`, `{classification}`,
-and `{checkpoint_line}` from the Step 1 scan and the Step 2 classification,
-and every shared placeholder exactly as `/fellowship` does.
+drift. Fill `{worktree_path}` (now a base-template placeholder too — here it's the
+worktree the crashed quest already had, not a freshly provisioned one) and
+the variant's `{phase}`, `{classification}`, and `{checkpoint_line}` from the
+Step 1 scan and the Step 2 classification, and every shared placeholder
+exactly as `/fellowship` does.
 
 Two things are worth saying out loud when you send it:
 
@@ -103,7 +102,7 @@ Two things are worth saying out loud when you send it:
 
 1. **User confirms before recovery.** Never auto-resume without showing what was found.
 2. **Checkpoint is king.** `.fellowship/checkpoint.md` is the primary per-quest recovery artifact. `/rekindle` is the recovery path *outside* a running quest; inside one, quest's Research step 0 is the only place that reads a checkpoint.
-3. **New team, new tasks.** Old task IDs are stale. Recovery creates fresh coordination state.
+3. **Fresh coordination.** The crashed session's agents are gone; each quest is respawned under its stored name, from the store.
 4. **Same Gandalf behavior.** After recovery, the coordinator loop is identical to `/fellowship`.
 5. **One spawn template.** The resume prompt is a variant of the shared base template, not a copy. Gate, hold, isolation, and boundary language is edited in one place.
 6. **Graceful degradation.** No fellowship recorded in the database? Fall back to worktree scanning. No checkpoint? Restart the phase.

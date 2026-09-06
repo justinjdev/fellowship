@@ -3,9 +3,9 @@
 # it: only the SessionStart hook (ensure-binary.sh) does that, so a hook
 # invocation never blocks the tool call it's guarding on a network download.
 #
-# Posture: gate hooks (gate-guard, gate-submit, gate-prereq,
-# completion-guard, metadata-track, file-track) fail *closed* — if the
-# binary isn't installed yet, this script blocks the tool call (exit 2)
+# Posture: gate hooks (gate-guard, gate-submit, gate-prereq, file-track,
+# agent-track) fail *closed* — if the binary isn't installed yet, this script blocks
+# the tool call (exit 2)
 # rather than trying to fetch it inline, so enforcement can't be silently
 # skipped. worktree-guard is defense-in-depth behind lead-provisioned
 # isolation, so it fails *open* (exit 0) when the binary is unavailable,

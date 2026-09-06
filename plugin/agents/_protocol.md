@@ -8,32 +8,21 @@ Canonical spec for how fellowship agents deliver reports and respond to lifecycl
 
 Use `SendMessage` to deliver findings or status to the requesting agent:
 
-```json
-{
-  "type": "message",
-  "recipient": "<requester>",
-  "content": "[markdown content]",
-  "summary": "[short one-line summary for logs]"
-}
+```
+SendMessage(
+  to: "<requester>",
+  summary: "<short one-line summary for logs>",
+  message: "<first line is the envelope header>\n<full markdown report body>"
+)
 ```
 
-- `recipient`: whoever requested the work, as provided at spawn time. **SendMessage addresses agents by teammate name, not task ID.**
+- `to`: whoever requested the work, as provided at spawn time. **SendMessage addresses agents by name, not task ID.**
   - Agents spawned by a teammate (e.g. balrog, spawned by a quest runner): the **requester's teammate name** from the spawn context (e.g. `"quest-auth-bug"`).
-  - Agents spawned by the fellowship lead (e.g. palantir): the lead — `"team-lead"`.
+  - Agents spawned by the fellowship lead (e.g. palantir): the lead — `"main"`.
   - If no requester name was provided (standalone mode), present output directly to the user instead of using SendMessage.
-- `content`: full markdown report body.
-- `summary`: one-line description shown in task logs (e.g., `"balrog: 2 critical, 1 high, 0 medium, 3 low findings"`).
+- `message`: first line is the envelope header (the recipient sees only this first line as the preview, so it must be self-contained), followed by the full markdown report body.
+- `summary`: one-line description shown in the sender's own transcript (e.g., `"balrog: 2 critical, 1 high, 0 medium, 3 low findings"`).
 
-## Shutdown
+## Stopping
 
-When you receive a shutdown request via `SendMessage`, respond immediately and stop:
-
-```json
-{
-  "type": "shutdown_response",
-  "request_id": "<from the incoming message>",
-  "approve": true
-}
-```
-
-Do not perform any further work after sending a shutdown response.
+The lead stops you with `TaskStop` when your work is cancelled or the fellowship disbands; there is nothing to respond to. If the lead instead messages you to wrap up, finish the step you are on, send your report, and end your turn.

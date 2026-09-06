@@ -263,3 +263,63 @@ func TestSamePath(t *testing.T) {
 		t.Error("normalized paths should compare equal")
 	}
 }
+
+// A teammate spawned with the Agent tool runs in-process and shares the lead's
+// session id; only the agent id in its hook payload tells it apart. Such a
+// payload writing source into the main tree is a mis-placed teammate, never
+// the lead — whatever session id it carries.
+func TestIsolationGuard_SubagentSharingTheLeadSessionIsNotTheLead(t *testing.T) {
+	result := IsolationGuard(IsolationParams{
+		FellowshipActive: true,
+		MainRoot:         "/repo",
+		SessionTopLevel:  "/repo",
+		ToolName:         "Write",
+		FilePath:         "/repo/src/main.go",
+		SessionID:        "lead-session",
+		AgentID:          "agent-7",
+		LeadSessionID:    "lead-session",
+	})
+	if !result.Block {
+		t.Fatal("a subagent payload carrying the lead's session id must be blocked in the main tree")
+	}
+	if !strings.Contains(result.Message, "subagent") {
+		t.Errorf("message should name the subagent detection, got: %s", result.Message)
+	}
+}
+
+// The same subagent, with no lead recorded at all, is still identifiable as a
+// subagent and still blocked: rule 3 does not need the lead's id for it.
+func TestIsolationGuard_SubagentBlockedWithoutRecordedLead(t *testing.T) {
+	result := IsolationGuard(IsolationParams{
+		FellowshipActive: true,
+		MainRoot:         "/repo",
+		SessionTopLevel:  "/repo",
+		ToolName:         "Write",
+		FilePath:         "/repo/src/main.go",
+		SessionID:        "some-session",
+		AgentID:          "agent-7",
+	})
+	if !result.Block {
+		t.Error("a subagent payload must be blocked in the main tree even with no lead recorded")
+	}
+}
+
+// A subagent of the lead may still write coordination files in the main tree
+// (a scout's findings under the data directory): the exemption is about the
+// path, not the writer.
+func TestIsolationGuard_SubagentMayWriteCoordinationPath(t *testing.T) {
+	result := IsolationGuard(IsolationParams{
+		FellowshipActive: true,
+		MainRoot:         "/repo",
+		SessionTopLevel:  "/repo",
+		ToolName:         "Write",
+		FilePath:         "/repo/.fellowship/scout-findings-scout-auth.md",
+		DataDirName:      ".fellowship",
+		SessionID:        "lead-session",
+		AgentID:          "agent-7",
+		LeadSessionID:    "lead-session",
+	})
+	if result.Block {
+		t.Errorf("a subagent writing under the data directory must be allowed, got: %s", result.Message)
+	}
+}

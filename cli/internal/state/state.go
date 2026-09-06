@@ -15,8 +15,6 @@ var ErrNotFound = errors.New("state: quest not found")
 
 type State struct {
 	QuestName        string   `json:"quest_name"`
-	TaskID           string   `json:"task_id"`
-	TeamName         string   `json:"team_name"`
 	Phase            string   `json:"phase"`
 	GatePending      bool     `json:"gate_pending"`
 	GateID           *string  `json:"gate_id"`
@@ -35,7 +33,7 @@ type State struct {
 // phaseOrder is the canonical quest lifecycle: four phases with a gate
 // leaving each of the first three. Review is terminal — no gate leaves it,
 // and the quest ends when the PR is opened and the task is marked complete
-// (enforced by the completion-guard hook).
+// (`fellowship complete`, refused by the command and by gate-guard elsewhere).
 var phaseOrder = []string{"Research", "Plan", "Implement", "Review"}
 
 // TerminalPhase is the last phase in the lifecycle. No gate leaves it.
@@ -89,7 +87,10 @@ func IsValidPhase(p string) bool {
 func Load(conn *sqlite.Conn, questName string) (*State, error) {
 	var s State
 	var found bool
-	err := sqlitex.Execute(conn, `SELECT quest_name, task_id, team_name, phase,
+	// task_id and team_name are still columns (schema v1) but nothing reads
+	// or writes them since the port off the agent-teams API; they are left
+	// NULL rather than dropped, which would need a migration for no gain.
+	err := sqlitex.Execute(conn, `SELECT quest_name, phase,
 		gate_pending, gate_id, lembas_completed, metadata_updated,
 		held, held_reason, auto_approve, created_at, updated_at,
 		COALESCE(session_id, '')
@@ -99,27 +100,25 @@ func Load(conn *sqlite.Conn, questName string) (*State, error) {
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				found = true
 				s.QuestName = stmt.ColumnText(0)
-				s.TaskID = stmt.ColumnText(1)
-				s.TeamName = stmt.ColumnText(2)
-				s.Phase = stmt.ColumnText(3)
-				s.GatePending = stmt.ColumnInt(4) != 0
-				if stmt.ColumnType(5) != sqlite.TypeNull {
-					gid := stmt.ColumnText(5)
+				s.Phase = stmt.ColumnText(1)
+				s.GatePending = stmt.ColumnInt(2) != 0
+				if stmt.ColumnType(3) != sqlite.TypeNull {
+					gid := stmt.ColumnText(3)
 					s.GateID = &gid
 				}
-				s.LembasCompleted = stmt.ColumnInt(6) != 0
-				s.MetadataUpdated = stmt.ColumnInt(7) != 0
-				s.Held = stmt.ColumnInt(8) != 0
-				if stmt.ColumnType(9) != sqlite.TypeNull {
-					hr := stmt.ColumnText(9)
+				s.LembasCompleted = stmt.ColumnInt(4) != 0
+				s.MetadataUpdated = stmt.ColumnInt(5) != 0
+				s.Held = stmt.ColumnInt(6) != 0
+				if stmt.ColumnType(7) != sqlite.TypeNull {
+					hr := stmt.ColumnText(7)
 					s.HeldReason = &hr
 				}
-				if aa := stmt.ColumnText(10); aa != "" {
+				if aa := stmt.ColumnText(8); aa != "" {
 					if err := json.Unmarshal([]byte(aa), &s.AutoApproveGates); err != nil {
 						return fmt.Errorf("unmarshal auto_approve: %w", err)
 					}
 				}
-				s.SessionID = stmt.ColumnText(13)
+				s.SessionID = stmt.ColumnText(11)
 				return nil
 			},
 		})
@@ -142,14 +141,14 @@ func Upsert(conn *sqlite.Conn, s *State) error {
 	}
 
 	return sqlitex.Execute(conn, `INSERT INTO quest_state
-		(quest_name, task_id, team_name, phase, gate_pending, gate_id,
+		(quest_name, phase, gate_pending, gate_id,
 		 lembas_completed, metadata_updated, held, held_reason, auto_approve,
 		 session_id, created_at, updated_at)
-		VALUES (:name, :task_id, :team, :phase, :gate_pending, :gate_id,
+		VALUES (:name, :phase, :gate_pending, :gate_id,
 		 :lembas, :metadata, :held, :held_reason, :auto_approve, :session_id,
 		 :now, :now)
 		ON CONFLICT(quest_name) DO UPDATE SET
-		 task_id=:task_id, team_name=:team, phase=:phase,
+		 phase=:phase,
 		 gate_pending=:gate_pending, gate_id=:gate_id,
 		 lembas_completed=:lembas, metadata_updated=:metadata,
 		 held=:held, held_reason=:held_reason, auto_approve=:auto_approve,
@@ -157,8 +156,6 @@ func Upsert(conn *sqlite.Conn, s *State) error {
 		&sqlitex.ExecOptions{
 			Named: map[string]any{
 				":name":         s.QuestName,
-				":task_id":      s.TaskID,
-				":team":         s.TeamName,
 				":phase":        s.Phase,
 				":gate_pending": boolToInt(s.GatePending),
 				":gate_id":      ptrToAny(s.GateID),

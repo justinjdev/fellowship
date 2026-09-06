@@ -33,7 +33,6 @@ type QuestEntry struct {
 	TaskDescription string `json:"task_description"`
 	Worktree        string `json:"worktree"`
 	Branch          string `json:"branch"`
-	TaskID          string `json:"task_id"`
 	Status          string `json:"status,omitempty"`
 }
 
@@ -49,7 +48,6 @@ func QuestEntryStatus(q QuestEntry) string {
 type ScoutEntry struct {
 	Name     string `json:"name"`
 	Question string `json:"question"`
-	TaskID   string `json:"task_id"`
 }
 
 type QuestStatus struct {
@@ -122,7 +120,7 @@ func LoadFellowship(conn *sqlite.Conn) (*FellowshipState, error) {
 	// Load quests
 	fs.Quests = []QuestEntry{}
 	err = sqlitex.Execute(conn,
-		`SELECT name, task_description, worktree, branch, task_id, status FROM fellowship_quests`,
+		`SELECT name, task_description, worktree, branch, status FROM fellowship_quests`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				fs.Quests = append(fs.Quests, QuestEntry{
@@ -130,8 +128,7 @@ func LoadFellowship(conn *sqlite.Conn) (*FellowshipState, error) {
 					TaskDescription: stmt.ColumnText(1),
 					Worktree:        stmt.ColumnText(2),
 					Branch:          stmt.ColumnText(3),
-					TaskID:          stmt.ColumnText(4),
-					Status:          stmt.ColumnText(5),
+					Status:          stmt.ColumnText(4),
 				})
 				return nil
 			},
@@ -143,13 +140,12 @@ func LoadFellowship(conn *sqlite.Conn) (*FellowshipState, error) {
 	// Load scouts
 	fs.Scouts = []ScoutEntry{}
 	err = sqlitex.Execute(conn,
-		`SELECT name, question, task_id FROM fellowship_scouts`,
+		`SELECT name, question FROM fellowship_scouts`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				fs.Scouts = append(fs.Scouts, ScoutEntry{
 					Name:     stmt.ColumnText(0),
 					Question: stmt.ColumnText(1),
-					TaskID:   stmt.ColumnText(2),
 				})
 				return nil
 			},
@@ -306,18 +302,17 @@ func upsertQuest(conn *sqlite.Conn, q QuestEntry) error {
 	}
 
 	return sqlitex.Execute(conn,
-		`INSERT INTO fellowship_quests (name, task_description, worktree, branch, task_id, status)
-		 VALUES (:name, :desc, :wt, :branch, :task_id, :status)
+		`INSERT INTO fellowship_quests (name, task_description, worktree, branch, status)
+		 VALUES (:name, :desc, :wt, :branch, :status)
 		 ON CONFLICT(name) DO UPDATE SET
-		   task_description=:desc, worktree=:wt, branch=:branch, task_id=:task_id, status=:status`,
+		   task_description=:desc, worktree=:wt, branch=:branch, status=:status`,
 		&sqlitex.ExecOptions{
 			Named: map[string]any{
-				":name":    q.Name,
-				":desc":    q.TaskDescription,
-				":wt":      q.Worktree,
-				":branch":  q.Branch,
-				":task_id": q.TaskID,
-				":status":  status,
+				":name":   q.Name,
+				":desc":   q.TaskDescription,
+				":wt":     q.Worktree,
+				":branch": q.Branch,
+				":status": status,
 			},
 		})
 }
@@ -329,7 +324,6 @@ func UpdateQuest(conn *sqlite.Conn, name string, updates map[string]any) error {
 		"task_description": "task_description",
 		"worktree":         "worktree",
 		"branch":           "branch",
-		"task_id":          "task_id",
 		"status":           "status",
 	}
 	setClauses := ""
@@ -373,14 +367,13 @@ func AddScout(conn *sqlite.Conn, s ScoutEntry) error {
 
 func upsertScout(conn *sqlite.Conn, s ScoutEntry) error {
 	return sqlitex.Execute(conn,
-		`INSERT INTO fellowship_scouts (name, question, task_id)
-		 VALUES (:name, :question, :task_id)
-		 ON CONFLICT(name) DO UPDATE SET question=:question, task_id=:task_id`,
+		`INSERT INTO fellowship_scouts (name, question)
+		 VALUES (:name, :question)
+		 ON CONFLICT(name) DO UPDATE SET question=:question`,
 		&sqlitex.ExecOptions{
 			Named: map[string]any{
 				":name":     s.Name,
 				":question": s.Question,
-				":task_id":  s.TaskID,
 			},
 		})
 }
@@ -432,7 +425,7 @@ func addGroupInternal(conn *sqlite.Conn, name string, quests []string, scouts []
 func ListQuests(conn *sqlite.Conn) ([]QuestEntry, error) {
 	var quests []QuestEntry
 	err := sqlitex.Execute(conn,
-		`SELECT name, task_description, worktree, branch, task_id, status FROM fellowship_quests`,
+		`SELECT name, task_description, worktree, branch, status FROM fellowship_quests`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				quests = append(quests, QuestEntry{
@@ -440,8 +433,7 @@ func ListQuests(conn *sqlite.Conn) ([]QuestEntry, error) {
 					TaskDescription: stmt.ColumnText(1),
 					Worktree:        stmt.ColumnText(2),
 					Branch:          stmt.ColumnText(3),
-					TaskID:          stmt.ColumnText(4),
-					Status:          stmt.ColumnText(5),
+					Status:          stmt.ColumnText(4),
 				})
 				return nil
 			},
@@ -453,13 +445,12 @@ func ListQuests(conn *sqlite.Conn) ([]QuestEntry, error) {
 func ListScouts(conn *sqlite.Conn) ([]ScoutEntry, error) {
 	var scouts []ScoutEntry
 	err := sqlitex.Execute(conn,
-		`SELECT name, question, task_id FROM fellowship_scouts`,
+		`SELECT name, question FROM fellowship_scouts`,
 		&sqlitex.ExecOptions{
 			ResultFunc: func(stmt *sqlite.Stmt) error {
 				scouts = append(scouts, ScoutEntry{
 					Name:     stmt.ColumnText(0),
 					Question: stmt.ColumnText(1),
-					TaskID:   stmt.ColumnText(2),
 				})
 				return nil
 			},

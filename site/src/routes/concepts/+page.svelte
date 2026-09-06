@@ -62,7 +62,7 @@
 
 		<div class="fellowship-callout">
 			<span class="callout-label">In Fellowship</span>
-			<p>The coordinator is called <strong>Gandalf</strong>. It analyzes your task list, spawns quest runners for code tasks and scouts for research questions, routes gate approvals, and tracks progress across all agents &mdash; but never writes code itself.</p>
+			<p>The coordinator is called <strong>Gandalf</strong>. It registers each quest and scout in the store, spawns them as named background agents for code tasks and research questions, routes gate approvals, and tracks progress across all agents &mdash; but never writes code itself.</p>
 		</div>
 	</section>
 

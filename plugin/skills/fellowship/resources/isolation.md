@@ -14,9 +14,11 @@ just as quietly when skipped, dropping the quest into the shared main tree.
 
 ## Gate hook propagation
 
-Plugin hooks fire only in Gandalf's session; teammates spawned via the Agent
-tool do NOT inherit them. For `worktree-guard` to fire in a session, a
-`.claude/settings.local.json` registering it must exist at that session's root.
+Plugin hooks fire in the session that loaded the plugin, and that covers the
+tool calls of the background agents it spawns. A worktree can still be opened
+by a session of its own — a rekindled quest, a terminal — and that session
+only enforces `worktree-guard` if a `.claude/settings.local.json` at its root
+registers it.
 
 `fellowship state init` writes that file: it merges the `worktree-guard`
 PreToolUse hook into the project's `.claude/settings.local.json`, preserving
@@ -58,10 +60,12 @@ always safe; it never blocks work outside a fellowship.
 3. **Verify before the teammate writes.** `git worktree list` must show the
    worktree, and its path must not be the main root. Never tell a teammate it
    is "already isolated" without having checked.
-4. **Publish the verified path before spawning.**
-   `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<path>"})`,
-   so the quest's own `TaskGet` check finds it and does not create a second
-   worktree on the wrong branch.
+4. **Publish the verified path before spawning.** Register it in the store —
+   `fellowship state update-quest --dir <repo_root> --name <quest_name>
+   --worktree <path>` (or `add-quest --worktree` when registering a new
+   quest) — so `fellowship init --dir <path>` resolves the quest and the
+   teammate's own check (`state show --json`) finds it and does not create a
+   second worktree on the wrong branch.
 
 ## The two backstops
 
@@ -69,8 +73,10 @@ None of the above is what finally prevents a mis-placed write. These are, and
 they hold regardless of how isolation was provisioned:
 
 1. The teammate's mandatory isolation self-check before its first write — its
-   git top-level must differ from the main repo root, else it stops and
-   messages the lead (see [spawn-prompts.md](spawn-prompts.md)).
+   registered worktree must resolve, via `git -C`, to a distinct tree — it
+   never assumes its working directory is the worktree, because it is not —
+   else it stops and messages the lead (see
+   [spawn-prompts.md](spawn-prompts.md)).
 2. The fail-closed `worktree-guard` PreToolUse hook, which blocks source
    writes from the main tree during an active fellowship. A block from it is
    **proof** the teammate is mis-placed, not an obstacle to route around.
