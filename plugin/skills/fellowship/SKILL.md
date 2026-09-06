@@ -131,6 +131,7 @@ For each quest, Gandalf:
    - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"` — this is how `SendMessage(to: "<quest_name>")` addresses it
    - `subagent_type: "general-purpose"`
    - `run_in_background: true`
+   - no `isolation` parameter — the lead provisioned the worktree; the flag would create a second one and demote the teammate to a plain subagent
    - `model`: `config.models.quest` if set; otherwise omit — quest teammates write production code and inherit the session model by default
    - **Isolation:** the worktree the lead provisioned and verified in the
      pre-flight above, registered in the store before this spawn. See

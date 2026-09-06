@@ -51,8 +51,9 @@ always safe; it never blocks work outside a fellowship.
 1. **Create the worktree yourself.** Run
    `git worktree add -b <branch> <path> <base>` with `<path>` a distinct git
    worktree root (any path; the default is `.claude/worktrees` under the
-   repo). Passing the harness `isolation` flag as well MAY work, but it must
-   be verified, never assumed.
+   repo). Never pass the Agent tool's `isolation` parameter as well: it
+   creates a second worktree the store knows nothing about, and a named agent
+   spawned with it launches as a plain subagent rather than a teammate.
 2. **Make it usable.** Provision dependencies so the teammate's tests run (for
    example symlink or install `node_modules`), and copy the settings file in
    so the guard is armed there:
