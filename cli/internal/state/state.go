@@ -25,6 +25,11 @@ type State struct {
 	AutoApproveGates []string `json:"auto_approve_gates"`
 	Held             bool     `json:"held"`
 	HeldReason       *string  `json:"held_reason"`
+	// SessionID is the Claude Code session that ran `fellowship init` for this
+	// quest — the teammate working it. It is recorded so the lead row cannot be
+	// claimed by a session that is already a teammate; empty when the
+	// environment exposed no session id, or when the row predates the column.
+	SessionID string `json:"session_id,omitempty"`
 }
 
 // phaseOrder is the canonical quest lifecycle: four phases with a gate
@@ -86,7 +91,8 @@ func Load(conn *sqlite.Conn, questName string) (*State, error) {
 	var found bool
 	err := sqlitex.Execute(conn, `SELECT quest_name, task_id, team_name, phase,
 		gate_pending, gate_id, lembas_completed, metadata_updated,
-		held, held_reason, auto_approve, created_at, updated_at
+		held, held_reason, auto_approve, created_at, updated_at,
+		COALESCE(session_id, '')
 		FROM quest_state WHERE quest_name = :name`,
 		&sqlitex.ExecOptions{
 			Named: map[string]any{":name": questName},
@@ -113,6 +119,7 @@ func Load(conn *sqlite.Conn, questName string) (*State, error) {
 						return fmt.Errorf("unmarshal auto_approve: %w", err)
 					}
 				}
+				s.SessionID = stmt.ColumnText(13)
 				return nil
 			},
 		})
@@ -137,15 +144,16 @@ func Upsert(conn *sqlite.Conn, s *State) error {
 	return sqlitex.Execute(conn, `INSERT INTO quest_state
 		(quest_name, task_id, team_name, phase, gate_pending, gate_id,
 		 lembas_completed, metadata_updated, held, held_reason, auto_approve,
-		 created_at, updated_at)
+		 session_id, created_at, updated_at)
 		VALUES (:name, :task_id, :team, :phase, :gate_pending, :gate_id,
-		 :lembas, :metadata, :held, :held_reason, :auto_approve, :now, :now)
+		 :lembas, :metadata, :held, :held_reason, :auto_approve, :session_id,
+		 :now, :now)
 		ON CONFLICT(quest_name) DO UPDATE SET
 		 task_id=:task_id, team_name=:team, phase=:phase,
 		 gate_pending=:gate_pending, gate_id=:gate_id,
 		 lembas_completed=:lembas, metadata_updated=:metadata,
 		 held=:held, held_reason=:held_reason, auto_approve=:auto_approve,
-		 updated_at=:now`,
+		 session_id=:session_id, updated_at=:now`,
 		&sqlitex.ExecOptions{
 			Named: map[string]any{
 				":name":         s.QuestName,
@@ -159,6 +167,7 @@ func Upsert(conn *sqlite.Conn, s *State) error {
 				":held":         boolToInt(s.Held),
 				":held_reason":  ptrToAny(s.HeldReason),
 				":auto_approve": autoApprove,
+				":session_id":   s.SessionID,
 				":now":          now,
 			},
 		})

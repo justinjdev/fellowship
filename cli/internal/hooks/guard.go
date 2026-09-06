@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/state"
@@ -14,8 +15,48 @@ type HookResult struct {
 	Message string
 }
 
-func GateGuard(s *state.State, input *HookInput) HookResult {
-	if s.Held {
+// GuardParams carries the session-level facts gate-guard needs beyond the
+// quest row itself. Resolving them costs a git call and a store read, so the
+// caller does it once and hands the result to the pure decision function.
+type GuardParams struct {
+	// LeadSessionID is the session id recorded for the fellowship's lead, or
+	// "" when no lead was recorded. Only the lead may move a quest's phase.
+	LeadSessionID string
+	// DataDirName is the data directory name configured for the MAIN repo
+	// (datadir.Resolve(mainRoot)), whose writes the early-phase rule exempts.
+	// It must be resolved from the main root, exactly as the store path is:
+	// the project config lives there, and a hook that resolved it from its own
+	// worktree read ".fellowship" for a fellowship configured otherwise —
+	// exempting the wrong directory and blocking the right one. Empty falls
+	// back to the process-wide lookup.
+	DataDirName string
+}
+
+// dataDirName returns the data directory name to enforce with, falling back to
+// the process-wide lookup when the caller did not resolve one.
+func (p GuardParams) dataDirName() string {
+	if p.DataDirName != "" {
+		return p.DataDirName
+	}
+	return datadir.Name()
+}
+
+// IsLeadSession reports whether a hook payload's session id identifies the
+// fellowship's lead. Both ids must be known: an empty id on either side means
+// "unidentifiable", never "the lead".
+func IsLeadSession(sessionID, leadSessionID string) bool {
+	return sessionID != "" && sessionID == leadSessionID
+}
+
+func GateGuard(s *state.State, input *HookInput, p GuardParams) HookResult {
+	// The escape allowlist is read-only reporting and side-channel bookkeeping:
+	// nothing on it can clear a hold or a gate. A held teammate that cannot even
+	// run `fellowship status` or record a failure has no way to see why it is
+	// stopped or to leave a note about it, so the hold check reads the allowlist
+	// too — it is checked before both blocks rather than only before the gate.
+	escape := isFellowshipEscapeCommand(input.ToolInput.Command)
+
+	if s.Held && !escape {
 		msg := "Quest is held — paused by the lead."
 		if s.HeldReason != nil {
 			msg += " Reason: " + *s.HeldReason
@@ -27,27 +68,93 @@ func GateGuard(s *state.State, input *HookInput) HookResult {
 		}
 	}
 
-	if s.GatePending && !isFellowshipEscapeCommand(input.ToolInput.Command) {
+	if s.GatePending && !escape {
 		return HookResult{
 			Block:   true,
 			Message: "Gate pending — waiting for lead approval. Do not take any action until the lead approves your gate.",
 		}
 	}
 
-	if state.IsEarlyPhase(s.Phase) {
-		filePath := input.ToolInput.FilePath
-		if filePath == "" {
-			filePath = input.ToolInput.NotebookPath
+	// Lead-only CLI commands. GateGuard runs only where a quest row was
+	// resolved — that is, inside a registered quest worktree — so any
+	// `fellowship state ...` here is a teammate reaching for the lead's own
+	// command set, and `fellowship init --phase/--plan-skip` is a phase move,
+	// which is a gate decision. Both are refused before they reach the CLI.
+	//
+	// Every invocation on the line is judged, not just the first: a no-op
+	// `init --phase <current phase>` is waved through below, and stopping at
+	// it would hand a teammate everything chained behind it.
+	if !IsLeadSession(input.SessionID, p.LeadSessionID) {
+		for _, inv := range LeadOnlyCommands(input.ToolInput.Command) {
+			switch inv.Subcommand {
+			case "state":
+				return HookResult{
+					Block: true,
+					Message: fmt.Sprintf(
+						"\"fellowship state %s\" is a lead command and this is a quest worktree. `state init` records which session is the lead, so running it here would make this teammate the lead and lock the real one out. Ask the lead to run it.",
+						strings.TrimSpace(inv.Detail)),
+				}
+			case "init":
+				// Re-running init for the phase the quest is already in moves
+				// nothing, so it is not a gate decision.
+				if inv.Detail != s.Phase {
+					return HookResult{
+						Block: true,
+						Message: fmt.Sprintf(
+							"Only the lead may move a quest's phase: \"fellowship init\" with --phase/--plan-skip would take this quest from %s to %s without a gate. Submit this phase's gate and wait for the lead instead.",
+							s.Phase, inv.Detail),
+					}
+				}
+			}
 		}
-		if filePath != "" && !datadir.IsDataDirPath(filePath) {
+	}
+
+	if result := StoreWriteGuard(input); result.Block {
+		return result
+	}
+
+	filePath := TargetPath(input)
+	if state.IsEarlyPhase(s.Phase) {
+		dataDir := p.dataDirName()
+		if filePath != "" && !datadir.IsPathIn(filePath, dataDir) {
 			return HookResult{
 				Block:   true,
-				Message: fmt.Sprintf("Phase '%s' does not allow file modifications outside %s/. Submit this phase's gate to advance toward Implement.", s.Phase, datadir.Name()),
+				Message: fmt.Sprintf("Phase '%s' does not allow file modifications outside %s/. Submit this phase's gate to advance toward Implement.", s.Phase, dataDir),
 			}
 		}
 	}
 
 	return HookResult{}
+}
+
+// StoreWriteGuard refuses an Edit/Write/NotebookEdit aimed at the SQLite store.
+//
+// The data directory is exempt from the phase write rule — teammates keep
+// coordination files there — but the store inside it is not a coordination
+// file: it IS the enforcement state, and hand-editing it rewrites a phase,
+// clears a gate, or renames the lead. Blocked in every phase, for every
+// session; the CLI is the only writer.
+func StoreWriteGuard(input *HookInput) HookResult {
+	filePath := TargetPath(input)
+	if filePath == "" || !datadir.IsStorePath(filePath) {
+		return HookResult{}
+	}
+	return HookResult{
+		Block:   true,
+		Message: "The fellowship store is not editable by hand — it is the enforcement state itself. Use the fellowship CLI (gate, init, todo, notes) to change it.",
+	}
+}
+
+// TargetPath returns the file a tool call writes: file_path, or notebook_path
+// for NotebookEdit. Empty for tool calls that write no file (Bash, Task, ...).
+func TargetPath(input *HookInput) string {
+	if input == nil {
+		return ""
+	}
+	if p := input.ToolInput.FilePath; p != "" {
+		return p
+	}
+	return input.ToolInput.NotebookPath
 }
 
 // WorktreeGuard blocks the lead session from cd'ing into a quest worktree.
@@ -134,6 +241,87 @@ func isLegacyWorktreePath(path string) bool {
 		strings.Contains(normalized, "/.claude/worktrees/")
 }
 
+// IsStoreUpgradeCommand reports whether a Bash command is one that can bring an
+// out-of-date store up to date without being able to change quest state.
+//
+// Hooks refuse to migrate, so an out-of-date store makes every gate hook block
+// until some other invocation runs the schema ladder. gate-guard gates Bash, so
+// a blanket refusal would deny the only way out of itself and freeze every
+// session in the repo. Every non-hook command opens the store through
+// db.OpenExisting, which migrates, so the allowance does not need to name a
+// mutating command — and must not. `fellowship init` also RESETS an existing
+// quest row, clearing gate_pending; letting it through here would hand a
+// gate-blocked teammate its own release the first time a binary upgrade made
+// the store stale, at exactly the moment gate-guard cannot read the gate flag
+// to refuse it. The escape allowlist is the right set: read-only reporting and
+// side-channel bookkeeping, which upgrade the schema on open and can advance
+// nothing. Shell metacharacters are rejected there for the same reason —
+// nothing may be chained onto the allowance.
+func IsStoreUpgradeCommand(command string) bool {
+	return isFellowshipEscapeCommand(command)
+}
+
+// isFellowshipBinary reports whether a command-line token names the fellowship
+// CLI: the bare name or any path ending in it, and the wrapper script the
+// plugin ships (fellowship.sh), which execs the same binary.
+func isFellowshipBinary(token string) bool {
+	base := token
+	if i := strings.LastIndex(base, "/"); i >= 0 {
+		base = base[i+1:]
+	}
+	return base == "fellowship" || base == "fellowship.sh"
+}
+
+// shellFields splits a command line on whitespace that is OUTSIDE quotes,
+// keeping a quoted run as part of the token it appears in and dropping the
+// quote characters themselves.
+//
+// It is not a shell parser — escapes, substitutions and variable expansion are
+// left alone — but it is exactly enough to tell a command being RUN from a
+// command merely NAMED inside an argument. strings.Fields cannot: it splits
+// `-m "fellowship init --phase Implement"` into tokens that read as an
+// invocation, and the leading-quote heuristic that papered over that also
+// skipped a genuinely quoted binary path.
+func shellFields(command string) []string {
+	var (
+		fields []string
+		cur    strings.Builder
+		inTok  bool
+		quote  rune
+	)
+	flush := func() {
+		if inTok {
+			fields = append(fields, cur.String())
+			cur.Reset()
+			inTok = false
+		}
+	}
+	for _, r := range command {
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			} else {
+				cur.WriteRune(r)
+			}
+		case r == '\'' || r == '"':
+			quote = r
+			inTok = true
+		case unicode.IsSpace(r):
+			flush()
+		default:
+			cur.WriteRune(r)
+			inTok = true
+		}
+	}
+	flush()
+	return fields
+}
+
+// PlanSkipPhase is the phase `fellowship init --plan-skip` starts a quest in:
+// the plan already exists, so Research and Plan are recorded as skipped.
+const PlanSkipPhase = "Implement"
+
 // isFellowshipEscapeCommand returns true for fellowship CLI commands that are
 // safe to execute even when gate_pending is true.
 //
@@ -155,13 +343,16 @@ func isFellowshipEscapeCommand(command string) bool {
 		strings.Contains(trimmed, "$(") {
 		return false
 	}
-	fields := strings.Fields(trimmed)
+	// shellFields, not strings.Fields, for the same reason InitPhaseRequest
+	// uses it: a quoted binary path ("$HOME/.claude/fellowship/bin/fellowship")
+	// is one token being RUN, and a command merely NAMED inside a quoted
+	// argument is not an invocation at all.
+	fields := shellFields(trimmed)
 	if len(fields) < 2 {
 		return false
 	}
 	// Accept bare "fellowship" or any path ending in "/fellowship".
-	bin := fields[0]
-	if bin != "fellowship" && !strings.HasSuffix(bin, "/fellowship") {
+	if !isFellowshipBinary(fields[0]) {
 		return false
 	}
 	// Allowlist of subcommands safe to run during gate_pending. Both the

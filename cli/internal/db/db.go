@@ -29,6 +29,16 @@ type DB struct {
 // than block (and must not bring a store into existence by looking).
 var ErrNoStore = errors.New("db: no fellowship store")
 
+// ErrEmptyStore reports that the store file exists but is zero bytes.
+//
+// This is what deleting the store looks like when something recreates the file
+// — and it used to be indistinguishable from a brand-new one: ensureSchema saw
+// user_version 0, wrote the whole schema, and the hook that opened it reported
+// "no quest here" for a store it had just built itself. An empty store is a
+// destroyed store, never a fresh one; only `init` and `state init` may build a
+// schema.
+var ErrEmptyStore = errors.New("db: fellowship store is empty")
+
 // StorePath returns the fellowship database path for the repo containing
 // fromDir, without touching the filesystem.
 //
@@ -41,7 +51,7 @@ func StorePath(fromDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("db: resolve main repo: %w", err)
 	}
-	return filepath.Join(mainRepo, datadir.Resolve(mainRepo), "fellowship.db"), nil
+	return filepath.Join(mainRepo, datadir.Resolve(mainRepo), datadir.StoreFileName), nil
 }
 
 // Open resolves the main repo from fromDir (via git rev-parse --git-common-dir),
@@ -72,23 +82,89 @@ func OpenExisting(fromDir string) (*DB, error) {
 
 // openExistingPath is OpenExisting once the store path is known.
 func openExistingPath(dbPath string) (*DB, error) {
-	if _, err := os.Stat(dbPath); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("%w at %s", ErrNoStore, dbPath)
-		}
-		return nil, fmt.Errorf("db: stat %s: %w", dbPath, err)
+	if err := statStore(dbPath); err != nil {
+		return nil, err
 	}
-	return openPath(dbPath, false)
+	return openPath(dbPath, openOptions{migrate: true})
+}
+
+// statStore reports whether a store file is there to be opened: ErrNoStore when
+// it is absent, ErrEmptyStore when it is zero bytes (a destroyed store, which
+// must never be mistaken for a fresh one).
+func statStore(dbPath string) error {
+	info, err := os.Stat(dbPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("%w at %s", ErrNoStore, dbPath)
+		}
+		return fmt.Errorf("db: stat %s: %w", dbPath, err)
+	}
+	if info.Size() == 0 {
+		return fmt.Errorf("%w at %s", ErrEmptyStore, dbPath)
+	}
+	return nil
+}
+
+// OpenForHook opens the store for a hook: it never creates one, and it never
+// migrates. A hook is a decision, not an upgrade path — running the schema
+// ladder from inside one would have every tool call racing to rewrite the store
+// it is reading, and it is how a zero-byte store used to be rebuilt into a
+// brand-new one. An out-of-date store is reported (ErrSchemaOutOfDate) so the
+// caller can fail closed and tell the user to run `fellowship init`.
+//
+// readOnly opens the connection read-only as well, for the hooks that only
+// decide. A read-only connection cannot create the -shm file a WAL database
+// wants when one is missing, so that open falls back to read-write rather than
+// turning a recoverable state into a block.
+func OpenForHook(fromDir string, readOnly bool) (*DB, error) {
+	dbPath, err := StorePath(fromDir)
+	if err != nil {
+		return nil, err
+	}
+	return openForHookPath(dbPath, readOnly)
+}
+
+// openForHookPath is OpenForHook once the store path is known.
+func openForHookPath(dbPath string, readOnly bool) (*DB, error) {
+	if err := statStore(dbPath); err != nil {
+		return nil, err
+	}
+	if readOnly {
+		d, err := openPath(dbPath, openOptions{readOnly: true})
+		if err == nil {
+			return d, nil
+		}
+		// A schema verdict — out of date, or newer than this binary — is the
+		// answer, not an obstacle to work around; reopening read-write would
+		// only reach it again. Anything else (a WAL database whose -shm a
+		// read-only connection cannot create) falls back to the writable open.
+		if errors.Is(err, ErrSchemaOutOfDate) || errors.Is(err, ErrSchemaNewer) {
+			return nil, err
+		}
+	}
+	return openPath(dbPath, openOptions{})
 }
 
 // OpenPath opens a DB at the given file path, creating it if needed.
 func OpenPath(dbPath string) (*DB, error) {
-	return openPath(dbPath, true)
+	return openPath(dbPath, openOptions{create: true, migrate: true})
 }
 
-func openPath(dbPath string, create bool) (*DB, error) {
+// openOptions selects how openPath treats the file: whether it may bring one
+// into existence, whether the connection may write, and whether it may run the
+// schema ladder.
+type openOptions struct {
+	create   bool
+	readOnly bool
+	migrate  bool
+}
+
+func openPath(dbPath string, o openOptions) (*DB, error) {
 	flags := sqlite.OpenReadWrite | sqlite.OpenWAL
-	if create {
+	if o.readOnly {
+		flags = sqlite.OpenReadOnly | sqlite.OpenWAL
+	}
+	if o.create {
 		if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 			return nil, fmt.Errorf("db: mkdir %s: %w", filepath.Dir(dbPath), err)
 		}
@@ -105,14 +181,17 @@ func openPath(dbPath string, create bool) (*DB, error) {
 
 	d := &DB{pool: pool, path: dbPath}
 
-	// Enable foreign keys and bring the schema up to date. ensureSchema is a
-	// no-op read when the store is already current, which keeps the common
-	// case (a hook opening an initialized store) free of writes.
+	// Enable foreign keys and settle the schema. Only the store-creating and
+	// -upgrading commands migrate; everything else checks the version and
+	// refuses to touch a store it would have to rewrite.
 	if err := d.WithConn(context.Background(), func(conn *Conn) error {
 		if err := sqlitex.ExecuteTransient(conn, "PRAGMA foreign_keys = ON", nil); err != nil {
 			return err
 		}
-		return ensureSchema(conn)
+		if o.migrate {
+			return ensureSchema(conn)
+		}
+		return checkSchemaCurrent(conn)
 	}); err != nil {
 		pool.Close()
 		return nil, err

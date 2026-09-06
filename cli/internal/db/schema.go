@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 
 	"zombiezen.com/go/sqlite"
@@ -23,6 +24,32 @@ const baseSchemaVersion = 1
 // migration apply byte-identical DDL — see
 // TestFreshSchemaMatchesMigratedSchema in migrations_test.go.
 const questWorktreeUniqueIndexSQL = `CREATE UNIQUE INDEX IF NOT EXISTS idx_fellowship_quests_worktree ON fellowship_quests(worktree) WHERE worktree IS NOT NULL AND worktree != ''`
+
+// leadTableSQL records which Claude Code session is the fellowship's lead.
+// It lives in the store rather than in a file under the data directory: the
+// data directory is exempt from the write guards (teammates legitimately write
+// coordination files there), so a marker file was editable by the very sessions
+// the guard exists to identify. Nothing writes SQLite through Edit/Write.
+// This is migration version 4 in migrations.go; declared once here so the
+// fresh-install schema and the upgrade migration apply byte-identical DDL —
+// see TestFreshSchemaMatchesMigratedSchema in migrations_test.go.
+const leadTableSQL = `CREATE TABLE IF NOT EXISTS lead (
+		id         INTEGER PRIMARY KEY CHECK (id = 1),
+		session_id TEXT NOT NULL,
+		root       TEXT NOT NULL,
+		created_at TEXT NOT NULL
+	)`
+
+// questStateSessionColumnSQL records the Claude Code session that ran
+// `fellowship init` for a quest — the teammate working it.
+//
+// It is what lets `state init --claim-lead` tell a lead from a teammate: a
+// session that is already recorded against a quest cannot also be the lead, so
+// the one CLI door back into the lead row is closed to the sessions that door
+// exists to keep out. This is migration version 5 in migrations.go; declared
+// once here so the fresh-install schema and the upgrade migration apply
+// byte-identical DDL — see TestFreshSchemaMatchesMigratedSchema.
+const questStateSessionColumnSQL = `ALTER TABLE quest_state ADD COLUMN session_id TEXT`
 
 // baseSchema contains every CREATE TABLE, INDEX, and TRIGGER statement from
 // the original version-1 schema. Do not edit a statement here to ship a
@@ -240,7 +267,8 @@ var baseSchema = []string{
 // baseSchema plus the additive DDL from every migration step in
 // migrations.go, so a fresh install and a store upgraded through the ladder
 // always converge on identical schema objects.
-var schema = append(append([]string{}, baseSchema...), questWorktreeUniqueIndexSQL)
+var schema = append(append([]string{}, baseSchema...),
+	questWorktreeUniqueIndexSQL, leadTableSQL, questStateSessionColumnSQL)
 
 // applySchemaCalls counts how many times applySchema has actually run DDL.
 // Tests use it to assert that opening an already-current store takes the
@@ -267,7 +295,7 @@ func ensureSchema(conn *Conn) error {
 		return nil
 	}
 	if v > latest {
-		return fmt.Errorf("db: database is from a newer fellowship (schema version %d, this binary supports up to %d); upgrade the binary", v, latest)
+		return fmt.Errorf("%w (schema version %d, this binary supports up to %d); upgrade the binary", ErrSchemaNewer, v, latest)
 	}
 	if err := sqlitex.ExecuteTransient(conn, "PRAGMA journal_mode = WAL", nil); err != nil {
 		return err
@@ -276,6 +304,36 @@ func ensureSchema(conn *Conn) error {
 		return applySchema(conn)
 	}
 	return applyMigrations(conn, v, latest)
+}
+
+// ErrSchemaOutOfDate reports a store written by an older fellowship binary,
+// opened by something that is not allowed to upgrade it — a hook. Migrating
+// from inside a hook would mean every tool call racing to rewrite the store it
+// is reading; the upgrade belongs to `fellowship init`.
+var ErrSchemaOutOfDate = errors.New("db: fellowship store is out of date")
+
+// ErrSchemaNewer reports a store written by a NEWER fellowship binary than this
+// one. Like ErrSchemaOutOfDate it is an answer, not a transient failure: no
+// retry, on any connection, will make it succeed.
+var ErrSchemaNewer = errors.New("db: fellowship store is from a newer fellowship")
+
+// checkSchemaCurrent verifies the store is at the version this binary expects,
+// writing nothing whatsoever. It is what ensureSchema would have decided, minus
+// the permission to act on it.
+func checkSchemaCurrent(conn *Conn) error {
+	v, err := userVersion(conn)
+	if err != nil {
+		return err
+	}
+	latest := latestSchemaVersion()
+	switch {
+	case v == latest:
+		return nil
+	case v > latest:
+		return fmt.Errorf("%w (schema version %d, this binary supports up to %d); upgrade the binary", ErrSchemaNewer, v, latest)
+	default:
+		return fmt.Errorf("%w (schema version %d, this binary expects %d) — run \"fellowship init\" to upgrade", ErrSchemaOutOfDate, v, latest)
+	}
 }
 
 // userVersion reads PRAGMA user_version, the stamp applySchema leaves behind.
@@ -294,19 +352,32 @@ func userVersion(conn *Conn) (int, error) {
 }
 
 // applySchema creates all tables, indexes, and triggers for a brand-new
-// store and stamps it at latestSchemaVersion. Uses IF NOT EXISTS so it is
-// idempotent.
+// store and stamps it at latestSchemaVersion.
+//
+// It runs in one transaction, exactly as applyMigrations does, so the DDL and
+// the user_version stamp land together or not at all. Most statements say IF
+// NOT EXISTS, but the migrations' ALTER TABLE ... ADD COLUMN cannot: a run
+// interrupted after the tables were created but before the version was stamped
+// would leave a store that re-enters this function on the next open and fails
+// on "duplicate column name", never to open again.
 func applySchema(conn *Conn) error {
 	applySchemaCalls++
-	for _, stmt := range schema {
-		if err := sqlitex.ExecuteTransient(conn, stmt, nil); err != nil {
-			return fmt.Errorf("db: schema: %w\nStatement: %.80s", err, stmt)
+	endFn, err := sqlitex.ImmediateTransaction(conn)
+	if err != nil {
+		return fmt.Errorf("db: begin schema tx: %w", err)
+	}
+	fnErr := func() error {
+		for _, stmt := range schema {
+			if err := sqlitex.ExecuteTransient(conn, stmt, nil); err != nil {
+				return fmt.Errorf("db: schema: %w\nStatement: %.80s", err, stmt)
+			}
 		}
-	}
-
-	// Set schema version.
-	if err := sqlitex.ExecuteTransient(conn, fmt.Sprintf("PRAGMA user_version = %d", latestSchemaVersion()), nil); err != nil {
-		return fmt.Errorf("db: set user_version: %w", err)
-	}
-	return nil
+		// Set schema version.
+		if err := sqlitex.ExecuteTransient(conn, fmt.Sprintf("PRAGMA user_version = %d", latestSchemaVersion()), nil); err != nil {
+			return fmt.Errorf("db: set user_version: %w", err)
+		}
+		return nil
+	}()
+	endFn(&fnErr)
+	return fnErr
 }

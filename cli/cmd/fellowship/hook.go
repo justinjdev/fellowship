@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/justinjdev/fellowship/cli/internal/datadir"
@@ -56,14 +55,22 @@ func runHook(d *db.DB, name string) int {
 func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 	ctx, cancel := context.WithTimeout(context.Background(), hookDBTimeout)
 	defer cancel()
-	gitRoot := gitRootFrom(cwd)
-
 	// Worktree isolation guard: self-contained, independent of quest state.
 	// Runs in teammate sessions (inherited via project settings), so it must
-	// not depend on quest lookup keyed to this worktree.
+	// not depend on quest lookup keyed to this worktree. It resolves the roots
+	// it needs itself, so nothing above may spend a git call on its behalf —
+	// this guard fires on every Edit/Write inside a 5s budget.
 	if name == "worktree-guard" {
 		return runWorktreeGuard(ctx, d, cwd, stdin)
 	}
+
+	gitRoot := gitRootFrom(ctx, cwd)
+	// Every path decision keys off the MAIN repo root, the same way the store
+	// path does: the project config and the data directory live there, not in
+	// whichever worktree this session happens to be. mainRoot is "" when git
+	// cannot answer, and datadir.Resolve falls back to the user config.
+	mainRoot := mainRootOrEmpty(ctx, cwd)
+	dataDirName := datadir.Resolve(mainRoot)
 
 	// Find quest name for this worktree.
 	var questName string
@@ -87,7 +94,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 		// means a teammate is somewhere no quest is registered — enforcement
 		// cannot be evaluated there, so gate hooks block instead of waving it
 		// through as if it were the lead.
-		if isGateHook(name) && unregisteredQuestWorktree(ctx, d, cwd, gitRoot) {
+		if isGateHook(name) && unregisteredQuestWorktree(ctx, d, cwd, gitRoot, mainRoot) {
 			fmt.Fprintf(os.Stderr, "fellowship: worktree %s has no registered quest while a fellowship is running — blocking for safety. The lead can register it with \"fellowship state update-quest --name <quest> --worktree %s\".\n", gitRoot, gitRoot)
 			return 2
 		}
@@ -96,11 +103,17 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			if err != nil {
 				input = &hooks.HookInput{}
 			}
+			// No quest row here, but the store is nobody's to hand-edit —
+			// not the lead's either.
+			if result := hooks.StoreWriteGuard(input); result.Block {
+				fmt.Fprintln(os.Stderr, result.Message)
+				return 2
+			}
 			// Only enumerate worktrees when the command looks like a cd/pushd,
 			// so the extra git call is off the common hot path.
 			var worktrees []string
 			if c := strings.TrimSpace(input.ToolInput.Command); strings.HasPrefix(c, "cd ") || strings.HasPrefix(c, "pushd ") {
-				worktrees = listQuestWorktrees(cwd)
+				worktrees = listQuestWorktrees(ctx, cwd)
 			}
 			if result := hooks.WorktreeGuard(input, hooks.CanonicalPath(cwd), worktrees); result.Block {
 				fmt.Fprintln(os.Stderr, result.Message)
@@ -129,11 +142,14 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 	case "gate-guard":
 		var result hooks.HookResult
 		if err := d.WithConn(ctx, func(conn *db.Conn) error {
-			s, err := state.Load(conn, questName)
+			s, err := loadQuestState(conn, questName)
 			if err != nil {
 				return err
 			}
-			result = hooks.GateGuard(s, input)
+			result = hooks.GateGuard(s, input, hooks.GuardParams{
+				LeadSessionID: state.LeadSessionID(conn, mainRoot, dataDirName),
+				DataDirName:   dataDirName,
+			})
 			return nil
 		}); err != nil {
 			return hookDBExit(err)
@@ -147,7 +163,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 	case "gate-prereq":
 		// Recording-only: GatePrereq never blocks, it just marks lembas done.
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
-			s, err := state.Load(conn, questName)
+			s, err := loadQuestState(conn, questName)
 			if err != nil {
 				return err
 			}
@@ -172,7 +188,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 	case "completion-guard":
 		var result hooks.HookResult
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
-			s, err := state.Load(conn, questName)
+			s, err := loadQuestState(conn, questName)
 			if err != nil {
 				return err
 			}
@@ -194,11 +210,11 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 
 	case "file-track":
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
-			s, err := state.Load(conn, questName)
+			s, err := loadQuestState(conn, questName)
 			if err != nil {
 				return err
 			}
-			hooks.FileTrack(conn, s, input, questName)
+			hooks.FileTrack(conn, s, input, questName, dataDirName)
 			return nil
 		}); err != nil {
 			return hookDBExit(err)
@@ -209,7 +225,7 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 		var result hooks.HookResult
 		var gateSubmitEnrich bool
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
-			s, err := state.Load(conn, questName)
+			s, err := loadQuestState(conn, questName)
 			if err != nil {
 				return err
 			}
@@ -278,11 +294,15 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 
 	case "metadata-track":
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
-			s, err := state.Load(conn, questName)
+			s, err := loadQuestState(conn, questName)
 			if err != nil {
 				return err
 			}
-			if !hooks.MetadataTrack(s, input) {
+			recorded, notice := hooks.MetadataTrack(s, input)
+			if notice != "" {
+				fmt.Fprintln(os.Stderr, notice)
+			}
+			if !recorded {
 				return nil
 			}
 			if err := state.Upsert(conn, s); err != nil {
@@ -306,55 +326,104 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 	}
 }
 
-// bootstrapNotice makes the bootstrap allow visible exactly once per process,
-// so a teammate can see why the hook let a call through without every
-// subsequent tool call repeating it.
-var bootstrapNotice sync.Once
+// errQuestRowMissing reports a quest_state row that is gone from under a quest
+// that has already done something. Unlike the bootstrap window this fails
+// closed: see loadQuestState.
+var errQuestRowMissing = errors.New("quest state row missing")
+
+// loadQuestState loads a quest's row, telling the bootstrap window apart from a
+// row that was deleted.
+//
+// A missing row has to allow during bootstrap — the lead has registered the
+// worktree, the teammate has not run `fellowship init` yet, and blocking would
+// deadlock the quest before it starts. But "no row" was also the state a
+// teammate could manufacture to shake off a pending gate. A quest that has
+// submitted a gate or logged an event is past its bootstrap, so a row missing
+// under it is a destroyed row and blocks.
+func loadQuestState(conn *db.Conn, questName string) (*state.State, error) {
+	s, err := state.Load(conn, questName)
+	if !errors.Is(err, state.ErrNotFound) {
+		return s, err
+	}
+	hasHistory, histErr := hooks.QuestHasHistory(conn, questName)
+	if histErr != nil {
+		return nil, histErr // unknown — fail closed
+	}
+	if hasHistory {
+		return nil, fmt.Errorf("%w: %s", errQuestRowMissing, questName)
+	}
+	return nil, err
+}
 
 // hookDBExit maps a hook's database error to an exit code.
 //
-// state.ErrNotFound is the bootstrap window: the lead has registered this
-// worktree as a quest, but the teammate has not run `fellowship init` yet, so
-// no quest_state row exists. Blocking there is a deadlock — the teammate cannot
-// run the very command that would create the row. So a missing quest row
-// allows. Every other error is a real failure and fails closed.
+// state.ErrNotFound is the bootstrap window (see loadQuestState): a missing
+// quest row on a quest with no history allows, so the teammate can run the very
+// command that creates the row. Every other error is a real failure and fails
+// closed.
 func hookDBExit(err error) int {
+	if errors.Is(err, errQuestRowMissing) {
+		fmt.Fprintln(os.Stderr, `fellowship: quest state row missing — run "fellowship init --quest <name>" from the lead. Blocking for safety.`)
+		return 2
+	}
 	if errors.Is(err, state.ErrNotFound) {
-		bootstrapNotice.Do(func() {
-			fmt.Fprintln(os.Stderr, `fellowship: no quest state for this worktree yet — allowing so the quest can be started with "fellowship init".`)
-		})
+		fmt.Fprintln(os.Stderr, `fellowship: no quest state for this worktree yet — allowing so the quest can be started with "fellowship init".`)
 		return 0
 	}
 	fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 	return 2
 }
 
+// mainRootOrEmpty resolves the main repository root for a directory, or "" when
+// git cannot answer. Callers read "" as "unknown", never as a path: the lead is
+// then unidentifiable and datadir.Resolve falls back to the user config.
+func mainRootOrEmpty(ctx context.Context, dir string) string {
+	root, err := gitutil.MainRepoRootContext(ctx, dir)
+	if err != nil {
+		return ""
+	}
+	return root
+}
+
 // unregisteredQuestWorktree reports whether cwd sits in a git worktree that is
-// NOT the main repo root while a fellowship is initialized in that repo's
+// NOT the main repo root while a fellowship is actually RUNNING in that repo's
 // store. That combination means a teammate is running somewhere no quest was
 // ever registered (a stale or mistyped path, a tree created outside the
 // fellowship), so gate hooks must not treat it as a lead session. Anything it
 // cannot determine reads as false: the lead session in the main tree must
 // never be blocked by this.
-func unregisteredQuestWorktree(ctx context.Context, d *db.DB, cwd, gitRoot string) bool {
-	mainRoot, err := gitutil.MainRepoRoot(cwd)
-	if err != nil {
-		return false
+//
+// "Running" is fellowshipRunning's definition, the same one worktree-guard
+// arms itself with — a live quest with a worktree on disk. The fellowship row
+// is never deleted, so "a row exists" is sticky: it made every linked worktree
+// of the repo unusable forever after one `state init`, long after the last
+// quest had merged.
+// mainRoot is the caller's already-resolved main repo root; "" means it could
+// not resolve one, and this function resolves it from cwd itself rather than
+// spending a second `git rev-parse` on a path the caller already walked.
+func unregisteredQuestWorktree(ctx context.Context, d *db.DB, cwd, gitRoot, mainRoot string) bool {
+	if mainRoot == "" {
+		var err error
+		if mainRoot, err = gitutil.MainRepoRootContext(ctx, cwd); err != nil {
+			return false
+		}
 	}
 	if hooks.CanonicalPath(mainRoot) == hooks.CanonicalPath(gitRoot) {
 		return false // the main tree — this really is the lead session
 	}
-	initialized := false
+	running := false
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
-		if _, err := fellowship.LoadFellowship(conn); err == nil {
-			initialized = true
+		fs, err := fellowship.LoadFellowship(conn)
+		if err != nil {
+			return nil
 		}
+		running = fellowshipRunning(fs)
 		return nil
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "fellowship: could not check for a running fellowship: %v\n", err)
 		return false
 	}
-	return initialized
+	return running
 }
 
 // runWorktreeGuard is the fail-OPEN backstop that keeps quest teammates from
@@ -368,20 +437,26 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 		return 0 // malformed input — allow (defense-in-depth, not primary gate)
 	}
 
-	mainRoot, err := gitutil.MainRepoRoot(cwd)
+	mainRoot, err := gitutil.MainRepoRootContext(ctx, cwd)
 	if err != nil {
 		return 0
 	}
 
-	sessionTop := hooks.CanonicalPath(gitRootFrom(cwd))
+	sessionTop := hooks.CanonicalPath(gitRootFrom(ctx, cwd))
 
 	// Inert unless a fellowship is actually running in the main repo's store.
 	// The same read answers whether this session's top-level is registered as
 	// a quest worktree, which is what tells a quest provisioned into the main
 	// tree apart from the lead standing in it.
+	dataDirName := datadir.Resolve(mainRoot)
 	active := false
 	sessionIsQuest := false
+	leadSessionID := ""
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
+		// The lead is read from the store, whatever else this read finds: a
+		// fellowship that is not running still has a lead, and reading it here
+		// costs nothing extra.
+		leadSessionID = state.LeadSessionID(conn, mainRoot, dataDirName)
 		fs, err := fellowship.LoadFellowship(conn)
 		if err != nil {
 			return nil
@@ -399,27 +474,37 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 		return 0
 	}
 
-	filePath := input.ToolInput.FilePath
-	if filePath == "" {
-		filePath = input.ToolInput.NotebookPath
-	}
+	filePath := hooks.TargetPath(input)
 	if filePath != "" && !filepath.IsAbs(filePath) {
 		filePath = filepath.Join(cwd, filePath)
 	}
+	filePath = hooks.CanonicalPath(filePath)
 
 	// Canonicalize all paths so symlinked repo roots (e.g. macOS /tmp ->
 	// /private/tmp) don't defeat the main-root comparison. `git --show-toplevel`
 	// returns a resolved path; the cwd-derived main root does not.
-	dataDirName := datadir.Name()
+	canonicalMainRoot := hooks.CanonicalPath(mainRoot)
+
+	// Resolving the target's own working tree costs a git subprocess, and this
+	// guard fires on every Edit/Write inside a 5s budget. Spend it only when
+	// the guard can actually reach the comparison it feeds: with no fellowship
+	// running, no target file, or a target outside the main worktree,
+	// IsolationGuard returns before looking at it.
+	targetTop := ""
+	if active && pathUnder(canonicalMainRoot, filePath) {
+		targetTop = targetTopLevel(ctx, filePath)
+	}
+
 	result := hooks.IsolationGuard(hooks.IsolationParams{
 		FellowshipActive:         active,
-		MainRoot:                 hooks.CanonicalPath(mainRoot),
+		MainRoot:                 canonicalMainRoot,
 		SessionTopLevel:          sessionTop,
+		TargetTopLevel:           targetTop,
 		ToolName:                 input.ToolName,
-		FilePath:                 hooks.CanonicalPath(filePath),
+		FilePath:                 filePath,
 		DataDirName:              dataDirName,
 		SessionID:                input.SessionID,
-		LeadSessionID:            state.LeadSessionID(mainRoot, dataDirName),
+		LeadSessionID:            leadSessionID,
 		SessionIsRegisteredQuest: sessionIsQuest,
 	})
 	if result.Block {
@@ -427,6 +512,60 @@ func runWorktreeGuard(ctx context.Context, d *db.DB, cwd string, stdin io.Reader
 		return 2
 	}
 	return 0
+}
+
+// targetTopLevel resolves the git working tree a target file belongs to, from
+// the file's own path rather than the session's working directory — that is
+// what makes a write into the main tree visible when the session sits in a
+// worktree. Returns "" when git cannot answer, which the guard reads as
+// "unknown" and falls back to the session's own top-level.
+//
+// The target may not exist yet (a Write creating a file, in a directory that
+// does not exist either), so the lookup runs in its nearest existing ancestor.
+func targetTopLevel(ctx context.Context, path string) string {
+	if path == "" {
+		return ""
+	}
+	dir := nearestExistingDir(filepath.Dir(path))
+	if dir == "" {
+		return ""
+	}
+	root, err := gitutil.TopLevelContext(ctx, dir)
+	if err != nil {
+		return ""
+	}
+	return hooks.CanonicalPath(root)
+}
+
+// pathUnder reports whether target sits strictly inside root. It is the cheap
+// filesystem-free version of the containment IsolationGuard checks with
+// relWithin: a target that is not under the main root is allowed there whatever
+// its own working tree turns out to be, so resolving that tree is wasted work.
+func pathUnder(root, target string) bool {
+	if root == "" || target == "" {
+		return false
+	}
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(target))
+	if err != nil {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, "../")
+}
+
+// nearestExistingDir walks up from dir to the first directory that exists, or
+// "" if it reaches the filesystem root without finding one.
+func nearestExistingDir(dir string) string {
+	for {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
 }
 
 // fellowshipRunning reports whether a fellowship is actually in progress, as

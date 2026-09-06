@@ -13,6 +13,22 @@ import (
 // DefaultName is the default directory name for fellowship working files.
 const DefaultName = ".fellowship"
 
+// StoreFileName is the SQLite store's file name inside the data directory.
+const StoreFileName = "fellowship.db"
+
+// IsStorePath reports whether a path names the SQLite store or one of the
+// sidecar files SQLite keeps beside it (-wal, -shm, -journal).
+//
+// The data directory as a whole is exempt from the write guards — teammates
+// legitimately keep coordination files there — but the store is not a
+// coordination file: it IS the enforcement state, and a session that can write
+// it can rewrite its own phase, clear its own gate, or name itself the lead.
+// Nothing legitimate edits it through Edit/Write; the CLI is the only writer.
+func IsStorePath(path string) bool {
+	base := filepath.Base(filepath.Clean(filepath.FromSlash(path)))
+	return base == StoreFileName || strings.HasPrefix(base, StoreFileName+"-")
+}
+
 // cfg holds the subset of fellowship config the CLI cares about.
 type cfg struct {
 	DataDir  string `json:"dataDir"`
@@ -31,9 +47,19 @@ var (
 	cachedName string
 )
 
-// Name returns the configured data directory name.
-// Merge order: defaults → project (.fellowship/config.json) → user (~/.claude/fellowship.json).
-// User config always wins. Result is cached after the first call.
+// Name returns the configured data directory name for the repo the process is
+// standing in. Merge order: defaults → project (.fellowship/config.json) → user
+// (~/.claude/fellowship.json). User config always wins. Result is cached after
+// the first call.
+//
+// The repo is resolved through gitutil.MainRepoRoot, the same lookup
+// db.StorePath makes: the project config lives in the MAIN worktree, so
+// resolving the session's own top-level meant a session inside a linked
+// worktree read no project config at all and silently fell back to
+// ".fellowship" while the store sat in the configured directory.
+//
+// Code that already knows which repo it means — every hook, which resolves the
+// main root anyway — should call Resolve(mainRoot) rather than this.
 func Name() string {
 	nameOnce.Do(func() {
 		root, err := gitRoot()
@@ -70,12 +96,27 @@ func Resolve(root string) string {
 	return dataDir
 }
 
-// IsDataDirPath reports whether the given path is inside the fellowship data directory.
+// IsDataDirPath reports whether the given path is inside the fellowship data
+// directory of the repo the process is standing in. Callers that already know
+// the repo — the hooks — should use IsPathIn with the name resolved from the
+// main repo root.
 func IsDataDirPath(path string) bool {
-	name := Name()
+	return IsPathIn(path, Name())
+}
+
+// IsPathIn reports whether path lies inside a data directory named dataDirName.
+//
+// The match is on a path segment anywhere in the path, not on the repo-relative
+// location: a hook is handed whatever path the tool call carried, which may be
+// relative to a worktree the hook cannot resolve. An empty name matches
+// nothing.
+func IsPathIn(path, dataDirName string) bool {
+	if dataDirName == "" || path == "" {
+		return false
+	}
 	// Normalize to forward slashes for consistent matching across platforms.
 	p := filepath.ToSlash(filepath.Clean(path))
-	return strings.Contains(p, "/"+name+"/") || strings.HasPrefix(p, name+"/")
+	return strings.Contains(p, "/"+dataDirName+"/") || strings.HasPrefix(p, dataDirName+"/")
 }
 
 // readUserConfig reads ~/.claude/fellowship.json.
@@ -103,7 +144,16 @@ func readConfigFile(path string) cfg {
 // gitRootFunc is the function used to find the git repository root.
 // It is a variable so tests can override it without spawning a subprocess.
 var gitRootFunc = func() (string, error) {
-	return gitutil.TopLevel("")
+	// The working directory has to be named explicitly: `git rev-parse
+	// --git-common-dir` answers relatively in the main worktree (".git"), and
+	// MainRepoRoot can only absolutize that against the directory it was given.
+	// Passing "" made it return "." — a root that is only correct for as long
+	// as the process never changes directory.
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	return gitutil.MainRepoRoot(cwd)
 }
 
 func gitRoot() (string, error) {

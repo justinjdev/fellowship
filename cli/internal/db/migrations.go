@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
@@ -88,6 +89,65 @@ var migrations = []migration{
 			return sqlitex.ExecuteTransient(conn, remapAutoApproveSQL(), nil)
 		},
 	},
+	{
+		version: 4,
+		up: func(conn *Conn) error {
+			// The lead's session id moves out of <data-dir>/lead and into
+			// the store. The data directory is exempt from the write
+			// guards, so a teammate could rewrite the marker with its own
+			// session id and become the lead as far as worktree-guard was
+			// concerned. Nothing writes SQLite through Edit/Write.
+			//
+			// The row is not backfilled: the marker file is still read as
+			// a one-release fallback, and `fellowship state init` (or
+			// `state init --claim-lead`) writes the row.
+			return sqlitex.ExecuteTransient(conn, leadTableSQL, nil)
+		},
+	},
+	{
+		version: 5,
+		up: func(conn *Conn) error {
+			// quest_state records which session is working the quest, so
+			// `state init --claim-lead` can refuse a session that is
+			// already a teammate. Existing rows are left NULL: the id is
+			// recorded the next time that quest runs `fellowship init`,
+			// and an unrecorded teammate simply falls back to gate-guard's
+			// refusal of lead commands from a quest worktree.
+			//
+			// ALTER TABLE has no IF NOT EXISTS, and every other statement in
+			// this schema is idempotent, so the check stands in for one: a
+			// store that already carries the column (one created by this
+			// binary and stamped back to an older version) upgrades instead
+			// of failing.
+			has, err := columnExists(conn, "quest_state", "session_id")
+			if err != nil {
+				return err
+			}
+			if has {
+				return nil
+			}
+			return sqlitex.ExecuteTransient(conn, questStateSessionColumnSQL, nil)
+		},
+	},
+}
+
+// columnExists reports whether a table already has a column, via PRAGMA
+// table_info. Migration steps that add a column use it in place of the
+// IF NOT EXISTS that ALTER TABLE does not have.
+func columnExists(conn *Conn, table, column string) (bool, error) {
+	found := false
+	err := sqlitex.ExecuteTransient(conn, fmt.Sprintf("PRAGMA table_info(%s)", table), &sqlitex.ExecOptions{
+		ResultFunc: func(stmt *sqlite.Stmt) error {
+			if stmt.ColumnText(1) == column {
+				found = true
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		return false, fmt.Errorf("db: read columns of %s: %w", table, err)
+	}
+	return found, nil
 }
 
 // retiredPhases maps each phase name removed by the four-phase lifecycle

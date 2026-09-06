@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 )
 
 // IsolationParams carries the facts the isolation guard needs, already resolved
@@ -18,36 +20,47 @@ type IsolationParams struct {
 	// SessionTopLevel is the absolute path to the current session's git top-level
 	// (`git rev-parse --show-toplevel`).
 	SessionTopLevel string
+	// TargetTopLevel is the git working-tree root the TARGET FILE lives in,
+	// resolved from the file's own path rather than from the session's working
+	// directory. A teammate sitting in its own worktree can still name an
+	// absolute path in the main tree, and where the write LANDS is what makes
+	// it a mis-placement. "" when git could not answer, in which case the
+	// session's top-level stands in.
+	TargetTopLevel string
 	// ToolName is the PreToolUse tool name (Edit, Write, NotebookEdit, ...).
 	ToolName string
 	// FilePath is the absolute, cleaned path to the tool's target file.
 	FilePath string
-	// DataDirName is the configured fellowship data directory name
-	// (datadir.Name(), e.g. ".fellowship" or a user override). Writes under it
-	// are coordination state, always allowed even in the main tree.
+	// DataDirName is the fellowship data directory name configured for the MAIN
+	// repo (datadir.Resolve(mainRoot), e.g. ".fellowship" or a user override).
+	// Writes under it are coordination state, allowed in the main tree for a
+	// session standing there — the store file excepted.
 	DataDirName string
 	// SessionID is the Claude Code session id from the hook payload, or "" if
 	// the payload carried none.
 	SessionID string
 	// LeadSessionID is the session id `fellowship state init` recorded in the
-	// lead marker, or "" when there is no marker or it holds no id.
+	// store's lead row, or "" when no lead is recorded.
 	LeadSessionID string
 	// SessionIsRegisteredQuest reports that the session's git top-level is
-	// registered as a quest worktree in fellowship state. Combined with a
-	// top-level that IS the main root, it is a positive mis-placement: a quest
-	// was provisioned in the main working tree.
+	// registered as a quest worktree in fellowship state. Combined with a write
+	// that lands in the main tree, it is a positive mis-placement: either a
+	// quest provisioned into the main working tree, or a teammate reaching into
+	// it from its own worktree.
 	SessionIsRegisteredQuest bool
 }
 
 // IsolationGuard is the fail-OPEN backstop for worktree isolation: it blocks
 // only on a positive mis-placement detection, and every uncertainty (no
 // fellowship active, unresolved paths, non-mutating tool, an unidentifiable
-// writer) allows. During an active fellowship, a quest teammate must operate
-// inside its own git worktree; a session whose top-level IS the main worktree
-// root and that is not the lead has had isolation skipped, and its source
-// writes are blocked. Teammates in their own worktree, non-mutating tools, and
-// the lead's own session are never blocked. This is defense-in-depth:
-// lead-created `isolation: "worktree"` is the primary guarantee.
+// writer) allows. During an active fellowship, a quest teammate's source writes
+// must land inside its own git worktree; a write that lands in the MAIN
+// worktree from a session that is not the lead has had isolation skipped, and
+// is blocked — whether the session was dropped into the main tree or reached it
+// by absolute path from its own worktree. Writes inside the teammate's own
+// worktree, non-mutating tools, and the lead's own session are never blocked.
+// This is defense-in-depth: lead-created `isolation: "worktree"` is the primary
+// guarantee.
 func IsolationGuard(p IsolationParams) HookResult {
 	// Inert unless a fellowship is active — installing the guard is always safe.
 	if !p.FellowshipActive {
@@ -57,11 +70,18 @@ func IsolationGuard(p IsolationParams) HookResult {
 	if !isSourceMutatingTool(p.ToolName) {
 		return HookResult{}
 	}
-	// The whole point: a session correctly in its own worktree is never blocked.
-	if !samePath(p.SessionTopLevel, p.MainRoot) {
+	if p.FilePath == "" {
 		return HookResult{}
 	}
-	if p.FilePath == "" {
+	// Where the write LANDS decides, not where the session happens to stand.
+	// The guard used to return here unless the session's own top-level was the
+	// main root, so a teammate in its worktree could write any absolute path in
+	// the main tree and never be looked at.
+	targetRoot := p.TargetTopLevel
+	if targetRoot == "" {
+		targetRoot = p.SessionTopLevel
+	}
+	if !samePath(targetRoot, p.MainRoot) {
 		return HookResult{}
 	}
 	rel, ok := relWithin(p.MainRoot, p.FilePath)
@@ -69,7 +89,11 @@ func IsolationGuard(p IsolationParams) HookResult {
 		// Target lives outside the main worktree — not our concern.
 		return HookResult{}
 	}
-	if isCoordinationPath(rel, p.DataDirName) {
+	// The coordination-path exemption is scoped to the session's own tree. A
+	// teammate in its worktree has no business hand-editing the MAIN tree's
+	// .git, .claude or data directory; only a session standing in the main tree
+	// (the lead, or the unidentifiable writer rule 4 lets through) gets it.
+	if samePath(p.SessionTopLevel, p.MainRoot) && isCoordinationPath(rel, p.DataDirName) {
 		return HookResult{}
 	}
 
@@ -79,26 +103,25 @@ func IsolationGuard(p IsolationParams) HookResult {
 	// writing decides, in this order:
 	//
 	//  1. The session that ran `fellowship state init` is the lead — allow.
-	//  2. A session whose top-level is BOTH the main root and a registered
-	//     quest worktree is a quest provisioned into the main tree — block,
-	//     with or without session ids.
+	//  2. A session registered as a quest worktree, writing here, is a
+	//     teammate: either provisioned into the main tree, or reaching into it
+	//     from its own worktree — block, with or without session ids.
 	//  3. A known session that is not the recorded lead, during an active
 	//     fellowship, is a teammate in the wrong tree — block.
 	//  4. Otherwise the writer cannot be identified. The guard is a fail-open
 	//     backstop behind lead-provisioned isolation, so it allows.
-	if p.SessionID != "" && p.SessionID == p.LeadSessionID {
+	if IsLeadSession(p.SessionID, p.LeadSessionID) {
 		return HookResult{}
 	}
 	if p.SessionIsRegisteredQuest {
-		return blockMainTreeWrite(rel, "this worktree is registered as a quest but resolves to the main working tree")
+		if samePath(p.SessionTopLevel, p.MainRoot) {
+			return blockMainTreeWrite(rel, "this worktree is registered as a quest but resolves to the main working tree")
+		}
+		return blockMainTreeWrite(rel, "this session is a registered quest worktree writing into the main working tree")
 	}
 	if p.SessionID != "" && p.LeadSessionID != "" {
-		marker := "lead marker in the fellowship data directory"
-		if p.DataDirName != "" {
-			marker = p.DataDirName + "/lead marker"
-		}
-		return blockMainTreeWrite(rel, fmt.Sprintf(
-			"this session is not the lead recorded by \"fellowship state init\" — if it is, delete the %s", marker))
+		return blockMainTreeWrite(rel,
+			"this session is not the lead recorded by \"fellowship state init\" — if it is, re-record it with \"fellowship state init --claim-lead\"")
 	}
 	return HookResult{}
 }
@@ -152,7 +175,13 @@ func relWithin(root, target string) (string, bool) {
 // legitimately manages these even in the main tree. The data directory is
 // user-configurable (datadir.Name), so the caller passes its resolved name
 // rather than assuming the ".fellowship" default; .git and .claude are fixed.
+// The store is the one thing inside the data directory that is never exempt:
+// it is the enforcement state, not a coordination file, and a session that can
+// write it can name itself the lead.
 func isCoordinationPath(rel, dataDirName string) bool {
+	if datadir.IsStorePath(rel) {
+		return false
+	}
 	first := strings.SplitN(filepath.ToSlash(rel), "/", 2)[0]
 	if first == ".git" || first == ".claude" {
 		return true

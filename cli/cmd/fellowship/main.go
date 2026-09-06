@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/justinjdev/fellowship/cli/internal/db"
+	"github.com/justinjdev/fellowship/cli/internal/hooks"
 )
 
 var version = "dev"
@@ -54,6 +55,10 @@ func main() {
 	}
 	defer d.Close()
 
+	// One line, once, when this session is not the recorded lead but is
+	// standing where only the lead may write.
+	noticeLeadMismatch(d, cwd, os.Args[1:])
+
 	switch os.Args[1] {
 	case "hook":
 		if len(os.Args) < 3 {
@@ -68,7 +73,7 @@ func main() {
 		}
 		os.Exit(runGate(d, os.Args[2:]))
 	case "init":
-		os.Exit(runInit(d))
+		os.Exit(runInit(d, os.Args[2:]))
 	case "status":
 		os.Exit(runStatus(d, os.Args[2:]))
 	case "group":
@@ -157,9 +162,42 @@ func storeCreatingCommand(args []string) bool {
 	return false
 }
 
+// readOnlyHooks are the hooks that only decide — they read the store and write
+// nothing back. They get a read-only connection, so a bug or a future edit
+// cannot quietly turn a decision into a write. The recording hooks
+// (gate-submit, gate-prereq, metadata-track, file-track, completion-guard)
+// need the write side.
+var readOnlyHooks = map[string]bool{
+	"gate-guard":     true,
+	"worktree-guard": true,
+}
+
+// pendingToolUpgradesStore reports whether the tool call this hook is deciding
+// on is a fellowship command that would bring an out-of-date store up to date.
+//
+// It consumes stdin, which is safe only because every caller exits immediately
+// afterwards: the payload is never needed again. A payload that will not parse,
+// or a tool that is not Bash, reads as "not the upgrade" and the block stands.
+func pendingToolUpgradesStore() bool {
+	input, err := hooks.ParseInput(os.Stdin)
+	if err != nil || input == nil || input.ToolName != "Bash" {
+		return false
+	}
+	return hooks.IsStoreUpgradeCommand(input.ToolInput.Command)
+}
+
 func openStore(cwd string, args []string) (*db.DB, error) {
 	if storeCreatingCommand(args) {
 		return db.Open(cwd)
+	}
+	// Hooks never migrate: the schema ladder belongs to `init`, not to a
+	// decision that fires on every tool call.
+	if args[0] == "hook" {
+		hookName := ""
+		if len(args) > 1 {
+			hookName = args[1]
+		}
+		return db.OpenForHook(cwd, readOnlyHooks[hookName])
 	}
 	return db.OpenExisting(cwd)
 }
@@ -167,9 +205,13 @@ func openStore(cwd string, args []string) (*db.DB, error) {
 // storeOpenExit turns a store-open failure into an exit code according to the
 // enforcement posture:
 //
-//   - No store at all — this is an ordinary repo with no fellowship, so hooks
-//     allow (exit 0) and there is nothing to enforce. Other commands report the
-//     missing store.
+//   - No store, and no fellowship data directory either — this is an ordinary
+//     repo with no fellowship, so hooks allow (exit 0) and there is nothing to
+//     enforce. Other commands report the missing store.
+//   - No store (or a zero-byte one) in a repo that HAS a data directory — a
+//     fellowship is expected here and its state is gone. Deleting the store was
+//     the cheapest way to switch enforcement off, so gate hooks block (exit 2);
+//     worktree-guard still fails open.
 //   - Store present but unopenable (corrupt, unreadable, locked out) — gate
 //     hooks block (exit 2) because enforcement state is unknown; worktree-guard
 //     still fails open.
@@ -180,7 +222,18 @@ func storeOpenExit(cwd string, args []string, err error) int {
 		hookName = args[1]
 	}
 
-	if errors.Is(err, db.ErrNoStore) {
+	if errors.Is(err, db.ErrNoStore) || errors.Is(err, db.ErrEmptyStore) {
+		if fellowshipExpected(cwd) {
+			if isGateHook(hookName) {
+				fmt.Fprintln(os.Stderr, "fellowship: store missing or empty — restore it, or run \"fellowship state init\" from a terminal outside this session (this hook blocks the session's own tool calls). Blocking for safety.")
+				return 2
+			}
+			if isHook {
+				return 0 // worktree-guard and unknown hooks fail open
+			}
+			fmt.Fprintln(os.Stderr, "fellowship: store missing or empty — restore it or run \"fellowship state init\".")
+			return 1
+		}
 		if isHook {
 			return 0 // no fellowship here — nothing to enforce
 		}
@@ -189,6 +242,30 @@ func storeOpenExit(cwd string, args []string, err error) int {
 			return 1
 		}
 		fmt.Fprintln(os.Stderr, `fellowship: no fellowship state in this repo — run "fellowship init" first.`)
+		return 1
+	}
+
+	if errors.Is(err, db.ErrSchemaOutOfDate) {
+		// A hook found a store written by an older binary. Migrating is not a
+		// decision hook's job, so say what to run — and let that command
+		// through. gate-guard gates Bash, so a blanket block would deny the
+		// only way out of itself: after any binary upgrade every tool call in
+		// the repo would be refused, including the one the refusal asks for.
+		// What is let through is a read-only command: every non-hook
+		// invocation migrates on open, so the remedy does not have to be one
+		// that can also reset a quest's gate (see hooks.IsStoreUpgradeCommand).
+		if isGateHook(hookName) {
+			if hookName == "gate-guard" && pendingToolUpgradesStore() {
+				fmt.Fprintln(os.Stderr, `fellowship: the store is out of date — allowing this command to upgrade it.`)
+				return 0
+			}
+			fmt.Fprintln(os.Stderr, `fellowship: the store is out of date — run "fellowship status" to upgrade it (every non-hook command migrates the store on open). Blocking for safety.`)
+			return 2
+		}
+		if isHook {
+			return 0 // worktree-guard fails open
+		}
+		fmt.Fprintf(os.Stderr, "fellowship: %v\n", err)
 		return 1
 	}
 
@@ -261,6 +338,7 @@ Fellowship state:
     --name NAME           Fellowship name (required)
     --base-branch BRANCH  Base branch for quest worktrees (default: auto-detected)
     --skip-hook-install   Skip registering the worktree-guard hook in settings.local.json
+    --claim-lead          Record this session as the lead (alone: changes nothing else)
   state add-quest         Add a quest entry to fellowship state
     --name NAME           Quest name (required)
     --task "DESC"         Task description (required)

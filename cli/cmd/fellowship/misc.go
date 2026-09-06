@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/justinjdev/fellowship/cli/internal/dashboard"
+	"github.com/justinjdev/fellowship/cli/internal/datadir"
 	"github.com/justinjdev/fellowship/cli/internal/db"
 	"github.com/justinjdev/fellowship/cli/internal/gitutil"
 	"github.com/justinjdev/fellowship/cli/internal/hooks"
@@ -156,20 +157,32 @@ func extractJSONFlag(args []string) (found bool, rest []string) {
 // working directory outside a repo.
 func gitRootOrCwd() string {
 	cwd, _ := os.Getwd()
-	return gitRootFrom(cwd)
+	return gitRootFrom(context.Background(), cwd)
+}
+
+// mainRepoRootOrCwd returns the MAIN repository root — the worktree that holds
+// the store, the data directory and the project config — falling back to this
+// session's own working-tree root when git cannot answer. Commands that write
+// fellowship-wide state use it so they never land in a linked worktree.
+func mainRepoRootOrCwd() string {
+	cwd, _ := os.Getwd()
+	if root, err := gitutil.MainRepoRoot(cwd); err == nil {
+		return root
+	}
+	return gitRootFrom(context.Background(), cwd)
 }
 
 // listQuestWorktrees returns the canonicalized roots of all git worktrees for
 // the repo containing dir, excluding the main worktree. Used by the lead's
 // cd-guard to recognize quest worktrees created OUTSIDE the main tree (not just
 // the legacy .claude/worktrees location). Returns nil if git is unavailable.
-func listQuestWorktrees(dir string) []string {
-	worktrees, err := gitutil.ListWorktrees(dir)
+func listQuestWorktrees(ctx context.Context, dir string) []string {
+	worktrees, err := gitutil.ListWorktreesContext(ctx, dir)
 	if err != nil {
 		return nil
 	}
 	mainRoot := ""
-	if mr, err := gitutil.MainRepoRoot(dir); err == nil {
+	if mr, err := gitutil.MainRepoRootContext(ctx, dir); err == nil {
 		mainRoot = hooks.CanonicalPath(mr)
 	}
 	var paths []string
@@ -184,9 +197,11 @@ func listQuestWorktrees(dir string) []string {
 }
 
 // gitRootFrom returns the git root for a given directory, or dir itself when
-// git cannot answer (dir is not in a repo, or git is unavailable).
-func gitRootFrom(dir string) string {
-	root, err := gitutil.TopLevel(dir)
+// git cannot answer (dir is not in a repo, git is unavailable, or ctx expired).
+// Hooks pass their own bounded context so a wedged git call is cancelled with
+// the hook rather than outliving it.
+func gitRootFrom(ctx context.Context, dir string) string {
+	root, err := gitutil.TopLevelContext(ctx, dir)
 	if err != nil {
 		return dir
 	}
@@ -202,9 +217,10 @@ func resolveDirQuest(d *db.DB, dir string) string {
 	if dir == "" {
 		dir, _ = os.Getwd()
 	}
+	ctx := context.Background()
 	var questName string
-	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
-		n, err := state.FindQuest(conn, gitRootFrom(dir))
+	if err := d.WithConn(ctx, func(conn *db.Conn) error {
+		n, err := state.FindQuest(conn, gitRootFrom(ctx, dir))
 		if err != nil {
 			return err
 		}
@@ -245,6 +261,52 @@ func checkDir(dir string) error {
 	}
 	return nil
 }
+
+// fellowshipExpected reports whether the repo containing fromDir is supposed to
+// have a fellowship store: its main worktree has a fellowship data directory
+// that something other than a git checkout put there.
+//
+// That is the difference between "an ordinary repo, nothing to enforce" and "a
+// fellowship whose store went missing". Deleting <data-dir>/fellowship.db was
+// the cheapest way to switch enforcement off — every hook read "no store here"
+// and allowed. The data directory is left behind by everything else the
+// fellowship writes, so its presence says a fellowship was expected here.
+//
+// The one exception is projectConfigName: the data directory is git-ignored
+// except for that file, which teams commit to share settings (see the README).
+// A fresh clone of such a repo therefore has a data directory holding nothing
+// but the config, and no fellowship has ever run in it — blocking there would
+// refuse every tool call in a repo nobody has initialized. An EMPTY data
+// directory is still evidence, because git never checks one out: only the CLI
+// (or a person) creates it.
+func fellowshipExpected(fromDir string) bool {
+	mainRepo, err := gitutil.MainRepoRoot(fromDir)
+	if err != nil {
+		return false
+	}
+	dir := filepath.Join(mainRepo, datadir.Resolve(mainRepo))
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return true // present but unreadable — assume a fellowship was here
+	}
+	if len(entries) == 0 {
+		return true
+	}
+	for _, e := range entries {
+		if e.Name() != projectConfigName {
+			return true
+		}
+	}
+	return false // only the committable project config: a clone, not a fellowship
+}
+
+// projectConfigName is the one file inside the data directory that a repo
+// commits (README: `.fellowship/` is git-ignored except `!.fellowship/config.json`).
+const projectConfigName = "config.json"
 
 // jsonFilesExist checks whether legacy JSON state files exist in the .fellowship
 // directory, indicating a migration is needed.

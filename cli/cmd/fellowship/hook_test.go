@@ -75,6 +75,17 @@ func fellowshipWith(t *testing.T, root string, quests map[string]string) *db.DB 
 	return d
 }
 
+// recordLead names a session as the fellowship's lead, in the store — where
+// the guards read it and where no Edit/Write can reach it.
+func recordLead(t *testing.T, d *db.DB, root, sessionID string) {
+	t.Helper()
+	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
+		return state.RecordLead(conn, root, sessionID)
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func setQuestState(t *testing.T, d *db.DB, s *state.State) {
 	t.Helper()
 	if err := d.WithTx(context.Background(), func(conn *db.Conn) error {
@@ -351,9 +362,7 @@ func TestRunWorktreeGuard_LeadSession(t *testing.T) {
 	root := newMainRepo(t)
 	worktree := addWorktree(t, root, "quest-lead-alpha")
 	d := fellowshipWith(t, root, map[string]string{"quest-lead-alpha": worktree})
-	if err := state.WriteLeadMarker(root, ".fellowship", "lead-session"); err != nil {
-		t.Fatal(err)
-	}
+	recordLead(t, d, root, "lead-session")
 	target := filepath.Join(root, "src", "main.go")
 
 	cases := []struct {
@@ -399,9 +408,7 @@ func TestRunWorktreeGuard_AllowsWriteInsideWorktree(t *testing.T) {
 	root := newMainRepo(t)
 	worktree := addWorktree(t, root, "quest-inside-alpha")
 	d := fellowshipWith(t, root, map[string]string{"quest-inside-alpha": worktree})
-	if err := state.WriteLeadMarker(root, ".fellowship", "lead-session"); err != nil {
-		t.Fatal(err)
-	}
+	recordLead(t, d, root, "lead-session")
 	target := filepath.Join(worktree, "src", "main.go")
 
 	if got := runWorktreeGuard(context.Background(), d, worktree, writeInput("teammate-session", target)); got != 0 {

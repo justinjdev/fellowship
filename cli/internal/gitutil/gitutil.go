@@ -1,6 +1,7 @@
 package gitutil
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,8 +12,18 @@ import (
 )
 
 // RunGit executes a git command in the given directory and returns stdout.
+// It is RunGitContext with a background context: callers that work to a
+// deadline — the hooks, whose whole invocation is bounded — should pass theirs.
 func RunGit(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	return RunGitContext(context.Background(), dir, args...)
+}
+
+// RunGitContext executes a git command under ctx, so a git call that hangs on a
+// lock or a slow filesystem is cancelled with the caller rather than outliving
+// it. A hook has about 5s before Claude Code kills it outright; the deadline it
+// sets is only real if the subprocesses respect it.
+func RunGitContext(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
@@ -23,7 +34,12 @@ func RunGit(dir string, args ...string) (string, error) {
 
 // ListWorktrees parses `git worktree list --porcelain` and returns worktree paths.
 func ListWorktrees(gitRoot string) ([]string, error) {
-	out, err := RunGit(gitRoot, "worktree", "list", "--porcelain")
+	return ListWorktreesContext(context.Background(), gitRoot)
+}
+
+// ListWorktreesContext is ListWorktrees bounded by ctx.
+func ListWorktreesContext(ctx context.Context, gitRoot string) ([]string, error) {
+	out, err := RunGitContext(ctx, gitRoot, "worktree", "list", "--porcelain")
 	if err != nil {
 		return nil, fmt.Errorf("listing worktrees: %w", err)
 	}
@@ -86,7 +102,12 @@ func GateAge(gateID string, now time.Time) int {
 // --show-toplevel`. In a linked worktree that is the worktree's own root, not
 // the main repo's; use MainRepoRoot for that.
 func TopLevel(dir string) (string, error) {
-	out, err := RunGit(dir, "rev-parse", "--show-toplevel")
+	return TopLevelContext(context.Background(), dir)
+}
+
+// TopLevelContext is TopLevel bounded by ctx.
+func TopLevelContext(ctx context.Context, dir string) (string, error) {
+	out, err := RunGitContext(ctx, dir, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return "", fmt.Errorf("git rev-parse --show-toplevel: %w", err)
 	}
@@ -98,7 +119,12 @@ func TopLevel(dir string) (string, error) {
 // main worktree. The fellowship store, its data directory and the guards all
 // key off this path, so every caller must compute it the same way.
 func MainRepoRoot(dir string) (string, error) {
-	out, err := RunGit(dir, "rev-parse", "--git-common-dir")
+	return MainRepoRootContext(context.Background(), dir)
+}
+
+// MainRepoRootContext is MainRepoRoot bounded by ctx.
+func MainRepoRootContext(ctx context.Context, dir string) (string, error) {
+	out, err := RunGitContext(ctx, dir, "rev-parse", "--git-common-dir")
 	if err != nil {
 		return "", fmt.Errorf("git rev-parse --git-common-dir: %w", err)
 	}
