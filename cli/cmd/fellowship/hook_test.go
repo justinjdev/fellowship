@@ -415,3 +415,27 @@ func TestRunWorktreeGuard_AllowsWriteInsideWorktree(t *testing.T) {
 		t.Errorf("runWorktreeGuard = %d, want 0 (write inside the teammate's own worktree)", got)
 	}
 }
+
+// A directory that is not inside any git repository has no fellowship: hooks
+// allow, and the CLI reports "no fellowship state" rather than a git failure.
+// Every Bash call in a plain directory used to be blocked "for safety".
+func TestStoreOpen_OutsideAnyRepoAllowsHooks(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	_, err := openStore(dir, []string{"hook", "gate-guard"})
+	if err == nil {
+		t.Fatal("expected an error opening a store outside a repository")
+	}
+	for _, hook := range []string{"gate-guard", "gate-submit", "gate-prereq", "file-track", "agent-track", "worktree-guard"} {
+		if got := storeOpenExit(dir, []string{"hook", hook}, err); got != 0 {
+			t.Errorf("%s outside a repo: exit %d, want 0 (allow)", hook, got)
+		}
+	}
+	if got := storeOpenExit(dir, []string{"status"}, err); got != 1 {
+		t.Errorf("status outside a repo: exit %d, want 1", got)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, ".fellowship")); statErr == nil {
+		t.Error("a store lookup outside a repo created a data directory")
+	}
+}
