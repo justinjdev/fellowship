@@ -96,7 +96,7 @@ Each gate received (whether auto-approved or user-approved) increments the count
 
 **Before accepting quest completion**, Gandalf verifies from the store — nothing is "marked done" by the lead:
 1. `fellowship history show --quest <name> --json` lists every gate submitted/approved, matching the expected count for its mode (3 standard/promoted, 1 plan-driven)
-2. `gate status --dir <worktree>` shows Review with no gate pending, and `fellowship state show --json` shows the quest `status: completed` (which only `fellowship complete` sets, from the worktree)
+2. `gate status --dir <worktree>` shows Review with no gate pending, and `fellowship history show --quest <name> --json` shows `status: completed` with a `quest_completed` event (`fellowship events --quest <name> --json`) — the real evidence the teammate ran `fellowship complete`, since the store's own `status: completed` (`fellowship state show --json`) can also be set directly by the lead's `state update-quest --status completed`
 
 If either check fails, Gandalf rejects the completion:
 - Message the teammate: "Gate discipline violation — you have completed {N}/{expected} gates. You must submit gates for all phase transitions before completing. Missing: {list of missing transitions}."

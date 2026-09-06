@@ -73,8 +73,10 @@ None of the above is what finally prevents a mis-placed write. These are, and
 they hold regardless of how isolation was provisioned:
 
 1. The teammate's mandatory isolation self-check before its first write — its
-   git top-level must differ from the main repo root, else it stops and
-   messages the lead (see [spawn-prompts.md](spawn-prompts.md)).
+   registered worktree must resolve, via `git -C`, to a distinct tree — it
+   never assumes its working directory is the worktree, because it is not —
+   else it stops and messages the lead (see
+   [spawn-prompts.md](spawn-prompts.md)).
 2. The fail-closed `worktree-guard` PreToolUse hook, which blocks source
    writes from the main tree during an active fellowship. A block from it is
    **proof** the teammate is mis-placed, not an obstacle to route around.

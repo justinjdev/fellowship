@@ -75,9 +75,11 @@ On user confirmation, transition into Gandalf coordinator mode:
 template in `plugin/skills/fellowship/resources/spawn-prompts.md`. Rekindle
 keeps no copy of it — the gate, hold, isolation, and boundary language is the
 same for a resumed quest as for a fresh one, and a second copy here would
-drift. Fill the variant's `{worktree_path}`, `{phase}`, `{classification}`,
-and `{checkpoint_line}` from the Step 1 scan and the Step 2 classification,
-and every shared placeholder exactly as `/fellowship` does.
+drift. Fill `{worktree_path}` (now a base-template placeholder too — here it's the
+worktree the crashed quest already had, not a freshly provisioned one) and
+the variant's `{phase}`, `{classification}`, and `{checkpoint_line}` from the
+Step 1 scan and the Step 2 classification, and every shared placeholder
+exactly as `/fellowship` does.
 
 Two things are worth saying out loud when you send it:
 

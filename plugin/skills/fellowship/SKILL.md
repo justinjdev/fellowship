@@ -135,6 +135,10 @@ For each quest, Gandalf:
    - **Isolation:** the worktree the lead provisioned and verified in the
      pre-flight above, registered in the store before this spawn. See
      [resources/isolation.md](resources/isolation.md).
+   - **Worktree path:** carried in the spawn prompt as `{worktree_path}` — the
+     teammate's working directory stays the main repo root for its whole
+     life, so it names this path in every `fellowship --dir` call and every
+     file it reads or writes.
 
 **Todo persistence:** After spawning, write initial todos via `~/.claude/fellowship/bin/fellowship todo init --dir <path> --quest <name> --task "description"`. Add todos to running quests: `~/.claude/fellowship/bin/fellowship todo add --dir <worktree> 'description'`.
 

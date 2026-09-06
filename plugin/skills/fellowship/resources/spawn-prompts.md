@@ -16,29 +16,34 @@ YOUR TASK: {task_description}
 
 INSTRUCTIONS:
 1. {mode_instruction_1}
-2. ISOLATION SELF-CHECK (do this BEFORE any Edit/Write/commit): the lead should
-   have placed you in your own git worktree, but isolation provisioning can
-   silently fail — do NOT assume it worked. Verify before touching anything.
-   Run `git rev-parse --path-format=absolute --show-toplevel` and
-   `git rev-parse --path-format=absolute --git-common-dir` (`--path-format=absolute`
-   matters — without it, `--git-common-dir` prints a relative path like `.git`
-   when you're already at the main root, which will never string-match an
-   absolute top-level path). The main repo root is the PARENT of the common
-   git dir. Your top-level MUST NOT equal the main repo root. If it IS the main root, STOP — do not edit,
-   do not commit — and message the lead that you were not isolated. Only
-   proceed once you have confirmed your top-level is a distinct worktree path.
-   Note: the fail-closed `worktree-guard` hook blocks source writes from the
-   main tree — a block is PROOF you are mis-placed, not an obstacle to route
-   around.
+2. ISOLATION SELF-CHECK (do this BEFORE any Edit/Write/commit): you do not
+   stand in {worktree_path} — your working directory is the main repo root
+   for your whole life as a background agent, and a bare `cd` will not
+   persist to your next Bash call — so verify by naming the path, not by
+   trusting your cwd. Run `git -C {worktree_path} rev-parse
+   --path-format=absolute --show-toplevel` and `git rev-parse
+   --path-format=absolute --git-common-dir` (`--path-format=absolute` matters
+   — without it, `--git-common-dir` prints a relative path like `.git`, which
+   will never string-match an absolute top-level path). The main repo root is
+   the PARENT of the common git dir. The first command's output MUST equal
+   {worktree_path} and must NOT equal the main repo root, and
+   `~/.claude/fellowship/bin/fellowship state show --json` must list your
+   quest with that `worktree`. If any of this fails, STOP — do not edit, do
+   not commit — and message the lead that you were not isolated. Note: the
+   fail-closed `worktree-guard` hook blocks source writes from the main tree
+   — a block is PROOF you are mis-placed, not an obstacle to route around.
+   Every `fellowship` command from here on takes `--dir {worktree_path}` —
+   never your current directory, and never a shell-expanded working-directory
+   substitution.
 3. Gate handling — gates are enforced by plugin hooks reading quest state
    from the fellowship database. The hooks structurally block your tools
    after gate submission. Here is how it works:
 
    Before EACH gate, you MUST:
    a. Run /lembas to compress context (hooks verify this)
-   b. Run `~/.claude/fellowship/bin/fellowship phase confirm --dir <worktree>
-      --phase <current_phase>` to record your current phase (hooks verify
-      this)
+   b. Run `~/.claude/fellowship/bin/fellowship phase confirm --dir
+      {worktree_path} --phase <current_phase>` to record your current phase
+      (hooks verify this)
    c. Send ONE gate checklist via SendMessage to the lead ("main").
       The message content MUST start with [GATE] — e.g.:
       "[GATE] Research complete\n- [x] Key files identified..."
@@ -65,7 +70,7 @@ INSTRUCTIONS:
    lead will send you a message with updated instructions when you
    are resumed.
 5. When /quest reaches the last step of Review, create a PR, run
-   `~/.claude/fellowship/bin/fellowship complete --dir <worktree>`, then
+   `~/.claude/fellowship/bin/fellowship complete --dir {worktree_path}`, then
    message the lead with the PR URL
 6. If you get stuck or need a decision, message the lead
 7. The lead stops you with TaskStop when your work is cancelled or the
@@ -77,8 +82,10 @@ CONVENTIONS:
 - Use conventional commits for all git commits (e.g., feat:, fix:, docs:, refactor:)
 
 BOUNDARIES:
-- Stay in YOUR worktree. Do NOT read, write, or navigate into other
-  teammates' worktrees. Your working directory is your worktree root.{boundaries_exception}
+- Work only in YOUR worktree, {worktree_path}, by absolute path and `--dir`.
+  Do NOT read, write, or navigate into other teammates' worktrees. Your
+  working directory is the main repo root and stays there — never write
+  there, never `cd` (it will not persist).{boundaries_exception}
 - Do NOT use MCP tools or external service integrations (Notion, Slack,
   Jira, etc.) without first messaging the lead and getting explicit
   approval. Your scope is local: code, tests, git, and the filesystem.
@@ -89,6 +96,7 @@ BOUNDARIES:
 CONTEXT:
 - Fellowship: {fellowship_name}
 - Your name (the lead addresses you by it): {quest_name}
+- Your worktree: {worktree_path}
 - The lead: SendMessage(to: "main", ...)
 - Other active quests: {brief_list}
 - PR config: {pr_config_line}
@@ -105,6 +113,7 @@ Before sending the spawn prompt, Gandalf substitutes these placeholders with act
 | `{task_description}` | The quest task text from the user |
 | `{fellowship_name}` | The fellowship's name (the `--name` given to `state init`, also `state show --json`'s `name`) |
 | `{quest_name}` | Descriptive name (e.g., `"quest-auth-bug"`) — this is also the name passed to `Agent(name: ...)`, so `SendMessage(to: "{quest_name}")` addresses this teammate |
+| `{worktree_path}` | The worktree the lead provisioned and registered for this quest (absolute). You never `cd` there — every `fellowship` command and every file path names it directly. For the Resume variant this is the same value the RESUME CONTEXT block already carries. |
 | `{brief_list}` | Comma-separated list of other active quest names |
 | `{gate_config_override}` | See below |
 | `{pr_config_line}` | If `config.pr` exists: `"draft=true, template=..."`. If not: `"default (not a draft, no template)"` |
@@ -153,7 +162,8 @@ Use when the user provides a pre-existing plan file for a quest.
 
 ```
 Run /quest to execute this task — but with a pre-existing plan:
-   - Copy the plan file to .fellowship/plan.md while provisioning
+   - Copy the plan file to {worktree_path}/.fellowship/plan.md while
+     provisioning
    - The quest skill will detect this file and skip Research and Plan,
      starting directly at Implement
 ```
@@ -207,9 +217,9 @@ RESUME CONTEXT:
 - Checkpoint: {checkpoint_line}
 ```
 
-`{checkpoint_line}`: for `resumable`, `"Load .fellowship/checkpoint.md for recovered context"`; for `stale`, `"No checkpoint — restart the current phase from scratch"`.
+`{checkpoint_line}`: for `resumable`, `"Load {worktree_path}/.fellowship/checkpoint.md for recovered context"`; for `stale`, `"No checkpoint — restart the current phase from scratch"`.
 
-The base template's step 2 (isolation self-check) still applies: a resumed quest verifies it is in a real worktree before touching anything, exactly as a fresh one does.
+The base template's step 2 (isolation self-check) still applies: a resumed quest verifies {worktree_path} resolves, via `git -C`, to a real, distinct worktree before touching anything, exactly as a fresh one does.
 
 ## Scout Spawn Prompt
 
