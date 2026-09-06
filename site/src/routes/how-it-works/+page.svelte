@@ -38,7 +38,7 @@
 
 	const fellowshipSteps = [
 		{ label: 'Describe', detail: 'You describe multiple tasks (quests and scouts)' },
-		{ label: 'Analyze', detail: 'Gandalf analyzes them, creates task list' },
+		{ label: 'Analyze', detail: 'Gandalf analyzes them and registers each in the store' },
 		{ label: 'Spawn', detail: 'Spawns quest teammates in isolated worktrees' },
 		{ label: 'Scout', detail: 'Spawns scout agents for research questions' },
 		{ label: 'Monitor', detail: "Palantir reports the CLI's health sweep (at 2+ quests; Gandalf runs it directly below that)" },
@@ -216,11 +216,11 @@
 			</div>
 			<div class="enforcement-card">
 				<h3>Lead Approval Required</h3>
-				<p>Tools stay blocked until the lead agent approves by writing to the quest state file.</p>
+				<p>Tools stay blocked until the lead approves with <code>fellowship gate approve</code>.</p>
 			</div>
 			<div class="enforcement-card">
 				<h3>Verified Prerequisites</h3>
-				<p>Running /lembas and updating task metadata are verified before gate submission.</p>
+				<p>Running /lembas and confirming the phase with <code>fellowship phase confirm</code> are verified before gate submission.</p>
 			</div>
 			<div class="enforcement-card">
 				<h3>No Self-Approval</h3>
