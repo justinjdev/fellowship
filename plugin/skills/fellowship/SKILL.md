@@ -7,7 +7,7 @@ description: Multi-task orchestrator. Coordinates agent teammates (led by Gandal
 
 ## Overview
 
-Coordinates parallel teammates — quest runners and scouts — over the agent teams API (`TeamCreate`, `SendMessage`, `TaskCreate`, `TaskUpdate`, `TeamDelete`). The lead plays Gandalf, the coordinator who never writes code: it spawns teammates, routes gate approvals, delivers research findings, and reports progress. Quest teammates run the `/quest` lifecycle — Research → Plan → Implement → Review — in an isolated worktree and produce PRs. Scout teammates run `/scout` for research: no code, no PRs, no worktree.
+Coordinates parallel teammates — quest runners and scouts — as named background agents (`Agent`, `SendMessage`, `ListAgents`, `TaskStop`). The session has one implicit team; the fellowship name lives in the store. The lead plays Gandalf, the coordinator who never writes code: it spawns teammates, routes gate approvals, delivers research findings, and reports progress. Quest teammates run the `/quest` lifecycle — Research → Plan → Implement → Review — in an isolated worktree and produce PRs. Scout teammates run `/scout` for research: no code, no PRs, no worktree.
 
 ## When to Use
 
@@ -29,7 +29,7 @@ The binary is then at `~/.claude/fellowship/bin/fellowship`. Use that full path 
 
 ### Start
 
-`/fellowship` creates the fellowship team via `TeamCreate` with name `fellowship-{timestamp}`. The lead enters coordinator mode, waiting for quests. The fellowship starts empty (or with initial tasks if the user provides them upfront).
+`/fellowship` picks a name `fellowship-{timestamp}` and records it with `state init --name`. The lead enters coordinator mode, waiting for quests. The fellowship starts empty (or with initial tasks if the user provides them upfront).
 
 ### Add Quests and Scouts
 
@@ -73,16 +73,16 @@ Store the result as `base_branch` — every quest spawn prompt carries it so wor
 
 > **Note:** `.fellowship/` is the default data directory. Users can override it via `dataDir` in `~/.claude/fellowship.json`. All `fellowship` CLI commands resolve the correct directory automatically.
 
-`state init` takes no `--dir` — it operates on the current directory, so run it from the repo root. Register each quest and scout after spawning it, and fill in the worktree path once task metadata carries one:
+`state init` takes no `--dir` — it operates on the current directory, so run it from the repo root. Register each quest and scout after spawning it, and register the worktree before spawning:
 
 `--claim-lead` records *this* session as the fellowship's lead. `state init` records a lead only when none is recorded yet, so on a repo that has run a fellowship before — a new session picking up an existing one — pass `--claim-lead` as well, or `worktree-guard` keeps treating the previous session as the lead and refuses this one's `Edit`/`Write` in the main tree. It only runs from the main working tree, and refuses a session that is already recorded against a quest.
 
 ```bash
 ~/.claude/fellowship/bin/fellowship state init --name <fellowship_name> [--base-branch <base_branch>] [--claim-lead]
-~/.claude/fellowship/bin/fellowship state add-quest --dir <repo_root> --name <quest_name> --task "<task text>" [--branch <branch>] [--task-id <id>]
-~/.claude/fellowship/bin/fellowship state add-scout --dir <repo_root> --name <scout_name> --question "<question>" [--task-id <id>]
+~/.claude/fellowship/bin/fellowship state add-quest --dir <repo_root> --name <quest_name> --task "<task text>" [--branch <branch>] [--worktree <path>]
+~/.claude/fellowship/bin/fellowship state add-scout --dir <repo_root> --name <scout_name> --question "<question>"
 ~/.claude/fellowship/bin/fellowship state add-group --dir <repo_root> --name <group_name> --quests q1,q2 --scouts s1
-~/.claude/fellowship/bin/fellowship state update-quest --dir <repo_root> --name <quest_name> [--worktree <path>] [--branch <branch>] [--task-id <id>]
+~/.claude/fellowship/bin/fellowship state update-quest --dir <repo_root> --name <quest_name> [--worktree <path>] [--branch <branch>] [--status active|completed|cancelled]
 ```
 
 ### Discover Templates
@@ -109,9 +109,10 @@ quest lands in the shared main tree. So before spawning any quest, Gandalf:
    is armed there too.
 3. Verifies with `git worktree list` that the worktree exists and is not the
    main root — never tell a teammate it is "already isolated" otherwise.
-4. Publishes the verified path with
-   `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<path>"})`
-   *before* spawning, so the quest finds it and does not create a second one.
+4. Registers the verified path in the store *before* spawning —
+   `fellowship state add-quest --worktree <path>` (or `state update-quest
+   --worktree <path>`) — so the quest finds it and does not create a second
+   one.
 
 Two fail-closed backstops catch a mis-placed teammate regardless: its own
 isolation self-check before its first write, and the `worktree-guard` hook.
@@ -122,17 +123,17 @@ See [resources/isolation.md](resources/isolation.md) for the full protocol.
 
 For each quest, Gandalf:
 
-1. `TaskCreate` in the shared task list with the quest description
+1. Register the quest in the store (`state add-quest --dir <repo_root> --name <quest_name> --task "<task text>" --worktree <path>`) with the quest description
 
 **Issue detection:** check the task description for GitHub issue references (`#\d+`) first. If any are found, invoke `/missive` with them, use its output for `{issue_context}` and its suggested branch name in place of the default slug, and spawn one quest per issue (each with its own missive output). With no references, `{issue_context}` is the empty string.
 
 2. Spawn a teammate via the `Agent` tool with:
-   - `team_name`: the fellowship team name
+   - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"` — this is how `SendMessage(to: "<quest_name>")` addresses it
    - `subagent_type: "general-purpose"`
-   - `name`: `"quest-{n}"` or a descriptive name like `"quest-auth-bug"`
+   - `run_in_background: true`
    - `model`: `config.models.quest` if set; otherwise omit — quest teammates write production code and inherit the session model by default
    - **Isolation:** the worktree the lead provisioned and verified in the
-     pre-flight above, published to task metadata before this spawn. See
+     pre-flight above, registered in the store before this spawn. See
      [resources/isolation.md](resources/isolation.md).
 
 **Todo persistence:** After spawning, write initial todos via `~/.claude/fellowship/bin/fellowship todo init --dir <path> --quest <name> --task "description"`. Add todos to running quests: `~/.claude/fellowship/bin/fellowship todo add --dir <worktree> 'description'`.
@@ -143,7 +144,7 @@ For each quest, Gandalf:
 
 When the user's prompt references a plan file (e.g., "implement docs/plans/my-plan.md with fellowship"):
 
-**Solo mode (one quest for the whole plan):** read the plan file to confirm it exists, `TaskCreate` with a description naming it, spawn a teammate with the **Plan-Driven variant** from spawn-prompts.md, and register the quest in fellowship state as usual.
+**Solo mode (one quest for the whole plan):** read the plan file to confirm it exists, spawn a teammate with the **Plan-Driven variant** from spawn-prompts.md, and register the quest in fellowship state as usual.
 
 **Fan-out mode (multiple quests from one plan):** read the plan, propose groupings to the user ("I'd split this into 3 quests: ..."), wait for approval, then spawn each with the plan-driven prompt — every quest gets the full plan path plus instructions scoped to its own subset of tasks.
 
@@ -153,20 +154,20 @@ When the user's prompt references a plan file (e.g., "implement docs/plans/my-pl
 
 For each scout, Gandalf:
 
-1. `TaskCreate` with the question and type "scout"
-2. Spawn via `Agent` tool with `subagent_type: "fellowship:scout"`, no worktree isolation. Pass `model: config.models.scout` if set; otherwise omit (the scout agent definition defaults to sonnet).
+1. Register the scout in the store (`state add-scout --dir <repo_root> --name <scout_name> --question "<question>"`)
+2. Spawn via `Agent` tool with `name: "<scout_name>"`, `subagent_type: "fellowship:scout"`, `run_in_background: true`, no worktree isolation. Pass `model: config.models.scout` if set; otherwise omit (the scout agent definition defaults to sonnet).
 
 **Spawn prompt:** See [resources/spawn-prompts.md](resources/spawn-prompts.md) for the scout spawn prompt template.
 
 ### Spawn Palantir
 
-When `config.palantir.minQuests` or more quests are active (default 2) and `config.palantir.enabled` is true (default), spawn one palantir monitoring agent — never more than one per fellowship — and shut it down when quests drop below the threshold. Pass `model: config.models.palantir` if set, else omit (the agent defaults to haiku; monitoring is read-only).
+When `config.palantir.minQuests` or more quests are active (default 2) and `config.palantir.enabled` is true (default), spawn one palantir monitoring agent — `Agent(name: "palantir", subagent_type: "fellowship:palantir", run_in_background: true, model: config.models.palantir if set)` — never more than one per fellowship — and stop it with `TaskStop(task_id: "palantir")` when quests drop below the threshold. Reach it with `SendMessage(to: "palantir", message: "check")`. Pass `model: config.models.palantir` if set, else omit (the agent defaults to haiku; monitoring is read-only).
 
 **Spawn prompt:** See [resources/spawn-prompts.md](resources/spawn-prompts.md) for the palantir spawn prompt template.
 
 ### Disband
 
-On "wrap up" or "disband": send `shutdown_request` to every active teammate including palantir; summarize quests completed, PR URLs, and open items; clear the ephemeral discoveries with `~/.claude/fellowship/bin/fellowship notes clear`; offer `/retro` ("it identifies patterns across quests and can recommend configuration improvements") as a suggestion the user may skip; then `TeamDelete`.
+On "wrap up" or "disband": `TaskStop(task_id: "<name>")` every teammate still running (quests, scouts, palantir) — an idle teammate needs nothing, nothing will message it again; summarize quests completed, PR URLs, and open items; clear the ephemeral discoveries with `~/.claude/fellowship/bin/fellowship notes clear`; offer `/retro` ("it identifies patterns across quests and can recommend configuration improvements") as a suggestion the user may skip. There is no team object to delete — the fellowship is the session's implicit team, and nothing is created or destroyed around it.
 
 ## Gate Handling
 
@@ -178,9 +179,9 @@ Each quest runs the full `/quest` lifecycle: **Research → Plan → Implement �
 
 ### Gate Approval Procedure
 
-1. Read the worktree path: `TaskGet(taskId)` → `metadata.worktree_path`
+1. Read the worktree path: `fellowship state show --json` (quests[].worktree) — or the path the lead itself provisioned
 2. `~/.claude/fellowship/bin/fellowship gate approve --dir <worktree_path>`
-3. SendMessage the teammate that it is approved
+3. `SendMessage(to: "<quest_name>", summary: "gate approved", message: "Gate approved — proceed to <next phase>. ...")` — this resumes the teammate with its context intact
 4. Send palantir a "check" message if active; otherwise run
    `~/.claude/fellowship/bin/fellowship health --json` yourself — see
    "Health Monitoring Without Palantir" in
@@ -217,13 +218,13 @@ See [resources/progress-tracking.md](resources/progress-tracking.md) for details
 
 - **Quest fails:** report to the user with context (which phase, what went wrong). Before respawning, preserve the failure for future quests with `~/.claude/fellowship/bin/fellowship failures infer --dir <worktree_path>`, which reconstructs a best-effort record from the quest's history, events, and health data. The worktree is preserved.
   - **Respawn:** spawn a new teammate with the same task description using the **Resume** variant of the quest spawn prompt (see [spawn-prompts.md](resources/spawn-prompts.md)) — it tells the teammate its worktree already exists and where its checkpoint is — with its working directory set to that worktree.
-- **Direct teammate access:** through Gandalf ("tell quest-2 to skip the logger refactor"), or Shift+Down to message the teammate directly.
+- **Direct teammate access:** through Gandalf ("tell quest-2 to skip the logger refactor"), or address the teammate by name yourself.
 - **Session death:** worktrees survive, coordination does not. `/rekindle` is the recovery path: it scans, classifies, and respawns each quest from its `.fellowship/checkpoint.md`. To unstick a quest by hand: `~/.claude/fellowship/bin/fellowship gate reject --dir <worktree>`.
 
 ## Key Principles
 
 1. **Coordinate, don't execute.** Gandalf never writes code — it spawns, routes, and reports.
-2. **Compose over existing primitives.** Agent teams + quest + worktrees.
+2. **Compose over existing primitives.** Named background agents + quest + worktrees.
 3. **Dynamic over static.** Accept quests anytime, not just at startup.
 4. **Isolation by default.** Every quest gets its own worktree; no shared in-progress state.
 5. **Human in the loop.** All gates surface to the user unless config opts specific ones out. Gandalf never merges PRs.

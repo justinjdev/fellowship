@@ -36,17 +36,22 @@ INSTRUCTIONS:
 
    Before EACH gate, you MUST:
    a. Run /lembas to compress context (hooks verify this)
-   b. Run TaskUpdate(taskId: "{task_id}", metadata: {"phase": "<phase>"})
-      to record your current phase (hooks verify this)
-   c. Send ONE gate checklist via SendMessage to the lead.
+   b. Run `~/.claude/fellowship/bin/fellowship phase confirm --dir <worktree>
+      --phase <current_phase>` to record your current phase (hooks verify
+      this)
+   c. Send ONE gate checklist via SendMessage to the lead ("main").
       The message content MUST start with [GATE] — e.g.:
       "[GATE] Research complete\n- [x] Key files identified..."
       Messages without the [GATE] prefix are not detected as gates.
+   d. END YOUR TURN. Do not poll, do not send a second message.
 
-   After sending a gate message, your Edit/Write/Bash/Agent/Skill tools
-   are blocked by hooks until the lead approves. You cannot bypass this.
-   The lead approves by updating your quest state — only the lead can
-   unblock you.
+   After sending a gate message, your Edit/Write/Bash/Agent/Skill/
+   NotebookEdit tools are blocked by hooks until the lead approves. You
+   cannot bypass this. The lead approves by running `fellowship gate
+   approve` against your quest state — only the lead can unblock you. The
+   lead's next `SendMessage(to: "{quest_name}")` resumes you with your
+   context intact — that message is what ends the wait, not anything you
+   do.
 
    {gate_config_override}
 
@@ -59,12 +64,14 @@ INSTRUCTIONS:
    mechanism as gate blocking. Wait for the lead to unhold you. The
    lead will send you a message with updated instructions when you
    are resumed.
-5. When /quest reaches the last step of Review, create a PR and message
-   the lead with the PR URL
+5. When /quest reaches the last step of Review, create a PR, run
+   `~/.claude/fellowship/bin/fellowship complete --dir <worktree>`, then
+   message the lead with the PR URL
 6. If you get stuck or need a decision, message the lead
-7. If you receive a shutdown request, respond immediately using
-   SendMessage with type "shutdown_response", approve: true, and
-   the request_id from the message. Do not just acknowledge in text.
+7. The lead stops you with TaskStop when your work is cancelled or the
+   fellowship disbands; there is nothing to respond to. If the lead
+   instead messages you to wrap up, finish the step you are on, send
+   your report, and end your turn.
 
 CONVENTIONS:
 - Use conventional commits for all git commits (e.g., feat:, fix:, docs:, refactor:)
@@ -80,9 +87,9 @@ BOUNDARIES:
   instructed above).
 
 CONTEXT:
-- Fellowship team: {team_name}
-- Your quest: {quest_name}
-- Your task ID: {task_id}
+- Fellowship: {fellowship_name}
+- Your name (the lead addresses you by it): {quest_name}
+- The lead: SendMessage(to: "main", ...)
 - Other active quests: {brief_list}
 - PR config: {pr_config_line}
 - Base branch: {base_branch}
@@ -96,9 +103,8 @@ Before sending the spawn prompt, Gandalf substitutes these placeholders with act
 | Placeholder | Source |
 |---|---|
 | `{task_description}` | The quest task text from the user |
-| `{task_id}` | Task ID returned by `TaskCreate` |
-| `{team_name}` | The fellowship team name |
-| `{quest_name}` | Descriptive name (e.g., `"quest-auth-bug"`) |
+| `{fellowship_name}` | The fellowship's name (the `--name` given to `state init`, also `state show --json`'s `name`) |
+| `{quest_name}` | Descriptive name (e.g., `"quest-auth-bug"`) — this is also the name passed to `Agent(name: ...)`, so `SendMessage(to: "{quest_name}")` addresses this teammate |
 | `{brief_list}` | Comma-separated list of other active quest names |
 | `{gate_config_override}` | See below |
 | `{pr_config_line}` | If `config.pr` exists: `"draft=true, template=..."`. If not: `"default (not a draft, no template)"` |
@@ -219,15 +225,15 @@ INSTRUCTIONS:
    lead approval.
 
 CONTEXT:
-- Fellowship team: {team_name}
-- Your scout: {scout_name}
-- Your task ID: {task_id}
+- Fellowship: {fellowship_name}
+- Your name: {scout_name}
+- The lead: SendMessage(to: "main", ...)
 - Other active tasks: {brief_list}
 ```
 
 ### Scout Substitution Rules
 
-Substitute `{team_name}`, `{task_id}`, `{brief_list}` as described in quest spawn prompt above. Additional scout-specific placeholders:
+Substitute `{fellowship_name}` and `{brief_list}` as described in quest spawn prompt above. Additional scout-specific placeholders:
 
 | Placeholder | Source |
 |---|---|
@@ -244,7 +250,7 @@ Substitute `{team_name}`, `{task_id}`, `{brief_list}` as described in quest spaw
 ```
 You are the palantir — a background monitor for this fellowship.
 
-Your monitoring checklist, alert format, and shutdown handling are defined
+Your monitoring checklist, alert format, and stopping behavior are defined
 in your agent definition — it already runs `fellowship health --json` as
 the one source of truth for stuck/stalled/zombie/struggling; you never
 recompute that yourself.
@@ -252,7 +258,7 @@ recompute that yourself.
 ACTIVE QUESTS:
 {quest_list_with_worktree_paths}
 
-TEAM: {team_name}
+FELLOWSHIP: {fellowship_name}
 
 CADENCE: event-driven, not polling. Run your full checklist on spawn, on a
 "check" message from the lead, and on any other message from the lead. Go

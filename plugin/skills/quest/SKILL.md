@@ -30,9 +30,9 @@ write it. Read it with `~/.claude/fellowship/bin/fellowship gate status`.
 At the end of Research, Plan, and Implement, in this order:
 
 1. Invoke `/lembas` (hooks verify this).
-2. `TaskUpdate(taskId: "<your_task_id>", metadata: {"phase": "<current_phase>"})`
+2. `~/.claude/fellowship/bin/fellowship phase confirm --dir <worktree> --phase <current_phase>`
    (hooks verify this). Valid phase names: Research, Plan, Implement, Review.
-3. SendMessage the lead a `[GATE]` message:
+3. SendMessage(to: "main") a `[GATE]` message:
 
 ```
 [GATE] <phase> complete
@@ -51,18 +51,20 @@ At the end of Research, Plan, and Implement, in this order:
 ```
 
 Steps 1 and 2 must both be done before step 3 or the hooks block the gate.
-Then end your turn and wait for the lead.
+Then END YOUR TURN — do not poll, do not send a second message. The lead's
+next `SendMessage(to: "<your name>")` resumes you with your context intact;
+that message is what ends the wait, not anything you do.
 
 The hooks also block Edit/Write outside `.fellowship/` during Research and
 Plan (Bash, Agent, Skill, and reads are always allowed); require `[GATE]` at
 the start of a line to detect a gate; block your tools between a submission
 and the lead's decision; refuse a second gate while one is pending; block
 your tools while the quest is held ("Quest is held — paused by the lead. ...
-Wait for the lead to unhold before taking any action."); and refuse to mark
-the task completed unless the phase is Review with no gate pending. If you
-receive a `shutdown_request`, respond
-immediately via SendMessage with type `shutdown_response`, `approve: true`,
-and the request's `request_id` — do not just acknowledge it in text.
+Wait for the lead to unhold before taking any action."); and refuse
+`fellowship complete` unless the phase is Review with no gate pending. The
+lead stops you with `TaskStop` when your work is cancelled or the fellowship
+disbands; there is nothing to respond to. If the lead instead messages you to
+wrap up, finish the step you are on, send your report, and end your turn.
 
 ## Phase 1: Research
 
@@ -78,11 +80,10 @@ a `RESUME CONTEXT:` block, or `.fellowship/checkpoint.md` exists:
 2. `~/.claude/fellowship/bin/fellowship init --dir $(pwd)` clears
    `gate_pending` and keeps the phase. If a gate was pending when the previous
    session died the hooks block this — only the lead can clear it, so ask.
-3. `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})`.
-4. Read `.fellowship/checkpoint.md` as your starting context in place of step
+3. Read `.fellowship/checkpoint.md` as your starting context in place of step
    2, and `~/.claude/fellowship/bin/fellowship history show --dir $(pwd)` for
    your phases, gates, and files touched.
-5. Resume at the phase `~/.claude/fellowship/bin/fellowship gate status`
+4. Resume at the phase `~/.claude/fellowship/bin/fellowship gate status`
    reports, going straight there if it is past Research.
 
 With no checkpoint, restart the current phase from scratch.
@@ -95,9 +96,10 @@ prompt carries a `PRE-EXISTING PLAN:`.
 1. **Config.** Read `.fellowship/config.json` (repo root) and
    `~/.claude/fellowship.json` if present and merge defaults → project → user
    (user wins; `/settings` documents the schema).
-2. **Isolate.** If task metadata already has a `worktree_path` that exists on
-   disk you are isolated — skip ahead. Otherwise, when `worktree.enabled` is
-   true (the default):
+2. **Isolate.** If `~/.claude/fellowship/bin/fellowship state show --json`
+   lists your quest with a `worktree` that exists on disk, the lead
+   provisioned it — skip ahead. Otherwise, when `worktree.enabled` is true
+   (the default):
    - **Branch name:** the name `/missive` suggested, if the spawn prompt has
      one. Else `branch.pattern` with `{slug}` (slugified task description),
      `{ticket}` (matched by `branch.ticketPattern`, default `[A-Z]+-\d+`) and
@@ -122,8 +124,9 @@ prompt carries a `PRE-EXISTING PLAN:`.
    resolves your quest name from the worktree the lead registered (override
    with `--quest <name>`), and loads `gates.autoApprove` from the merged
    config. Confirm with `~/.claude/fellowship/bin/fellowship gate status --dir
-   <worktree_path>`, then
-   `TaskUpdate(taskId: "<task_id>", metadata: {"worktree_path": "<cwd>"})`.
+   <worktree_path>`. If you had to create the worktree yourself, message the
+   lead its absolute path so the lead can register it (`state update-quest
+   --worktree` is a lead command; gate-guard refuses it from a worktree).
 
 ### Step 2 — orient
 
@@ -284,10 +287,15 @@ work is done until this passes; if it fails, fix and re-verify.
 squash/merge decision, PR creation, and branch cleanup. Draft the PR if
 `pr.draft` is set; use `pr.template` as the body if set (it takes `{task}`,
 `{summary}`, `{changes}`); include any `/missive` issue keywords (e.g.
-`Closes #42`). Clean up the worktree after the merge, then report what was
-built, what review found, the verification results, and the PR link. Marking
-the task complete ends the quest — the hooks allow it only from Review with no
-gate pending, and the history is marked completed for you.
+`Closes #42`). With the PR open, run
+`~/.claude/fellowship/bin/fellowship complete --dir <worktree>`, then
+`SendMessage(to: "main", summary: "<quest>: complete, PR opened", message:
+"[COMPLETE] <quest_name>\nPR: <url>\n\n## Summary\n...")` with what was
+built, what review found, the verification results, and the PR link, then end
+your turn with the same summary as your final result. `fellowship complete`
+ends the quest — the CLI and gate-guard allow it only from Review with no
+gate pending, and it marks the history completed for you. The worktree is
+cleaned up after the merge, which is the user's, not yours.
 
 ## Plan-driven mode
 
