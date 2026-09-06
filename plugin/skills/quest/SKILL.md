@@ -327,11 +327,17 @@ as your blueprint. One gate remains: Implement.
 
 ## Escape hatch
 
-Skip the lifecycle only when **all** of these hold: one file changes (or two,
-one a test); under ~50 lines; no new pattern — you are following an existing
-one exactly; and a familiar area, or one CLAUDE.md documents clearly. If any
-is uncertain, run the full lifecycle. The short version: read the relevant
-file, make the change, run `/warden`.
+**Standalone only.** A fellowship teammate never takes it: the lead spawned
+you for the gated lifecycle, the hooks enforce it from `fellowship init` on,
+and before `init` they allow only the self-check and init themselves (plus
+writes into your worktree's data directory). However small the
+task, run Research → Plan → Implement → Review and submit every gate.
+
+Standalone, skip the lifecycle only when **all** of these hold: one file
+changes (or two, one a test); under ~50 lines; no new pattern — you are
+following an existing one exactly; and a familiar area, or one CLAUDE.md
+documents clearly. If any is uncertain, run the full lifecycle. The short
+version: read the relevant file, make the change, run `/warden`.
 
 ## Key principles
 

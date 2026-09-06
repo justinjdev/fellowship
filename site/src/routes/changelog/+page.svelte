@@ -15,6 +15,9 @@
 		<h2 class="version-heading"><a href="{base}/changelog#unreleased">Unreleased</a></h2>
 		<ul class="changes">
 			<li>
+				<strong>Teammates run the full lifecycle</strong> &mdash; a fellowship teammate could take <code>/quest</code>'s escape hatch for a small task, skip <code>fellowship init</code>, and finish with no gate ever submitted; with no state row the hooks had nothing to enforce. The escape hatch is now standalone-only, the spawn prompt says so, and until <code>fellowship init</code> has run in a registered worktree <code>gate-guard</code> allows only what bootstrap needs: Edit/Write into the data directory (a plan-driven quest copies its plan there), the fellowship CLI minus the lead's <code>state</code> commands, read-only git, and read-only shell builtins with no redirection &mdash; a source write, a heredoc, a <code>git commit</code> all wait for <code>init</code>. A <code>[COMPLETE]</code> with no gate history is a violation, not a finished quest.
+			</li>
+			<li>
 				<strong>Hooks allow outside a git repository</strong> &mdash; a session started in a directory that is not inside any repo had every Bash, Edit and Write call blocked by <code>gate-guard</code> &ldquo;for safety&rdquo;: the store lookup surfaced git's &ldquo;not a git repository&rdquo; as an unreadable store. Outside a repo there is nothing to enforce, so it now reads as &ldquo;no fellowship here&rdquo; and hooks allow; <code>fellowship</code> commands report &ldquo;no fellowship state&rdquo; instead of a git error.
 			</li>
 			<li>

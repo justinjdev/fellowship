@@ -308,6 +308,31 @@ func FellowshipDirArgs(command string) []string {
 	return dirs
 }
 
+// CommandPaths reports every absolute path a Bash command line names, in
+// order and without duplicates: a `--dir` value, a `git -C` target, the file
+// after a redirection, the argument of a `cd`. A leading `>`/`>>` is stripped
+// so `cat > /wt/x` yields `/wt/x`. It is how a hook attributes a subagent's
+// Bash call to a quest when the call names no `--dir` at all — a heredoc into
+// the worktree, a commit in it — so the pre-init and gate rules reach it.
+func CommandPaths(command string) []string {
+	var paths []string
+	seen := map[string]bool{}
+	for _, tokens := range commandInvocations(command, 0) {
+		for _, t := range tokens {
+			t = strings.TrimLeft(t, ">&|<")
+			if !strings.HasPrefix(t, "/") && !strings.HasPrefix(t, "~/") {
+				continue
+			}
+			if seen[t] {
+				continue
+			}
+			seen[t] = true
+			paths = append(paths, t)
+		}
+	}
+	return paths
+}
+
 // dirArgFrom reads the `--dir` value out of the arguments following a
 // fellowship subcommand, stopping at the next fellowship binary token so one
 // invocation's --dir is not read for another's.
