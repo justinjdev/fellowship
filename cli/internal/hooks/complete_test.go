@@ -140,3 +140,73 @@ func TestIsLeadPayload(t *testing.T) {
 		}
 	}
 }
+
+func TestCompleteCommands_Dirs(t *testing.T) {
+	cases := []struct {
+		command string
+		want    []string
+	}{
+		{"fellowship complete --dir /wt", []string{"/wt"}},
+		{"fellowship complete --dir=/wt", []string{"/wt"}},
+		{"fellowship complete", []string{""}},
+		{"fellowship complete --dir /a && fellowship complete --dir /b", []string{"/a", "/b"}},
+		{"fellowship gate status --dir /x && fellowship complete", []string{""}},
+		{"ls", nil},
+	}
+	for _, c := range cases {
+		got := CompleteCommands(c.command)
+		if strings.Join(got, ",") != strings.Join(c.want, ",") || (got == nil) != (c.want == nil) {
+			t.Errorf("CompleteCommands(%q) = %q, want %q", c.command, got, c.want)
+		}
+	}
+}
+
+func TestFellowshipDirArgs(t *testing.T) {
+	cases := []struct {
+		command string
+		want    string
+	}{
+		{"~/.claude/fellowship/bin/fellowship init --dir /wt/a", "/wt/a"},
+		{"fellowship phase confirm --dir=/wt/a --phase Research", "/wt/a"},
+		{"cd /repo && fellowship todo list --dir /wt/a", "/wt/a"},
+		{"fellowship init --dir /wt/a; fellowship gate status --dir /wt/b", "/wt/a,/wt/b"},
+		{"fellowship state show --json", ""},
+		{`git commit -m "fellowship init --dir /nope"`, ""},
+		{"ls --dir /x", ""},
+	}
+	for _, c := range cases {
+		if got := strings.Join(FellowshipDirArgs(c.command), ","); got != c.want {
+			t.Errorf("FellowshipDirArgs(%q) = %q, want %q", c.command, got, c.want)
+		}
+	}
+}
+
+// `fellowship complete --dir <other>` is judged against the quest that --dir
+// names, not the caller's own — in both directions.
+func TestGateGuard_CompleteDirIsJudgedAgainstThatQuest(t *testing.T) {
+	states := map[string]*state.State{
+		"/wt/review":    {QuestName: "a", Phase: state.TerminalPhase},
+		"/wt/implement": {QuestName: "b", Phase: "Implement"},
+	}
+	params := GuardParams{StateForDir: func(dir string) (*state.State, error) { return states[dir], nil }}
+
+	caller := &state.State{Phase: state.TerminalPhase}
+	in := &HookInput{ToolName: "Bash", ToolInput: ToolInput{Command: "fellowship complete --dir /wt/implement"}}
+	if r := GateGuard(caller, in, params); !r.Block {
+		t.Error("completing a quest still in Implement must be refused even from a caller in Review")
+	}
+	caller = &state.State{Phase: "Implement"}
+	in.ToolInput.Command = "fellowship complete --dir /wt/review"
+	if r := GateGuard(caller, in, params); r.Block {
+		t.Errorf("completing a quest in Review must be allowed from a caller in Implement, got: %s", r.Message)
+	}
+	in.ToolInput.Command = "fellowship complete --dir /wt/unknown"
+	if r := GateGuard(caller, in, params); !r.Block {
+		t.Error("a --dir with no registered quest must be refused")
+	}
+	// No --dir: the caller's own state decides.
+	in.ToolInput.Command = "fellowship complete"
+	if r := GateGuard(&state.State{Phase: "Plan"}, in, params); !r.Block {
+		t.Error("without --dir the caller's own phase decides")
+	}
+}

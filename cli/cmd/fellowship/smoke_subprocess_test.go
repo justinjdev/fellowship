@@ -74,10 +74,16 @@ func TestImplicitTeamSmoke(t *testing.T) {
 	code, _, stderr = cliRun(t, bin, wt, lead, "", "init", "--dir", wt)
 	step("teammate init", code, 0, stderr)
 
+	// The teammate's hooks run where an in-process teammate actually stands:
+	// the main repo root, never its worktree. Its quest is resolved from the
+	// paths its calls name and from the agent mapping recorded after its
+	// `fellowship init --dir <worktree>`.
 	teammate := func(name, hook string, tool string, in map[string]string) (int, string, string) {
 		t.Helper()
-		return cliRun(t, bin, wt, lead, hookPayload(lead, agent, tool, in), "hook", hook)
+		return cliRun(t, bin, root, lead, hookPayload(lead, agent, tool, in), "hook", hook)
 	}
+	code, _, stderr = teammate("agent-track", "agent-track", "Bash", map[string]string{"command": "~/.claude/fellowship/bin/fellowship init --dir " + wt})
+	step("agent-track after init", code, 0, stderr)
 	gate := func(phase string) map[string]string {
 		return map[string]string{"to": "main", "summary": "gate", "message": "[GATE] " + phase + " complete\n\n## Summary\nsmoke"}
 	}
@@ -123,8 +129,8 @@ func TestImplicitTeamSmoke(t *testing.T) {
 		if strings.Contains(out, `"deny"`) {
 			t.Fatalf("%s: gate was denied with prerequisites met: %s", phase, out)
 		}
-		if out != "" && !strings.Contains(out, `"message":"[GATE] `+phase) {
-			t.Fatalf("%s: enrichment must return the body under `message`, got %s", phase, out)
+		if out != "" && (!strings.Contains(out, `"message":"[GATE] `+phase) || !strings.Contains(out, `"to":"main"`)) {
+			t.Fatalf("%s: enrichment must return the whole tool_input with the body under `message`, got %s", phase, out)
 		}
 		code, out, stderr = cliRun(t, bin, wt, lead, "", "gate", "status", "--dir", wt)
 		step(phase+": gate status", code, 0, stderr)

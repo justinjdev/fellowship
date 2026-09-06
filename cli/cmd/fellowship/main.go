@@ -174,7 +174,7 @@ func storeCreatingCommand(args []string) bool {
 // readOnlyHooks are the hooks that only decide — they read the store and write
 // nothing back. They get a read-only connection, so a bug or a future edit
 // cannot quietly turn a decision into a write. The recording hooks
-// (gate-submit, gate-prereq, file-track) need the write side.
+// (gate-submit, gate-prereq, file-track, agent-track) need the write side.
 var readOnlyHooks = map[string]bool{
 	"gate-guard":     true,
 	"worktree-guard": true,
@@ -300,6 +300,7 @@ Hook commands (called by Claude Code hooks, read stdin):
   hook gate-submit       Detect [GATE] messages, check prereqs, advance state
   hook gate-prereq       Track lembas skill invocation
   hook file-track        Record file touches in quest history
+  hook agent-track       Remember which quest a subagent works (after its Bash calls)
   hook worktree-guard    Block source writes to the main tree during a fellowship
 
 Agent/lead commands:

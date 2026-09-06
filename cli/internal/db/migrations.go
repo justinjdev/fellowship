@@ -129,6 +129,18 @@ var migrations = []migration{
 			return sqlitex.ExecuteTransient(conn, questStateSessionColumnSQL, nil)
 		},
 	},
+	{
+		version: 6,
+		up: func(conn *Conn) error {
+			// agent_quests: which quest a subagent (by the agent_id in its
+			// hook payloads) is working. In-process teammates never stand
+			// in their worktree, so the cwd-based quest lookup finds
+			// nothing for them; the hooks record this mapping from the
+			// commands that name the worktree (`--dir`) and read it back
+			// for the tool calls that name no path at all.
+			return sqlitex.ExecuteTransient(conn, agentQuestsTableSQL, nil)
+		},
+	},
 }
 
 // columnExists reports whether a table already has a column, via PRAGMA

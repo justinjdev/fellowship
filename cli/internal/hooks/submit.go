@@ -102,15 +102,15 @@ type HookSpecificOutput struct {
 }
 
 type hookSpecificOutputInner struct {
-	HookEventName            string            `json:"hookEventName"`
-	PermissionDecision       string            `json:"permissionDecision"`
-	PermissionDecisionReason string            `json:"permissionDecisionReason,omitempty"`
-	UpdatedInput             map[string]string `json:"updatedInput,omitempty"`
+	HookEventName            string         `json:"hookEventName"`
+	PermissionDecision       string         `json:"permissionDecision"`
+	PermissionDecisionReason string         `json:"permissionDecisionReason,omitempty"`
+	UpdatedInput             map[string]any `json:"updatedInput,omitempty"`
 }
 
 // NewAllowOutput returns a HookSpecificOutput that allows the tool call
 // with optional input mutation.
-func NewAllowOutput(updatedInput map[string]string) HookSpecificOutput {
+func NewAllowOutput(updatedInput map[string]any) HookSpecificOutput {
 	return HookSpecificOutput{
 		HSO: hookSpecificOutputInner{
 			HookEventName:      "PreToolUse",

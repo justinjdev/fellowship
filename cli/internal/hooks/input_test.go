@@ -99,3 +99,16 @@ func TestParseInput_EmptyInput(t *testing.T) {
 		t.Error("expected error for empty input")
 	}
 }
+
+// The raw tool_input is kept so a hook can hand the whole object back with one
+// field rewritten — `to` and `summary` included.
+func TestParseInput_KeepsRawToolInput(t *testing.T) {
+	input := `{"tool_name":"SendMessage","tool_input":{"to":"main","summary":"gate","message":"[GATE] Plan complete"}}`
+	hi, err := ParseInput(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("ParseInput failed: %v", err)
+	}
+	if hi.RawToolInput["to"] != "main" || hi.RawToolInput["summary"] != "gate" {
+		t.Errorf("RawToolInput = %v", hi.RawToolInput)
+	}
+}

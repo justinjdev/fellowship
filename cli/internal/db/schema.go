@@ -51,6 +51,21 @@ const leadTableSQL = `CREATE TABLE IF NOT EXISTS lead (
 // byte-identical DDL — see TestFreshSchemaMatchesMigratedSchema.
 const questStateSessionColumnSQL = `ALTER TABLE quest_state ADD COLUMN session_id TEXT`
 
+// agentQuestsTableSQL maps a subagent id to the quest it works. A teammate
+// spawned in-process with the Agent tool keeps the lead's working directory
+// for its whole life (a bare `cd` does not persist between its Bash calls), so
+// the hooks cannot resolve its quest from the process cwd the way they do for a
+// session standing in its worktree. Its hook payloads do carry an agent_id;
+// this table is what turns that id back into a quest for the tool calls that
+// name no path (SendMessage, Skill). This is migration version 6 in
+// migrations.go; declared once here so the fresh-install schema and the
+// upgrade migration apply byte-identical DDL.
+const agentQuestsTableSQL = `CREATE TABLE IF NOT EXISTS agent_quests (
+		agent_id   TEXT PRIMARY KEY,
+		quest_name TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	)`
+
 // baseSchema contains every CREATE TABLE, INDEX, and TRIGGER statement from
 // the original version-1 schema. Do not edit a statement here to ship a
 // schema change — add a migration step in migrations.go instead (see
@@ -268,7 +283,7 @@ var baseSchema = []string{
 // migrations.go, so a fresh install and a store upgraded through the ladder
 // always converge on identical schema objects.
 var schema = append(append([]string{}, baseSchema...),
-	questWorktreeUniqueIndexSQL, leadTableSQL, questStateSessionColumnSQL)
+	questWorktreeUniqueIndexSQL, leadTableSQL, questStateSessionColumnSQL, agentQuestsTableSQL)
 
 // applySchemaCalls counts how many times applySchema has actually run DDL.
 // Tests use it to assert that opening an already-current store takes the

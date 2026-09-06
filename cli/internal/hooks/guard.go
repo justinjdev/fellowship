@@ -30,6 +30,11 @@ type GuardParams struct {
 	// exempting the wrong directory and blocking the right one. Empty falls
 	// back to the process-wide lookup.
 	DataDirName string
+	// StateForDir resolves the quest state registered for a `--dir` a
+	// command names, so `fellowship complete --dir <other>` is judged
+	// against THAT quest. nil means "use the caller's own state"; an error
+	// or a nil state from the resolver blocks, fail closed.
+	StateForDir func(dir string) (*state.State, error)
 }
 
 // dataDirName returns the data directory name to enforce with, falling back to
@@ -129,9 +134,21 @@ func GateGuard(s *state.State, input *HookInput, p GuardParams) HookResult {
 	// `fellowship complete` ends the quest. The command refuses to run outside
 	// Review, or with a gate pending, or while held — and so does the guard,
 	// so the invariant holds structurally even if the binary the teammate
-	// reaches is not this one. Judged against the same rule the command uses.
-	if HasCompleteCommand(input.ToolInput.Command) {
-		if result := CompletionCheck(s); result.Block {
+	// reaches is not this one. Judged against the same rule the command uses,
+	// for the quest the invocation actually names.
+	for _, dir := range CompleteCommands(input.ToolInput.Command) {
+		target := s
+		if dir != "" && p.StateForDir != nil {
+			resolved, err := p.StateForDir(dir)
+			if err != nil {
+				return HookResult{Block: true, Message: fmt.Sprintf("fellowship: cannot resolve the quest for --dir %q: %v — blocking for safety.", dir, err)}
+			}
+			if resolved == nil {
+				return HookResult{Block: true, Message: fmt.Sprintf("fellowship: no quest is registered for --dir %q — nothing to complete.", dir)}
+			}
+			target = resolved
+		}
+		if result := CompletionCheck(target); result.Block {
 			return result
 		}
 	}

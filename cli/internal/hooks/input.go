@@ -23,6 +23,11 @@ type HookInput struct {
 	// AgentType is the subagent's type (e.g. "general-purpose",
 	// "fellowship:scout"), present alongside AgentID.
 	AgentType string `json:"agent_type,omitempty"`
+	// RawToolInput is the tool_input object as it arrived, every field kept.
+	// A hook that rewrites one field (gate-submit's enrichment) hands the
+	// whole object back, so a harness that replaces tool_input with the
+	// hook's updatedInput rather than merging it does not lose `to`.
+	RawToolInput map[string]any `json:"-"`
 }
 
 type ToolInput struct {
@@ -57,6 +62,12 @@ func ParseInput(r io.Reader) (*HookInput, error) {
 	var hi HookInput
 	if err := json.Unmarshal(data, &hi); err != nil {
 		return nil, fmt.Errorf("parsing input: %w", err)
+	}
+	var raw struct {
+		ToolInput map[string]any `json:"tool_input"`
+	}
+	if err := json.Unmarshal(data, &raw); err == nil {
+		hi.RawToolInput = raw.ToolInput
 	}
 	return &hi, nil
 }

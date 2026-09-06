@@ -327,3 +327,111 @@ func TestSplitAutoApproveGates(t *testing.T) {
 		t.Errorf("empty split = %v / %v", v, u)
 	}
 }
+
+// --- an in-process teammate never stands in its worktree ---------------------
+
+// A background agent's working directory is the lead's — the main repo root —
+// for its whole life, so its quest cannot be found from cwd. Its hook payloads
+// carry an agent id, and its quest is resolved from what the call names, then
+// remembered for the calls that name nothing.
+func TestRunHookWith_SubagentAtMainRootResolvesItsQuest(t *testing.T) {
+	root := newMainRepo(t)
+	t.Setenv("HOME", t.TempDir())
+	worktree := addWorktree(t, root, "quest-root-epsilon")
+	d := fellowshipWith(t, root, map[string]string{"quest-root-epsilon": worktree})
+	recordLead(t, d, root, "lead-1")
+	setQuestState(t, d, &state.State{QuestName: "quest-root-epsilon", Phase: "Research"})
+
+	sub := func(tool string, toolInput string) *strings.Reader {
+		return strings.NewReader(`{"session_id":"lead-1","agent_id":"agent-e","agent_type":"general-purpose","tool_name":"` + tool + `","tool_input":` + toolInput + `}`)
+	}
+
+	// Before anything is remembered, a SendMessage from the main root
+	// resolves no quest: nothing to enforce, allow (no gate recorded).
+	if got := runHookWith("gate-submit", sub("SendMessage", `{"to":"main","message":"[GATE] Research complete"}`), root, d); got != 0 {
+		t.Fatalf("gate-submit with nothing to resolve: exit %d, want 0", got)
+	}
+	if s := loadQuest(t, d, "quest-root-epsilon"); s.GatePending {
+		t.Fatal("a gate must not be recorded for an unresolved subagent")
+	}
+
+	// A lead-only command naming the worktree resolves the quest through
+	// --dir and is refused — from the main root, where the old lookup would
+	// have taken the subagent for the lead.
+	if got := runHookWith("gate-guard", sub("Bash", `{"command":"fellowship init --dir `+worktree+` --phase Implement"}`), root, d); got != 2 {
+		t.Errorf("subagent init --phase from the main root: exit %d, want 2 (block)", got)
+	}
+	// So is an Edit into the worktree's source during Research.
+	if got := runHookWith("gate-guard", sub("Edit", `{"file_path":"`+filepath.Join(worktree, "src", "main.go")+`"}`), root, d); got != 2 {
+		t.Errorf("subagent source edit in Research from the main root: exit %d, want 2 (block)", got)
+	}
+	// A data-directory write in the worktree is fine, and file-track's
+	// resolution through the path remembers the agent.
+	if got := runHookWith("gate-guard", sub("Write", `{"file_path":"`+filepath.Join(worktree, ".fellowship", "checkpoint.md")+`"}`), root, d); got != 0 {
+		t.Errorf("subagent checkpoint write from the main root: exit %d, want 0", got)
+	}
+
+	// agent-track after the teammate's `fellowship init --dir <worktree>`.
+	if got := runHookWith("agent-track", sub("Bash", `{"command":"~/.claude/fellowship/bin/fellowship init --dir `+worktree+`"}`), root, d); got != 0 {
+		t.Fatalf("agent-track: exit %d, want 0", got)
+	}
+	var mapped string
+	if err := d.WithConn(context.Background(), func(conn *db.Conn) error {
+		var err error
+		mapped, err = state.FindQuestByAgent(conn, "agent-e")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if mapped != "quest-root-epsilon" {
+		t.Fatalf("agent mapping = %q, want quest-root-epsilon", mapped)
+	}
+
+	// Now the path-less calls resolve: lembas is recorded, and the gate is
+	// judged for this quest (blocked on the missing phase confirmation).
+	if got := runHookWith("gate-prereq", sub("Skill", `{"skill":"fellowship:lembas"}`), root, d); got != 0 {
+		t.Fatalf("gate-prereq: exit %d, want 0", got)
+	}
+	if s := loadQuest(t, d, "quest-root-epsilon"); !s.LembasCompleted {
+		t.Error("lembas not recorded for the mapped quest")
+	}
+	if got := runHookWith("gate-submit", sub("SendMessage", `{"to":"main","message":"[GATE] Research complete"}`), root, d); got != 0 {
+		t.Fatalf("gate-submit: exit %d, want 0 (JSON deny)", got)
+	}
+	setQuestState(t, d, &state.State{QuestName: "quest-root-epsilon", Phase: "Research", LembasCompleted: true, MetadataUpdated: true})
+	if got := runHookWith("gate-submit", sub("SendMessage", `{"to":"main","message":"[GATE] Research complete"}`), root, d); got != 0 {
+		t.Fatalf("gate-submit with prerequisites: exit %d, want 0", got)
+	}
+	if s := loadQuest(t, d, "quest-root-epsilon"); !s.GatePending {
+		t.Error("the gate was not recorded for the mapped quest")
+	}
+	// And while pending, its Bash is blocked from the main root too.
+	if got := runHookWith("gate-guard", sub("Bash", `{"command":"ls"}`), root, d); got != 2 {
+		t.Errorf("subagent Bash while pending: exit %d, want 2 (block)", got)
+	}
+	// The lead's own conversation at the same root is untouched by all this.
+	if got := runHookWith("gate-guard", strings.NewReader(`{"session_id":"lead-1","tool_name":"Bash","tool_input":{"command":"fellowship gate approve --dir `+worktree+`"}}`), root, d); got != 0 {
+		t.Errorf("lead gate approve from the main root: exit %d, want 0", got)
+	}
+}
+
+// With no lead recorded, `fellowship init` records no session id at all: the
+// lead's own id could otherwise be written against a quest before the lead
+// was known, and `--claim-lead` would refuse the lead for good.
+func TestRunInit_RecordsNoSessionWithoutALead(t *testing.T) {
+	root := newMainRepo(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Chdir(root)
+	d := db.OpenTest(t)
+
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "lead-1")
+	if got := runInit(d, []string{"--quest", "alpha"}); got != 0 {
+		t.Fatalf("init = %d, want 0", got)
+	}
+	if got := questSession(t, d, "alpha"); got != "" {
+		t.Errorf("recorded quest session = %q, want none (no lead known)", got)
+	}
+	if got := claimLeadSession(d, root); got != 0 {
+		t.Errorf("claim-lead after a lead-less init = %d, want 0", got)
+	}
+}

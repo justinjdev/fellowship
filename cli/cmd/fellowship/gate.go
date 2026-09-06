@@ -364,9 +364,12 @@ func runInit(d *db.DB, args []string) int {
 	// working it. A teammate spawned in-process with the Agent tool shares
 	// the lead's session id, and recording that would make the lead "a
 	// teammate" — and `state init --claim-lead` would then refuse the lead
-	// itself. Only an id that differs from the lead's identifies anyone.
+	// itself. An id only identifies anyone relative to a known lead that it
+	// differs from; with no lead recorded yet, nothing is recorded, or the
+	// lead's own id could be written here before the lead was known and lock
+	// it out for good.
 	questSession := state.CurrentSessionID()
-	if questSession == leadID {
+	if leadID == "" || questSession == leadID {
 		questSession = ""
 	}
 	// Whether --plan-skip's history entry is written: only alongside a phase

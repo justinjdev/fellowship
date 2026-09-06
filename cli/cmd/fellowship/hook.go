@@ -33,6 +33,7 @@ var gateHooks = map[string]bool{
 	"gate-submit": true,
 	"gate-prereq": true,
 	"file-track":  true,
+	"agent-track": true,
 }
 
 func isGateHook(name string) bool { return gateHooks[name] }
@@ -70,13 +71,43 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 	mainRoot := mainRootOrEmpty(ctx, cwd)
 	dataDirName := datadir.Resolve(mainRoot)
 
-	// Find quest name for this worktree.
+	// The payload is read before the quest is resolved: for a subagent it is
+	// the payload — not the working directory — that says which quest this
+	// is. A payload that will not parse is remembered and judged below,
+	// exactly as before, once it is known whether a quest is in play.
+	input, parseErr := hooks.ParseInput(stdin)
+	if parseErr != nil {
+		input = &hooks.HookInput{}
+	}
+
+	// Find the quest for this tool call.
+	//
+	// A session standing in its worktree resolves through the working
+	// directory. A teammate spawned in-process with the Agent tool never
+	// does: its working directory is the lead's, the main repo root, for its
+	// whole life (a bare `cd` does not persist between its Bash calls). Such
+	// a payload carries an agent_id, and its quest is found from what the
+	// call names — the `--dir` of a fellowship command, the file an Edit or
+	// Write targets — or, for calls that name nothing (SendMessage, Skill),
+	// from the mapping the earlier path-bearing calls recorded.
 	var questName string
 	var lookupErr error
 	if err := d.WithConn(ctx, func(conn *db.Conn) error {
 		var err error
 		questName, err = state.FindQuest(conn, gitRoot)
-		return err
+		if err != nil || questName != "" || input.AgentID == "" {
+			return err
+		}
+		questName, err = resolveSubagentQuest(ctx, conn, input)
+		if err != nil || questName == "" {
+			return err
+		}
+		// Enrichment and the unregistered-worktree rule read the quest's
+		// own tree, which for a subagent is not the process's.
+		if wt, err := state.QuestWorktree(conn, questName); err == nil && wt != "" {
+			gitRoot = wt
+		}
+		return nil
 	}); err != nil {
 		lookupErr = err
 	}
@@ -97,39 +128,41 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			return 2
 		}
 		if name == "gate-guard" {
-			input, err := hooks.ParseInput(stdin)
-			if err != nil {
-				input = &hooks.HookInput{}
-			}
 			// No quest row here, but the store is nobody's to hand-edit —
 			// not the lead's either.
 			if result := hooks.StoreWriteGuard(input); result.Block {
 				fmt.Fprintln(os.Stderr, result.Message)
 				return 2
 			}
-			// Only enumerate worktrees when the command looks like a cd/pushd,
-			// so the extra git call is off the common hot path.
-			var worktrees []string
-			if c := strings.TrimSpace(input.ToolInput.Command); strings.HasPrefix(c, "cd ") || strings.HasPrefix(c, "pushd ") {
-				worktrees = listQuestWorktrees(ctx, cwd)
-			}
-			if result := hooks.WorktreeGuard(input, hooks.CanonicalPath(cwd), worktrees); result.Block {
-				fmt.Fprintln(os.Stderr, result.Message)
-				return 2
+			// The bare-cd rule keeps the LEAD out of quest worktrees. A
+			// subagent is not the lead, and its cd would not persist
+			// anyway, so it is not judged. Only enumerate worktrees when
+			// the command looks like a cd/pushd, so the extra git call is
+			// off the common hot path.
+			if input.AgentID == "" {
+				var worktrees []string
+				if c := strings.TrimSpace(input.ToolInput.Command); strings.HasPrefix(c, "cd ") || strings.HasPrefix(c, "pushd ") {
+					worktrees = listQuestWorktrees(ctx, cwd)
+				}
+				if result := hooks.WorktreeGuard(input, hooks.CanonicalPath(cwd), worktrees); result.Block {
+					fmt.Fprintln(os.Stderr, result.Message)
+					return 2
+				}
 			}
 		}
 		return 0
 	}
 
-	input, err := hooks.ParseInput(stdin)
-	if err != nil {
-		switch name {
-		case "gate-guard":
-			input = &hooks.HookInput{}
-		default:
-			fmt.Fprintln(os.Stderr, "fellowship: malformed hook input — blocking for safety")
-			return 2
-		}
+	if parseErr != nil && name != "gate-guard" {
+		fmt.Fprintln(os.Stderr, "fellowship: malformed hook input — blocking for safety")
+		return 2
+	}
+
+	// A subagent's quest, once known, is remembered for the calls that name
+	// no path. Read-only hooks cannot write it; the recording hooks below do,
+	// inside their own transaction.
+	remember := func(conn *db.Conn) error {
+		return state.RecordAgentQuest(conn, input.AgentID, questName)
 	}
 
 	// Dispatch. Hooks that only decide take a plain connection; hooks that
@@ -147,6 +180,13 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			result = hooks.GateGuard(s, input, hooks.GuardParams{
 				LeadSessionID: state.LeadSessionID(conn, mainRoot, dataDirName),
 				DataDirName:   dataDirName,
+				StateForDir: func(dir string) (*state.State, error) {
+					name, err := state.FindQuest(conn, gitRootFrom(ctx, dir))
+					if err != nil || name == "" {
+						return nil, err
+					}
+					return loadQuestState(conn, name)
+				},
 			})
 			return nil
 		}); err != nil {
@@ -163,6 +203,9 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
 			s, err := loadQuestState(conn, questName)
 			if err != nil {
+				return err
+			}
+			if err := remember(conn); err != nil {
 				return err
 			}
 			if !hooks.GatePrereq(s, input) {
@@ -189,8 +232,30 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 			if err != nil {
 				return err
 			}
+			if err := remember(conn); err != nil {
+				return err
+			}
 			hooks.FileTrack(conn, s, input, questName, dataDirName)
 			return nil
+		}); err != nil {
+			return hookDBExit(err)
+		}
+		return 0
+
+	case "agent-track":
+		// Recording-only, after a Bash call: a subagent whose command named
+		// its worktree (`fellowship init --dir <worktree>` is the first thing
+		// a teammate runs) is remembered as that quest's agent, so its later
+		// SendMessage and Skill calls — which name no path — resolve too. The
+		// lead's own calls carry no agent id and record nothing.
+		if input.AgentID == "" {
+			return 0
+		}
+		if err := d.WithTx(ctx, func(conn *db.Conn) error {
+			if _, err := loadQuestState(conn, questName); err != nil {
+				return err
+			}
+			return remember(conn)
 		}); err != nil {
 			return hookDBExit(err)
 		}
@@ -202,6 +267,9 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 		if err := d.WithTx(ctx, func(conn *db.Conn) error {
 			s, err := loadQuestState(conn, questName)
 			if err != nil {
+				return err
+			}
+			if err := remember(conn); err != nil {
 				return err
 			}
 			sr := hooks.GateSubmit(s, input)
@@ -258,14 +326,20 @@ func runHookWith(name string, stdin io.Reader, cwd string, d *db.DB) int {
 				fmt.Fprintf(os.Stderr, "fellowship: gate enrichment unavailable: %v\n", err)
 			}
 			if enrichment != "" {
-				// The body comes back under the field it arrived in: the
-				// SendMessage tool reads `message`; older payloads used
-				// `content`.
+				// The whole tool_input goes back with only the body changed,
+				// under the field it arrived in (the SendMessage tool reads
+				// `message`; older payloads used `content`), so a harness
+				// that replaces tool_input with updatedInput keeps `to`.
 				field := "message"
 				if input.ToolInput.Message == "" && input.ToolInput.Content != "" {
 					field = "content"
 				}
-				out := hooks.NewAllowOutput(map[string]string{field: input.ToolInput.MessageBody() + enrichment})
+				updated := make(map[string]any, len(input.RawToolInput)+1)
+				for k, v := range input.RawToolInput {
+					updated[k] = v
+				}
+				updated[field] = input.ToolInput.MessageBody() + enrichment
+				out := hooks.NewAllowOutput(updated)
 				if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
 					fmt.Fprintf(os.Stderr, "fellowship: could not emit gate enrichment: %v\n", err)
 				}
@@ -544,4 +618,47 @@ func fellowshipRunning(fs *fellowship.FellowshipState) bool {
 		}
 	}
 	return false
+}
+
+// resolveSubagentQuest finds the quest a subagent's tool call belongs to when
+// the working directory says nothing: from the `--dir` a fellowship command
+// names, from the file an Edit/Write/NotebookEdit targets, or from the
+// agent_quests mapping earlier calls recorded. Returns "" when none applies.
+func resolveSubagentQuest(ctx context.Context, conn *db.Conn, input *hooks.HookInput) (string, error) {
+	if input == nil || input.AgentID == "" {
+		return "", nil
+	}
+	var candidates []string
+	if input.ToolInput.Command != "" {
+		candidates = append(candidates, hooks.FellowshipDirArgs(input.ToolInput.Command)...)
+	}
+	if p := hooks.TargetPath(input); p != "" {
+		candidates = append(candidates, filepath.Dir(p))
+	}
+	for _, c := range candidates {
+		c = expandHome(c)
+		dir := nearestExistingDir(c)
+		if dir == "" {
+			continue
+		}
+		name, err := state.FindQuest(conn, gitRootFrom(ctx, dir))
+		if err != nil {
+			return "", err
+		}
+		if name != "" {
+			return name, nil
+		}
+	}
+	return state.FindQuestByAgent(conn, input.AgentID)
+}
+
+// expandHome resolves a leading ~ the way the shell would before the path
+// reached us; hook payloads carry the command text verbatim.
+func expandHome(p string) string {
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return home + p[1:]
+		}
+	}
+	return p
 }
