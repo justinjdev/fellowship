@@ -1,0 +1,9 @@
+{
+  "name": "fellowship-gates",
+  "version": "0.1.0",
+  "description": "Fellowship quest status in the status line, and a band above the prompt for pending gates",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "fellowship"
+  }
+}
